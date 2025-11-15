@@ -397,3 +397,4 @@ typescript-full-errors.log
 
 # Claude Flow Swarm files
 .ruv-swarm/
+.claude-flow/
