@@ -9,6 +9,7 @@ import { config } from './config/config';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
+import { metricsMiddleware, errorMetricsMiddleware } from './middleware/metrics.middleware';
 import { authRoutes } from './controllers/auth';
 import { healthRoutes } from './controllers/health';
 import { whatsappRoutes } from './controllers/whatsapp';
@@ -73,6 +74,10 @@ app.use('/api', limiter);
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Metrics middleware - track all HTTP requests
+app.use(metricsMiddleware);
+app.use(errorMetricsMiddleware);
 
 // Metrics endpoint
 app.get('/metrics', async (req, res) => {

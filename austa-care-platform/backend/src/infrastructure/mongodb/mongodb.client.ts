@@ -1,6 +1,7 @@
-import { MongoClient, Db, Collection, MongoClientOptions, GridFSBucket, Document } from 'mongodb';
+import { MongoClient, Db, Collection, MongoClientOptions, GridFSBucket, Document, ChangeStream } from 'mongodb';
 import { logger } from '../../utils/logger';
 import { config } from '../../config/config';
+import { metrics } from '../monitoring/prometheus.metrics';
 
 export interface MongoDBConfig {
   uri: string;
@@ -185,7 +186,7 @@ export class MongoDBClient {
     return this.gridFSBucket;
   }
 
-  // Helper methods for common operations
+  // Helper methods with metrics
 
   // Find documents with pagination
   async findWithPagination<T extends Document = Document>(
@@ -198,28 +199,55 @@ export class MongoDBClient {
       projection?: any;
     } = {}
   ): Promise<{ data: (T & { _id: any })[]; total: number; page: number; pages: number }> {
-    const collection = this.getCollection<T>(collectionName);
-    
-    const page = options.page || 1;
-    const limit = options.limit || 20;
-    const skip = (page - 1) * limit;
-    
-    const [data, total] = await Promise.all([
-      collection
-        .find(filter, { projection: options.projection })
-        .sort(options.sort || { _id: -1 })
-        .skip(skip)
-        .limit(limit)
-        .toArray(),
-      collection.countDocuments(filter),
-    ]);
-    
-    return {
-      data: data as (T & { _id: any })[],
-      total,
-      page,
-      pages: Math.ceil(total / limit),
-    };
+    return this.executeWithMetrics(
+      collectionName,
+      'find',
+      async () => {
+        const collection = this.getCollection<T>(collectionName);
+
+        const page = options.page || 1;
+        const limit = options.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const [data, total] = await Promise.all([
+          collection
+            .find(filter, { projection: options.projection })
+            .sort(options.sort || { _id: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray(),
+          collection.countDocuments(filter),
+        ]);
+
+        return {
+          data: data as (T & { _id: any })[],
+          total,
+          page,
+          pages: Math.ceil(total / limit),
+        };
+      }
+    );
+  }
+
+  // Execute operation with metrics tracking
+  private async executeWithMetrics<T>(
+    collection: string,
+    operation: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const start = Date.now();
+    try {
+      const result = await fn();
+      const duration = (Date.now() - start) / 1000;
+
+      metrics.mongoOperations.inc({ collection, operation, status: 'success' });
+      metrics.mongoLatency.observe({ collection, operation }, duration);
+
+      return result;
+    } catch (error) {
+      metrics.mongoOperations.inc({ collection, operation, status: 'error' });
+      throw error;
+    }
   }
 
   // Aggregate with cursor
@@ -285,18 +313,86 @@ export class MongoDBClient {
     return results as T[];
   }
 
-  // Change stream for real-time updates
+  // Enhanced change stream for real-time updates
   createChangeStream(
     collectionName: string,
     pipeline: any[] = [],
     options: any = {}
-  ) {
+  ): ChangeStream {
     const collection = this.getCollection(collectionName);
-    
-    return collection.watch(pipeline, {
+
+    const changeStream = collection.watch(pipeline, {
       fullDocument: 'updateLookup',
       ...options,
     });
+
+    // Setup error handling
+    changeStream.on('error', (error) => {
+      logger.error(`Change stream error for collection ${collectionName}:`, error);
+      metrics.mongoOperations.inc({ collection: collectionName, operation: 'changeStream', status: 'error' });
+    });
+
+    changeStream.on('change', () => {
+      metrics.mongoOperations.inc({ collection: collectionName, operation: 'changeStream', status: 'change' });
+    });
+
+    logger.info(`Change stream created for collection: ${collectionName}`);
+
+    return changeStream;
+  }
+
+  // Watch for specific operations
+  watchOperations(
+    collectionName: string,
+    operations: string[], // e.g., ['insert', 'update', 'delete']
+    handler: (change: any) => void
+  ): ChangeStream {
+    const pipeline = [
+      {
+        $match: {
+          operationType: { $in: operations },
+        },
+      },
+    ];
+
+    const changeStream = this.createChangeStream(collectionName, pipeline);
+
+    changeStream.on('change', (change) => {
+      handler(change);
+    });
+
+    return changeStream;
+  }
+
+  // Watch specific fields
+  watchFields(
+    collectionName: string,
+    fields: string[],
+    handler: (change: any) => void
+  ): ChangeStream {
+    const updateFields = fields.reduce((acc, field) => {
+      acc[`updateDescription.updatedFields.${field}`] = { $exists: true };
+      return acc;
+    }, {} as any);
+
+    const pipeline = [
+      {
+        $match: {
+          $or: [
+            { operationType: 'insert' },
+            updateFields,
+          ],
+        },
+      },
+    ];
+
+    const changeStream = this.createChangeStream(collectionName, pipeline);
+
+    changeStream.on('change', (change) => {
+      handler(change);
+    });
+
+    return changeStream;
   }
 
   // Transaction support

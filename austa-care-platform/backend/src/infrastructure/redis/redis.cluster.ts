@@ -1,6 +1,7 @@
 import Redis, { Cluster, ClusterOptions } from 'ioredis';
 import { logger } from '../../utils/logger';
 import { config } from '../../config/config';
+import { metrics } from '../monitoring/prometheus.metrics';
 
 export interface RedisClusterConfig {
   nodes: Array<{ host: string; port: number }>;
@@ -309,6 +310,188 @@ export class RedisClusterClient {
     await this.getClient().zremrangebyscore(metricsKey, '-inf', dayAgo);
   }
 
+  // Pub/Sub methods
+  async publish(channel: string, message: any): Promise<number> {
+    const start = Date.now();
+    try {
+      const data = typeof message === 'string' ? message : JSON.stringify(message);
+      const result = await this.getClient().publish(channel, data);
+
+      const duration = (Date.now() - start) / 1000;
+      metrics.redisOperations.inc({ operation: 'publish', status: 'success' });
+      metrics.redisLatency.observe({ operation: 'publish' }, duration);
+
+      logger.debug(`Published to channel ${channel}: ${result} subscribers`);
+      return result;
+    } catch (error) {
+      metrics.redisOperations.inc({ operation: 'publish', status: 'error' });
+      logger.error(`Failed to publish to channel ${channel}:`, error);
+      throw error;
+    }
+  }
+
+  async subscribe(channel: string, handler: (message: string, channel: string) => void): Promise<void> {
+    try {
+      const subscriber = this.isClusterMode ?
+        new Redis.Cluster((this.cluster as Cluster).nodes('master').map(node => ({
+          host: node.options.host || 'localhost',
+          port: node.options.port || 6379
+        }))) :
+        new Redis(config.redis?.url || 'redis://localhost:6379');
+
+      await subscriber.subscribe(channel);
+
+      subscriber.on('message', (ch, msg) => {
+        if (ch === channel) {
+          metrics.redisOperations.inc({ operation: 'receive', status: 'success' });
+          handler(msg, ch);
+        }
+      });
+
+      subscriber.on('error', (error) => {
+        logger.error(`Subscription error for channel ${channel}:`, error);
+        metrics.redisOperations.inc({ operation: 'receive', status: 'error' });
+      });
+
+      logger.info(`Subscribed to channel: ${channel}`);
+    } catch (error) {
+      metrics.redisOperations.inc({ operation: 'subscribe', status: 'error' });
+      logger.error(`Failed to subscribe to channel ${channel}:`, error);
+      throw error;
+    }
+  }
+
+  async psubscribe(pattern: string, handler: (message: string, channel: string) => void): Promise<void> {
+    try {
+      const subscriber = this.isClusterMode ?
+        new Redis.Cluster((this.cluster as Cluster).nodes('master').map(node => ({
+          host: node.options.host || 'localhost',
+          port: node.options.port || 6379
+        }))) :
+        new Redis(config.redis?.url || 'redis://localhost:6379');
+
+      await subscriber.psubscribe(pattern);
+
+      subscriber.on('pmessage', (pat, ch, msg) => {
+        if (pat === pattern) {
+          metrics.redisOperations.inc({ operation: 'receive', status: 'success' });
+          handler(msg, ch);
+        }
+      });
+
+      subscriber.on('error', (error) => {
+        logger.error(`Pattern subscription error for ${pattern}:`, error);
+        metrics.redisOperations.inc({ operation: 'receive', status: 'error' });
+      });
+
+      logger.info(`Subscribed to pattern: ${pattern}`);
+    } catch (error) {
+      metrics.redisOperations.inc({ operation: 'psubscribe', status: 'error' });
+      logger.error(`Failed to subscribe to pattern ${pattern}:`, error);
+      throw error;
+    }
+  }
+
+  // Enhanced methods with metrics
+  private async executeWithMetrics<T>(
+    operation: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const start = Date.now();
+    try {
+      const result = await fn();
+      const duration = (Date.now() - start) / 1000;
+
+      metrics.redisOperations.inc({ operation, status: 'success' });
+      metrics.redisLatency.observe({ operation }, duration);
+
+      return result;
+    } catch (error) {
+      metrics.redisOperations.inc({ operation, status: 'error' });
+      throw error;
+    }
+  }
+
+  // Enhanced session methods with metrics
+  async setSessionWithMetrics(sessionId: string, data: any, ttl: number = 1800): Promise<void> {
+    return this.executeWithMetrics('setSession', () => this.setSession(sessionId, data, ttl));
+  }
+
+  async getSessionWithMetrics(sessionId: string): Promise<any | null> {
+    return this.executeWithMetrics('getSession', () => this.getSession(sessionId));
+  }
+
+  // Enhanced cache methods with metrics
+  async setCacheWithMetrics(key: string, value: any, ttl?: number): Promise<void> {
+    return this.executeWithMetrics('setCache', () => this.setCache(key, value, ttl));
+  }
+
+  async getCacheWithMetrics<T = any>(key: string): Promise<T | null> {
+    return this.executeWithMetrics('getCache', () => this.getCache<T>(key));
+  }
+
+  // Get connection pool stats
+  async getPoolStats(): Promise<{
+    totalConnections: number;
+    activeConnections: number;
+    idleConnections: number;
+  }> {
+    const client = this.getClient();
+
+    if (this.isClusterMode) {
+      const nodes = (client as Cluster).nodes('all');
+      const stats = nodes.reduce((acc, node) => {
+        const status = node.status;
+        if (status === 'ready') {
+          acc.activeConnections++;
+        } else {
+          acc.idleConnections++;
+        }
+        acc.totalConnections++;
+        return acc;
+      }, { totalConnections: 0, activeConnections: 0, idleConnections: 0 });
+
+      return stats;
+    } else {
+      return {
+        totalConnections: 1,
+        activeConnections: (client as Redis).status === 'ready' ? 1 : 0,
+        idleConnections: (client as Redis).status === 'ready' ? 0 : 1,
+      };
+    }
+  }
+
+  // Get Redis info
+  async getInfo(): Promise<{ [key: string]: string }> {
+    const start = Date.now();
+    try {
+      const info = await this.getClient().info();
+      const duration = (Date.now() - start) / 1000;
+
+      metrics.redisOperations.inc({ operation: 'info', status: 'success' });
+      metrics.redisLatency.observe({ operation: 'info' }, duration);
+
+      // Parse info string into object
+      const lines = info.split('\r\n');
+      const result: { [key: string]: string } = {};
+
+      for (const line of lines) {
+        if (line && !line.startsWith('#')) {
+          const [key, value] = line.split(':');
+          if (key && value) {
+            result[key.trim()] = value.trim();
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      metrics.redisOperations.inc({ operation: 'info', status: 'error' });
+      logger.error('Failed to get Redis info:', error);
+      throw error;
+    }
+  }
+
   // Health check
   async healthCheck(): Promise<boolean> {
     try {
@@ -326,12 +509,12 @@ export class RedisClusterClient {
       await this.cluster.quit();
       this.cluster = null;
     }
-    
+
     if (this.standalone) {
       await this.standalone.quit();
       this.standalone = null;
     }
-    
+
     logger.info('Redis connection closed');
   }
 }
