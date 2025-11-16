@@ -9,8 +9,11 @@ const prisma = new PrismaClient();
 // Zod validation schemas
 const createVitalSignSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
-  type: z.enum(['blood_pressure', 'heart_rate', 'temperature', 'weight', 'glucose', 'oxygen_saturation'],
-    { errorMap: () => ({ message: 'Tipo de sinal vital inválido' }) }),
+  type: z.enum(['blood_pressure_systolic', 'blood_pressure_diastolic', 'heart_rate', 'temperature', 'weight', 'respiratory_rate', 'oxygen_saturation', 'glucose'])
+    .transform(val => {
+      const mapped = val === 'glucose' ? 'blood_glucose' : val;
+      return mapped.toUpperCase() as 'BLOOD_PRESSURE_SYSTOLIC' | 'BLOOD_PRESSURE_DIASTOLIC' | 'HEART_RATE' | 'TEMPERATURE' | 'WEIGHT' | 'RESPIRATORY_RATE' | 'OXYGEN_SATURATION' | 'BLOOD_GLUCOSE';
+    }),
   value: z.number().positive('Valor deve ser positivo'),
   unit: z.string().min(1, 'Unidade é obrigatória'),
   measuredAt: z.string().datetime().optional(),
@@ -263,7 +266,9 @@ router.post('/questionnaires', async (req: Request, res: Response) => {
     const questionnaireResponse = await prisma.questionnaireResponse.create({
       data: {
         userId: validated.userId,
+        organizationId: 'default-org-id', // TODO: Get from user context
         questionnaireId: validated.questionnaireId,
+        questionnaireName: 'General Health Assessment', // TODO: Get from questionnaire
         responses: validated.responses,
         score: validated.score,
         completedAt: validated.completedAt ? new Date(validated.completedAt) : new Date(),

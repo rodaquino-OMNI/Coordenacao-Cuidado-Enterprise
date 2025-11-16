@@ -44,14 +44,14 @@ router.post('/missions', async (req: Request, res: Response) => {
 
     const mission = await prisma.mission.create({
       data: {
-        name: validated.name,
+        title: validated.name,
         description: validated.description,
-        type: validated.type,
-        points: validated.points,
+        category: validated.type as any, // TODO: Map to MissionCategory enum
+        pointsReward: validated.points,
         requiredActions: validated.requiredActions,
-        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : null,
+        endDate: validated.expiresAt ? new Date(validated.expiresAt) : null,
         isActive: true,
-        metadata: validated.metadata || {},
+        organizationId: 'default-org-id', // TODO: Get from context
       }
     });
 
@@ -124,13 +124,8 @@ router.get('/missions/:id', async (req: Request, res: Response) => {
 
     const mission = await prisma.mission.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            achievements: true
-          }
-        }
-      }
+      // No _count available for Mission
+
     });
 
     if (!mission) {
@@ -252,11 +247,12 @@ router.post('/achievements', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if user already completed this mission
+    // Check if user already has this achievement
     const existingAchievement = await prisma.achievement.findFirst({
       where: {
         userId: validated.userId,
-        missionId: validated.missionId
+        name: validated.achievementName || 'Achievement',
+        isCompleted: true
       }
     });
 
@@ -272,13 +268,17 @@ router.post('/achievements', async (req: Request, res: Response) => {
       prisma.achievement.create({
         data: {
           userId: validated.userId,
-          missionId: validated.missionId,
-          pointsEarned: validated.pointsEarned,
+          organizationId: 'default-org-id', // TODO: Get from context
+          achievementType: 'HEALTH_DATA_ENTERED', // TODO: Map from validated data
+          name: 'Mission Achievement',
+          description: 'Completed mission successfully',
+          category: 'HEALTH_EDUCATION', // TODO: Map from validated data
+          pointsAwarded: validated.pointsEarned,
+          isCompleted: true,
           completedAt: validated.completedAt ? new Date(validated.completedAt) : new Date(),
           metadata: validated.metadata || {},
         },
         include: {
-          mission: true,
           user: {
             select: {
               id: true,
@@ -309,7 +309,7 @@ router.post('/achievements', async (req: Request, res: Response) => {
       message: 'Conquista registrada com sucesso',
       data: {
         achievement,
-        newHealthScore: user.healthScore + validated.pointsEarned
+        newHealthScore: (user.healthScore || 0) + validated.pointsEarned
       }
     });
   } catch (error) {
@@ -335,13 +335,10 @@ router.get('/users/:userId/achievements', async (req: Request, res: Response) =>
 
     const achievements = await prisma.achievement.findMany({
       where: { userId },
-      include: {
-        mission: true
-      },
       orderBy: { completedAt: 'desc' }
     });
 
-    const totalPoints = achievements.reduce((sum, achievement) => sum + achievement.pointsEarned, 0);
+    const totalPoints = achievements.reduce((sum, achievement) => sum + achievement.pointsAwarded, 0);
 
     res.status(200).json({
       success: true,

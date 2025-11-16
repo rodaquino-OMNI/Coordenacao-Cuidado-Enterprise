@@ -57,11 +57,16 @@ router.post('/', async (req: Request, res: Response) => {
       data: {
         email: validated.email,
         password: validated.password, // Should be hashed before saving
+        firstName: validated.name?.split(' ')[0] || validated.name || '',
+        lastName: validated.name?.split(' ').slice(1).join(' ') || '',
         name: validated.name,
         phone: validated.phone,
         cpf: validated.cpf,
         onboardingComplete: false,
         healthScore: 0,
+        organization: {
+          connect: { id: 'default-org-id' } // TODO: Get from context or config
+        }
       },
       select: {
         id: true,
@@ -418,12 +423,12 @@ router.get('/:id/onboarding', async (req: Request, res: Response) => {
       completed: user.onboardingComplete,
       currentStep: user.onboardingComplete ? 5 : 1,
       totalSteps: 5,
-      healthPoints: user.healthScore,
+      healthPoints: user.healthScore || 0,
       completedMissions: [
         { id: 'mission1', name: 'Me Conhece', points: 100, completed: true },
-        { id: 'mission2', name: 'Estilo de Vida', points: 150, completed: user.healthScore >= 150 },
-        { id: 'mission3', name: 'Bem-estar', points: 200, completed: user.healthScore >= 350 },
-        { id: 'mission4', name: 'Saúde Atual', points: 250, completed: user.healthScore >= 600 },
+        { id: 'mission2', name: 'Estilo de Vida', points: 150, completed: (user.healthScore || 0) >= 150 },
+        { id: 'mission3', name: 'Bem-estar', points: 200, completed: (user.healthScore || 0) >= 350 },
+        { id: 'mission4', name: 'Saúde Atual', points: 250, completed: (user.healthScore || 0) >= 600 },
         { id: 'mission5', name: 'Documentos', points: 300, completed: user.onboardingComplete },
       ]
     };

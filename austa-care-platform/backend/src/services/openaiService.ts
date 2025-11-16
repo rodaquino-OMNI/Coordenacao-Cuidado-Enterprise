@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 import { config } from '../config/config';
 import { logger } from '../utils/logger';
 import { RedisService } from './redisService';

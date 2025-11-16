@@ -27,8 +27,12 @@ const upload = multer({
 // Zod validation schemas
 const createDocumentSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
-  type: z.enum(['prescription', 'exam_result', 'medical_report', 'insurance_card', 'id_document', 'other'],
-    { errorMap: () => ({ message: 'Tipo de documento inválido' }) }),
+  type: z.enum(['prescription', 'exam_result', 'medical_record', 'insurance_card', 'id_document', 'lab_result', 'other'])
+    .transform(val => {
+      // Map old 'medical_report' to 'medical_record' for backwards compatibility
+      const mapped = val === 'exam_result' ? 'lab_result' : val === 'medical_report' ? 'medical_record' : val;
+      return mapped.toUpperCase() as 'PRESCRIPTION' | 'LAB_RESULT' | 'MEDICAL_RECORD' | 'INSURANCE_CARD' | 'ID_DOCUMENT' | 'OTHER';
+    }),
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
   metadata: z.record(z.any()).optional(),
@@ -37,7 +41,7 @@ const createDocumentSchema = z.object({
 const updateDocumentSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
-  status: z.enum(['pending', 'processing', 'completed', 'failed']).optional(),
+  status: z.enum(['pending', 'processing', 'completed', 'failed']).transform(val => val?.toUpperCase() as 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED').optional(),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -77,7 +81,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
         fileUrl,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
-        status: 'completed',
+        status: 'COMPLETED',
         metadata: validated.metadata || {},
       },
       include: {
@@ -388,7 +392,7 @@ router.post('/batch', upload.array('files', 10), async (req: Request, res: Respo
             fileUrl,
             mimeType: file.mimetype,
             fileSize: file.size,
-            status: 'completed',
+            status: 'COMPLETED',
             metadata: {},
           }
         });

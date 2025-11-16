@@ -127,6 +127,9 @@ export class RedisClusterClient {
     }
 
     const client = this.getClient();
+    if (!client) {
+      return; // No client available
+    }
 
     client.on('error', (error: Error) => {
       logger.warn('Redis error (operating in degraded mode):', error.message);
@@ -168,6 +171,15 @@ export class RedisClusterClient {
       return this.standalone;
     }
     return null;
+  }
+
+  // Helper: Ensure client is available and return non-null
+  private ensureClient(): Redis | Cluster {
+    const client = this.getClient();
+    if (!client) {
+      throw new Error('Redis client not available');
+    }
+    return client;
   }
 
   // Check if Redis is available

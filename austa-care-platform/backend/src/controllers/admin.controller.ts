@@ -28,7 +28,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
       systemHealth
     ] = await Promise.all([
       prisma.user.count(),
-      prisma.conversation.count({ where: { status: 'active' } }),
+      prisma.conversation.count({ where: { status: 'ACTIVE' } }),
       prisma.document.count(),
       prisma.achievement.count(),
       prisma.user.findMany({
@@ -288,7 +288,7 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
         }
       }),
       prisma.achievement.groupBy({
-        by: ['missionId'],
+        by: ['category'],
         _count: {
           id: true
         }
@@ -306,9 +306,9 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
           ...user,
           achievementsCount: user._count.achievements
         })),
-        averageCompletionsPerMission: missionCompletionRate.length > 0
+        averageCompletionsPerCategory: missionCompletionRate.length > 0
           ? Math.round(
-              missionCompletionRate.reduce((sum, item) => sum + item._count.id, 0) /
+              missionCompletionRate.reduce((sum, item) => sum + (item._count?.id || 0), 0) /
               missionCompletionRate.length
             )
           : 0
@@ -384,12 +384,12 @@ router.patch('/users/:id/suspend', async (req: Request, res: Response) => {
 
     const updatedUser = await prisma.user.update({
       where: { id },
-      data: { suspended: suspend },
+      data: { isActive: !suspend },
       select: {
         id: true,
         name: true,
         email: true,
-        suspended: true
+        isActive: true
       }
     });
 

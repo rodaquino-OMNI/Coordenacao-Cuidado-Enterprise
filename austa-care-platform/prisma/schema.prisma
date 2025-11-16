@@ -15,126 +15,135 @@ datasource db {
 // ==========================================
 
 model Organization {
-  id              String   @id @default(cuid())
-  name            String
-  type            OrganizationType
-  taxId           String?  @unique // CNPJ for Brazilian healthcare facilities
-  address         Json?    // Structured address data
-  phone           String?
-  email           String?
-  isActive        Boolean  @default(true)
-  settings        Json?    // Organization-specific configurations
-  
+  id       String           @id @default(cuid())
+  name     String
+  type     OrganizationType
+  taxId    String?          @unique // CNPJ for Brazilian healthcare facilities
+  address  Json? // Structured address data
+  phone    String?
+  email    String?
+  isActive Boolean          @default(true)
+  settings Json? // Organization-specific configurations
+
   // HIPAA & Compliance
-  hipaaCompliant  Boolean  @default(false)
-  dataRetentionYears Int   @default(7)
-  
+  hipaaCompliant     Boolean @default(false)
+  dataRetentionYears Int     @default(7)
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  users           User[]
-  providers       Provider[]
-  authorizations  Authorization[]
-  auditLogs       AuditLog[]
+  users            User[]
+  providers        Provider[]
+  authorizations   Authorization[]
+  auditLogs        AuditLog[]
   tasyIntegrations TasyIntegration[]
 
-  @@map("organizations")
   @@index([type, isActive])
   @@index([taxId])
+  @@map("organizations")
 }
 
 model User {
-  id              String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Personal Information (Encrypted)
-  firstName       String
-  lastName        String
-  email           String?  @unique
-  phone           String   @unique // WhatsApp number (primary identifier)
-  cpf             String?  @unique // Brazilian tax ID (encrypted)
-  dateOfBirth     DateTime?
-  gender          Gender?
+  firstName   String
+  lastName    String
+  name        String? // Full name for display
+  email       String?   @unique
+  phone       String    @unique // WhatsApp number (primary identifier)
+  cpf         String?   @unique // Brazilian tax ID (encrypted)
+  dateOfBirth DateTime?
+  gender      Gender?
 
   // Authentication & Security
-  password        String?  // Hashed password (nullable for WhatsApp-only users)
-  resetToken      String?  @unique // Password reset token
+  password         String? // Hashed password (nullable for WhatsApp-only users)
+  resetToken       String?   @unique // Password reset token
   resetTokenExpiry DateTime? // Reset token expiration
-  refreshToken    String?  // JWT refresh token
-  lastLoginAt     DateTime? // Track last login timestamp
+  refreshToken     String? // JWT refresh token
+  lastLoginAt      DateTime? // Track last login timestamp
 
   // WhatsApp Integration
-  whatsappId      String?  @unique // WhatsApp Business API user ID
-  preferredLanguage String @default("pt-BR")
-  timezone        String   @default("America/Sao_Paulo")
+  whatsappId        String? @unique // WhatsApp Business API user ID
+  preferredLanguage String  @default("pt-BR")
+  timezone          String  @default("America/Sao_Paulo")
 
   // System Status
-  isActive        Boolean  @default(true)
-  isVerified      Boolean  @default(false)
-  lastActiveAt    DateTime @default(now())
+  isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(false)
+  lastActiveAt DateTime @default(now())
+
+  // Health & Onboarding
+  healthScore        Float?  @default(0) // User health score (0-100)
+  onboardingComplete Boolean @default(false) // Onboarding completion status
 
   // Multi-tenancy
-  organizationId  String
+  organizationId String
 
   // Emergency Contact (Encrypted)
-  emergencyContact Json?   // { name, phone, relationship }
+  emergencyContact Json? // { name, phone, relationship }
 
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  conversations   Conversation[]
-  messages        Message[]
-  healthData      HealthData[]
-  onboardingProgress OnboardingProgress[]
-  healthPoints    HealthPoints[]
-  authorizations  Authorization[]
-  documents       Document[]
-  auditLogs       AuditLog[]
+  organization           Organization            @relation(fields: [organizationId], references: [id])
+  conversations          Conversation[]
+  messages               Message[]
+  healthData             HealthData[]
+  onboardingProgress     OnboardingProgress[]
+  healthPoints           HealthPoints[]
+  authorizations         Authorization[]
+  documents              Document[]
+  auditLogs              AuditLog[]
+  vitalSigns             VitalSign[]
+  questionnaireResponses QuestionnaireResponse[]
+  achievements           Achievement[]
 
-  @@map("users")
   @@index([organizationId, isActive])
   @@index([phone])
   @@index([whatsappId])
   @@index([cpf])
   @@index([resetToken])
+  @@index([healthScore])
+  @@map("users")
 }
 
 model Provider {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Professional Information
-  firstName       String
-  lastName        String
-  email           String   @unique
-  phone           String?
-  license         String?  @unique // Medical license number
-  specialty       String[]
-  
+  firstName String
+  lastName  String
+  email     String   @unique
+  phone     String?
+  license   String?  @unique // Medical license number
+  specialty String[]
+
   // Organization
-  organizationId  String
-  role            ProviderRole
-  isActive        Boolean  @default(true)
-  
+  organizationId String
+  role           ProviderRole
+  isActive       Boolean      @default(true)
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  authorizations  Authorization[]
-  auditLogs       AuditLog[]
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  authorizations Authorization[]
+  auditLogs      AuditLog[]
 
-  @@map("providers")
   @@index([organizationId, isActive])
   @@index([license])
   @@index([specialty])
+  @@map("providers")
 }
 
 // ==========================================
@@ -142,113 +151,116 @@ model Provider {
 // ==========================================
 
 model Conversation {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // WhatsApp Integration
-  whatsappChatId  String   @unique // WhatsApp Business API chat ID
-  status          ConversationStatus @default(ACTIVE)
-  type            ConversationType @default(SUPPORT)
-  
+  whatsappChatId String             @unique // WhatsApp Business API chat ID
+  status         ConversationStatus @default(ACTIVE)
+  type           ConversationType   @default(SUPPORT)
+  channel        String?            @default("whatsapp") // Communication channel
+
   // User & Organization
-  userId          String
-  organizationId  String
-  
+  userId         String
+  organizationId String
+
   // Conversation Metadata
-  title           String?
-  summary         String?
-  tags            String[]
-  priority        Priority @default(NORMAL)
-  
+  title    String?
+  summary  String?
+  tags     String[]
+  priority Priority @default(NORMAL)
+  metadata Json? // Additional conversation metadata
+
   // AI & Bot Configuration
-  botEnabled      Boolean  @default(true)
-  aiContext       Json?    // AI conversation context
+  botEnabled      Boolean   @default(true)
+  aiContext       Json? // AI conversation context
   lastBotResponse DateTime?
-  
+
   // Health Context
-  healthTopics    String[] // Health conditions discussed
+  healthTopics         String[] // Health conditions discussed
   medicationsMentioned String[]
-  symptomsReported String[]
-  
+  symptomsReported     String[]
+
   // Analytics
-  messageCount    Int      @default(0)
-  avgResponseTime Float?   // In minutes
+  messageCount      Int    @default(0)
+  avgResponseTime   Float? // In minutes
   satisfactionScore Float? // 1-5 rating
-  
+
   // Timestamps & Audit
-  startedAt       DateTime @default(now())
-  lastMessageAt   DateTime @default(now())
-  endedAt         DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  startedAt     DateTime  @default(now())
+  lastMessageAt DateTime  @default(now())
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  messages        Message[]
-  auditLogs       AuditLog[] @relation(name: "ConversationAudit")
+  user      User       @relation(fields: [userId], references: [id])
+  messages  Message[]
+  auditLogs AuditLog[] @relation(name: "ConversationAudit")
 
-  @@map("conversations")
   @@index([userId, status])
   @@index([organizationId, status])
   @@index([whatsappChatId])
   @@index([type, priority])
   @@index([lastMessageAt])
+  @@index([channel])
+  @@map("conversations")
 }
 
 model Message {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // WhatsApp Integration
-  whatsappMessageId String? @unique // WhatsApp Business API message ID
-  direction       MessageDirection // INBOUND/OUTBOUND
-  type            MessageType      // TEXT/AUDIO/IMAGE/DOCUMENT/etc
-  
+  whatsappMessageId String?          @unique // WhatsApp Business API message ID
+  direction         MessageDirection // INBOUND/OUTBOUND
+  type              MessageType // TEXT/AUDIO/IMAGE/DOCUMENT/etc
+
   // Message Content
-  content         String?   // Text content
-  mediaUrl        String?   // Media file URL
-  mediaType       String?   // MIME type
-  metadata        Json?     // Additional WhatsApp metadata
-  
+  content   String? // Text content
+  mediaUrl  String? // Media file URL
+  mediaType String? // MIME type
+  metadata  Json? // Additional WhatsApp metadata
+
   // Conversation Context
-  conversationId  String
-  userId          String
-  
+  conversationId String
+  userId         String
+
   // AI Processing
-  aiProcessed     Boolean  @default(false)
-  aiConfidence    Float?   // AI understanding confidence (0-1)
-  aiIntent        String?  // Detected user intent
-  aiEntities      Json?    // Extracted entities (medications, symptoms, etc.)
-  
+  aiProcessed  Boolean @default(false)
+  aiConfidence Float? // AI understanding confidence (0-1)
+  aiIntent     String? // Detected user intent
+  aiEntities   Json? // Extracted entities (medications, symptoms, etc.)
+
   // Health Information Extraction
-  healthKeywords  String[] // Detected health-related terms
-  urgencyLevel    UrgencyLevel @default(LOW)
-  requiresResponse Boolean @default(false)
-  
+  healthKeywords   String[] // Detected health-related terms
+  urgencyLevel     UrgencyLevel @default(LOW)
+  requiresResponse Boolean      @default(false)
+
   // Bot Response
-  isBot           Boolean  @default(false)
-  botResponseTime Float?   // Response time in seconds
-  
+  isBot           Boolean @default(false)
+  botResponseTime Float? // Response time in seconds
+
   // Status & Processing
-  status          MessageStatus @default(DELIVERED)
-  readAt          DateTime?
-  processedAt     DateTime?
-  
+  status      MessageStatus @default(DELIVERED)
+  readAt      DateTime?
+  processedAt DateTime?
+
   // Timestamps & Audit
-  sentAt          DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  sentAt    DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
-  user            User     @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
-  @@map("messages")
   @@index([conversationId, sentAt])
   @@index([userId, direction])
   @@index([whatsappMessageId])
   @@index([type, aiProcessed])
   @@index([urgencyLevel, requiresResponse])
+  @@map("messages")
 }
 
 // ==========================================
@@ -256,56 +268,56 @@ model Message {
 // ==========================================
 
 model HealthData {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // User & Organization
-  userId          String
-  organizationId  String
-  
+  userId         String
+  organizationId String
+
   // Health Information Categories
-  type            HealthDataType
-  category        HealthCategory
-  
+  type     HealthDataType
+  category HealthCategory
+
   // Medical Data (Encrypted)
-  conditions      Json?    // Medical conditions
-  medications     Json?    // Current medications with dosages
-  allergies       Json?    // Known allergies
-  symptoms        Json?    // Current symptoms
-  vitalSigns      Json?    // Blood pressure, weight, etc.
-  labResults      Json?    // Laboratory test results
-  
+  conditions  Json? // Medical conditions
+  medications Json? // Current medications with dosages
+  allergies   Json? // Known allergies
+  symptoms    Json? // Current symptoms
+  vitalSigns  Json? // Blood pressure, weight, etc.
+  labResults  Json? // Laboratory test results
+
   // Metadata
-  source          DataSource @default(USER_REPORTED)
-  reliability     ReliabilityLevel @default(MEDIUM)
-  isVerified      Boolean  @default(false)
-  verifiedBy      String?  // Provider ID who verified
-  verifiedAt      DateTime?
-  
+  source      DataSource       @default(USER_REPORTED)
+  reliability ReliabilityLevel @default(MEDIUM)
+  isVerified  Boolean          @default(false)
+  verifiedBy  String? // Provider ID who verified
+  verifiedAt  DateTime?
+
   // Privacy & Access
   sensitivityLevel SensitivityLevel @default(NORMAL)
-  accessLevel     AccessLevel @default(PATIENT_ONLY)
-  
+  accessLevel      AccessLevel      @default(PATIENT_ONLY)
+
   // Data Lifecycle
-  expiresAt       DateTime? // For temporary data
-  isActive        Boolean  @default(true)
-  
+  expiresAt DateTime? // For temporary data
+  isActive  Boolean   @default(true)
+
   // Timestamps & Audit
-  recordedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  recordedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  authorizations  Authorization[]
-  auditLogs       AuditLog[] @relation(name: "HealthDataAudit")
+  user           User            @relation(fields: [userId], references: [id])
+  authorizations Authorization[]
+  auditLogs      AuditLog[]      @relation(name: "HealthDataAudit")
 
-  @@map("health_data")
   @@index([userId, type, isActive])
   @@index([organizationId, category])
   @@index([sensitivityLevel, accessLevel])
   @@index([recordedAt])
   @@index([expiresAt])
+  @@map("health_data")
 }
 
 // ==========================================
@@ -313,164 +325,164 @@ model HealthData {
 // ==========================================
 
 model Mission {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Mission Definition
-  title           String
-  description     String
-  category        MissionCategory
-  difficulty      DifficultyLevel @default(EASY)
-  
+  title       String
+  description String
+  category    MissionCategory
+  difficulty  DifficultyLevel @default(EASY)
+
   // Rewards
-  pointsReward    Int      @default(0)
-  badgeReward     String?
-  unlockReward    String?  // What this mission unlocks
-  
+  pointsReward Int     @default(0)
+  badgeReward  String?
+  unlockReward String? // What this mission unlocks
+
   // Requirements
   prerequisites   String[] // Mission IDs that must be completed first
-  requiredActions Json     // Specific actions required
-  
+  requiredActions Json // Specific actions required
+
   // Availability
-  isActive        Boolean  @default(true)
-  startDate       DateTime?
-  endDate         DateTime?
-  organizationId  String
-  
+  isActive       Boolean   @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+  organizationId String
+
   // Metadata
-  estimatedTime   Int?     // Minutes to complete
-  tags            String[]
-  
+  estimatedTime Int? // Minutes to complete
+  tags          String[]
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
   onboardingProgress OnboardingProgress[]
 
-  @@map("missions")
   @@index([organizationId, isActive])
   @@index([category, difficulty])
   @@index([startDate, endDate])
+  @@map("missions")
 }
 
 model OnboardingProgress {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // User & Mission
-  userId          String
-  missionId       String
-  organizationId  String
-  
+  userId         String
+  missionId      String
+  organizationId String
+
   // Progress Tracking
-  status          ProgressStatus @default(NOT_STARTED)
-  progress        Float    @default(0) // 0-100 percentage
-  currentStep     Int      @default(0)
-  totalSteps      Int      @default(1)
-  
+  status      ProgressStatus @default(NOT_STARTED)
+  progress    Float          @default(0) // 0-100 percentage
+  currentStep Int            @default(0)
+  totalSteps  Int            @default(1)
+
   // Completion Data
-  startedAt       DateTime?
-  completedAt     DateTime?
-  pointsEarned    Int      @default(0)
-  badgeEarned     String?
-  
+  startedAt    DateTime?
+  completedAt  DateTime?
+  pointsEarned Int       @default(0)
+  badgeEarned  String?
+
   // Engagement Metrics
   attemptsCount   Int      @default(0)
   timeSpent       Int      @default(0) // Minutes
   lastInteraction DateTime @default(now())
-  
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  mission         Mission  @relation(fields: [missionId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  mission Mission @relation(fields: [missionId], references: [id])
 
-  @@map("onboarding_progress")
   @@unique([userId, missionId])
   @@index([userId, status])
   @@index([organizationId, status])
   @@index([completedAt])
+  @@map("onboarding_progress")
 }
 
 model HealthPoints {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // User & Organization
-  userId          String
-  organizationId  String
-  
+  userId         String
+  organizationId String
+
   // Points System
-  totalPoints     Int      @default(0)
-  availablePoints Int      @default(0)
-  spentPoints     Int      @default(0)
-  
+  totalPoints     Int @default(0)
+  availablePoints Int @default(0)
+  spentPoints     Int @default(0)
+
   // Point Categories
-  onboardingPoints Int     @default(0)
-  engagementPoints Int     @default(0)
-  healthPoints     Int     @default(0)
-  achievementPoints Int    @default(0)
-  
+  onboardingPoints  Int @default(0)
+  engagementPoints  Int @default(0)
+  healthPoints      Int @default(0)
+  achievementPoints Int @default(0)
+
   // Level System
-  currentLevel    Int      @default(1)
-  experiencePoints Int     @default(0)
-  nextLevelAt     Int      @default(100)
-  
+  currentLevel     Int @default(1)
+  experiencePoints Int @default(0)
+  nextLevelAt      Int @default(100)
+
   // Badges & Achievements
-  badges          String[] // Badge IDs earned
-  achievements    Json[]   // Achievement objects
-  
+  badges       String[] // Badge IDs earned
+  achievements Json[] // Achievement objects
+
   // Streaks
-  dailyStreak     Int      @default(0)
-  weeklyStreak    Int      @default(0)
-  longestStreak   Int      @default(0)
-  lastActiveDate  DateTime @default(now())
-  
+  dailyStreak    Int      @default(0)
+  weeklyStreak   Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActiveDate DateTime @default(now())
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  transactions    PointTransaction[]
+  user         User               @relation(fields: [userId], references: [id])
+  transactions PointTransaction[]
 
-  @@map("health_points")
   @@unique([userId])
   @@index([organizationId, currentLevel])
   @@index([totalPoints])
+  @@map("health_points")
 }
 
 model PointTransaction {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // User & Points
-  userId          String
-  healthPointsId  String
-  
+  userId         String
+  healthPointsId String
+
   // Transaction Details
-  type            TransactionType
-  amount          Int      // Positive for earning, negative for spending
-  reason          String
-  description     String?
-  
+  type        TransactionType
+  amount      Int // Positive for earning, negative for spending
+  reason      String
+  description String?
+
   // Context
-  sourceType      SourceType // MISSION/ENGAGEMENT/PURCHASE/etc
-  sourceId        String?    // Related entity ID
-  
+  sourceType SourceType // MISSION/ENGAGEMENT/PURCHASE/etc
+  sourceId   String? // Related entity ID
+
   // Metadata
-  metadata        Json?
-  
+  metadata Json?
+
   // Timestamps
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  healthPoints    HealthPoints @relation(fields: [healthPointsId], references: [id])
+  healthPoints HealthPoints @relation(fields: [healthPointsId], references: [id])
 
-  @@map("point_transactions")
   @@index([userId, createdAt])
   @@index([healthPointsId, type])
   @@index([sourceType, sourceId])
+  @@map("point_transactions")
 }
 
 // ==========================================
@@ -478,67 +490,67 @@ model PointTransaction {
 // ==========================================
 
 model Authorization {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Authorization Details
-  type            AuthorizationType
-  procedureName   String
-  procedureCode   String?  // Medical procedure code
-  description     String?
-  
+  type          AuthorizationType
+  procedureName String
+  procedureCode String? // Medical procedure code
+  description   String?
+
   // User & Provider
-  userId          String
-  providerId      String?
-  organizationId  String
-  
+  userId         String
+  providerId     String?
+  organizationId String
+
   // Health Data Reference
-  healthDataId    String?
+  healthDataId      String?
   relatedConditions String[]
-  
+
   // Authorization Status
-  status          AuthorizationStatus @default(PENDING)
-  priority        Priority @default(NORMAL)
-  urgencyLevel    UrgencyLevel @default(LOW)
-  
+  status       AuthorizationStatus @default(PENDING)
+  priority     Priority            @default(NORMAL)
+  urgencyLevel UrgencyLevel        @default(LOW)
+
   // Approval Workflow
-  requestedBy     String   // Provider ID
-  reviewedBy      String?  // Provider ID
-  approvedBy      String?  // Provider ID
-  
+  requestedBy String // Provider ID
+  reviewedBy  String? // Provider ID
+  approvedBy  String? // Provider ID
+
   // Dates & Validity
-  requestedAt     DateTime @default(now())
-  reviewedAt      DateTime?
-  approvedAt      DateTime?
-  validFrom       DateTime?
-  validUntil      DateTime?
-  
+  requestedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+  approvedAt  DateTime?
+  validFrom   DateTime?
+  validUntil  DateTime?
+
   // Documentation
-  justification   String?
-  clinicalNotes   String?
-  attachments     String[] // Document IDs
-  
+  justification String?
+  clinicalNotes String?
+  attachments   String[] // Document IDs
+
   // External Integration
-  tasyReferenceId String?  // Tasy ERP reference
+  tasyReferenceId  String? // Tasy ERP reference
   insuranceClaimId String?
-  
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  provider        Provider? @relation(fields: [providerId], references: [id])
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  healthData      HealthData? @relation(fields: [healthDataId], references: [id])
-  auditLogs       AuditLog[] @relation(name: "AuthorizationAudit")
+  user         User         @relation(fields: [userId], references: [id])
+  provider     Provider?    @relation(fields: [providerId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  healthData   HealthData?  @relation(fields: [healthDataId], references: [id])
+  auditLogs    AuditLog[]   @relation(name: "AuthorizationAudit")
 
-  @@map("authorizations")
   @@index([userId, status])
   @@index([organizationId, status, priority])
   @@index([providerId, status])
   @@index([requestedAt, validUntil])
   @@index([tasyReferenceId])
+  @@map("authorizations")
 }
 
 // ==========================================
@@ -546,65 +558,74 @@ model Authorization {
 // ==========================================
 
 model Document {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Document Metadata
-  filename        String
-  originalName    String
-  mimeType        String
-  size            Int      // File size in bytes
-  
+  filename     String // Use lowercase for consistency
+  fileName     String? // Alternative field name for compatibility
+  originalName String
+  mimeType     String
+  size         Int // File size in bytes
+  fileSize     Int? // Alternative size field for compatibility
+
   // Storage
   storageProvider StorageProvider @default(LOCAL)
   storagePath     String
   downloadUrl     String?
+  fileUrl         String? // Alternative URL field for compatibility
   thumbnailUrl    String?
-  
+
   // Document Classification
-  type            DocumentType
-  category        DocumentCategory
-  tags            String[]
-  
+  type     DocumentType
+  category DocumentCategory
+  tags     String[]
+  status   DocumentStatus   @default(PENDING) // Processing status
+
   // User & Organization
-  userId          String
-  organizationId  String
-  
+  userId         String
+  organizationId String
+
+  // Document Description
+  title       String? // Document title
+  description String? // Document description
+
   // OCR & Processing
-  hasOcr          Boolean  @default(false)
-  ocrText         String?  // Extracted text
-  ocrConfidence   Float?   // OCR confidence score
-  processedAt     DateTime?
-  
+  hasOcr        Boolean   @default(false)
+  ocrText       String? // Extracted text
+  ocrConfidence Float? // OCR confidence score
+  processedAt   DateTime?
+
   // Health Data Extraction
-  extractedData   Json?    // Structured health data from document
-  healthKeywords  String[] // Detected health terms
-  
+  extractedData  Json? // Structured health data from document
+  healthKeywords String[] // Detected health terms
+
   // Privacy & Security
-  isEncrypted     Boolean  @default(false)
-  encryptionKey   String?
-  accessLevel     AccessLevel @default(PATIENT_ONLY)
+  isEncrypted      Boolean          @default(false)
+  encryptionKey    String?
+  accessLevel      AccessLevel      @default(PATIENT_ONLY)
   sensitivityLevel SensitivityLevel @default(NORMAL)
-  
+
   // Document Lifecycle
-  isActive        Boolean  @default(true)
-  archivedAt      DateTime?
-  retentionUntil  DateTime? // HIPAA retention requirements
-  
+  isActive       Boolean   @default(true)
+  archivedAt     DateTime?
+  retentionUntil DateTime? // HIPAA retention requirements
+
   // Timestamps & Audit
-  uploadedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  uploadedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id])
-  auditLogs       AuditLog[] @relation(name: "DocumentAudit")
+  user      User       @relation(fields: [userId], references: [id])
+  auditLogs AuditLog[] @relation(name: "DocumentAudit")
 
-  @@map("documents")
   @@index([userId, type, isActive])
   @@index([organizationId, category])
   @@index([hasOcr, processedAt])
   @@index([uploadedAt, retentionUntil])
+  @@index([status])
+  @@map("documents")
 }
 
 // ==========================================
@@ -612,95 +633,209 @@ model Document {
 // ==========================================
 
 model TasyIntegration {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Integration Configuration
   organizationId  String
   tasyInstanceUrl String
-  apiVersion      String   @default("v1")
-  isActive        Boolean  @default(true)
-  
+  apiVersion      String  @default("v1")
+  isActive        Boolean @default(true)
+
   // Authentication
-  apiKey          String   // Encrypted
-  clientId        String?
-  lastAuthAt      DateTime?
-  
+  apiKey     String // Encrypted
+  clientId   String?
+  lastAuthAt DateTime?
+
   // Sync Configuration
-  syncEnabled     Boolean  @default(true)
-  syncInterval    Int      @default(300) // Seconds
-  lastSyncAt      DateTime?
-  nextSyncAt      DateTime?
-  
+  syncEnabled  Boolean   @default(true)
+  syncInterval Int       @default(300) // Seconds
+  lastSyncAt   DateTime?
+  nextSyncAt   DateTime?
+
   // Data Mapping
-  fieldMapping    Json     // Field mapping configuration
-  filters         Json?    // Data filters for sync
-  
+  fieldMapping Json // Field mapping configuration
+  filters      Json? // Data filters for sync
+
   // Status & Monitoring
-  status          IntegrationStatus @default(ACTIVE)
-  errorCount      Int      @default(0)
-  lastError       String?
-  lastErrorAt     DateTime?
-  
+  status      IntegrationStatus @default(ACTIVE)
+  errorCount  Int               @default(0)
+  lastError   String?
+  lastErrorAt DateTime?
+
   // Performance Metrics
-  avgSyncTime     Float?   // Average sync time in seconds
-  recordsProcessed Int     @default(0)
-  recordsFailured Int      @default(0)
-  
+  avgSyncTime      Float? // Average sync time in seconds
+  recordsProcessed Int    @default(0)
+  recordsFailured  Int    @default(0)
+
   // Timestamps & Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  syncLogs        TasySyncLog[]
-  auditLogs       AuditLog[] @relation(name: "TasyIntegrationAudit")
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  syncLogs     TasySyncLog[]
+  auditLogs    AuditLog[]    @relation(name: "TasyIntegrationAudit")
 
-  @@map("tasy_integrations")
   @@index([organizationId, isActive])
   @@index([status, nextSyncAt])
+  @@map("tasy_integrations")
 }
 
 model TasySyncLog {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Integration Reference
-  integrationId   String
-  
+  integrationId String
+
   // Sync Details
-  syncType        SyncType
-  direction       SyncDirection
-  recordType      String   // Type of record synced
-  
+  syncType   SyncType
+  direction  SyncDirection
+  recordType String // Type of record synced
+
   // Records Processing
-  recordsAttempted Int     @default(0)
-  recordsSucceeded Int     @default(0)
-  recordsFailed    Int     @default(0)
-  recordsSkipped   Int     @default(0)
-  
+  recordsAttempted Int @default(0)
+  recordsSucceeded Int @default(0)
+  recordsFailed    Int @default(0)
+  recordsSkipped   Int @default(0)
+
   // Status & Timing
-  status          SyncStatus
-  startedAt       DateTime @default(now())
-  completedAt     DateTime?
-  duration        Float?   // Sync duration in seconds
-  
+  status      SyncStatus
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+  duration    Float? // Sync duration in seconds
+
   // Error Handling
-  errorMessage    String?
-  errorDetails    Json?
-  
+  errorMessage String?
+  errorDetails Json?
+
   // Data Summary
-  summary         Json?    // Summary of sync results
-  
+  summary Json? // Summary of sync results
+
   // Timestamps
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  integration     TasyIntegration @relation(fields: [integrationId], references: [id])
+  integration TasyIntegration @relation(fields: [integrationId], references: [id])
 
-  @@map("tasy_sync_logs")
   @@index([integrationId, startedAt])
   @@index([status, syncType])
   @@index([recordType, completedAt])
+  @@map("tasy_sync_logs")
+}
+
+// ==========================================
+// HEALTH MONITORING MODELS
+// ==========================================
+
+model VitalSign {
+  id String @id @default(cuid())
+
+  // User & Organization
+  userId         String
+  organizationId String
+
+  // Vital Sign Data
+  type  VitalSignType
+  value Float
+  unit  String
+
+  // Measurement Context
+  source   DataSource @default(USER_REPORTED)
+  deviceId String? // Device used for measurement
+  notes    String?
+
+  // Metadata
+  measuredAt DateTime @default(now())
+  isVerified Boolean  @default(false)
+  verifiedBy String? // Provider ID
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, type, measuredAt])
+  @@index([organizationId, measuredAt])
+  @@map("vital_signs")
+}
+
+model QuestionnaireResponse {
+  id String @id @default(cuid())
+
+  // User & Organization
+  userId         String
+  organizationId String
+
+  // Questionnaire Details
+  questionnaireId   String // Reference to questionnaire template
+  questionnaireName String
+
+  // Response Data
+  responses Json // Question-answer pairs
+  score     Float? // Calculated score if applicable
+
+  // Completion Status
+  isComplete  Boolean   @default(false)
+  completedAt DateTime?
+
+  // Metadata
+  startedAt DateTime @default(now())
+  timeSpent Int? // Seconds spent on questionnaire
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, questionnaireId])
+  @@index([organizationId, completedAt])
+  @@index([isComplete])
+  @@map("questionnaire_responses")
+}
+
+model Achievement {
+  id String @id @default(cuid())
+
+  // User & Organization
+  userId         String
+  organizationId String
+
+  // Achievement Details
+  achievementType AchievementType
+  name            String
+  description     String?
+  category        MissionCategory
+
+  // Reward
+  pointsAwarded Int     @default(0)
+  badgeId       String?
+
+  // Progress
+  progress    Float     @default(0) // 0-100
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  // Metadata
+  metadata Json?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, achievementType, name])
+  @@index([userId, isCompleted])
+  @@index([organizationId, achievementType])
+  @@map("achievements")
 }
 
 // ==========================================
@@ -708,63 +843,63 @@ model TasySyncLog {
 // ==========================================
 
 model AuditLog {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Actor Information
-  userId          String?
-  providerId      String?
-  organizationId  String
-  userAgent       String?
-  ipAddress       String?
-  
+  userId         String?
+  providerId     String?
+  organizationId String
+  userAgent      String?
+  ipAddress      String?
+
   // Action Details
-  action          AuditAction
-  entity          String   // Table/Model name
-  entityId        String?  // Record ID
-  
+  action   AuditAction
+  entity   String // Table/Model name
+  entityId String? // Record ID
+
   // Change Tracking
-  oldValues       Json?    // Previous values
-  newValues       Json?    // New values
-  changedFields   String[] // Fields that changed
-  
+  oldValues     Json? // Previous values
+  newValues     Json? // New values
+  changedFields String[] // Fields that changed
+
   // Context
-  description     String?
-  reason          String?
-  sessionId       String?
-  requestId       String?
-  
+  description String?
+  reason      String?
+  sessionId   String?
+  requestId   String?
+
   // Risk Assessment
-  riskLevel       RiskLevel @default(LOW)
-  sensitiveData   Boolean  @default(false)
-  requiresReview  Boolean  @default(false)
-  
+  riskLevel      RiskLevel @default(LOW)
+  sensitiveData  Boolean   @default(false)
+  requiresReview Boolean   @default(false)
+
   // Compliance
-  hipaaRelevant   Boolean  @default(false)
-  lgpdRelevant    Boolean  @default(false) // Brazilian privacy law
-  
+  hipaaRelevant Boolean @default(false)
+  lgpdRelevant  Boolean @default(false) // Brazilian privacy law
+
   // Metadata
-  metadata        Json?
-  
+  metadata Json?
+
   // Timestamps
-  occurredAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   // Relations
-  user            User?    @relation(fields: [userId], references: [id])
-  provider        Provider? @relation(fields: [providerId], references: [id])
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  conversation    Conversation? @relation(name: "ConversationAudit", fields: [entityId], references: [id], map: "audit_conversation_fk")
-  healthData      HealthData? @relation(name: "HealthDataAudit", fields: [entityId], references: [id], map: "audit_health_data_fk")
-  authorization   Authorization? @relation(name: "AuthorizationAudit", fields: [entityId], references: [id], map: "audit_authorization_fk")
-  document        Document? @relation(name: "DocumentAudit", fields: [entityId], references: [id], map: "audit_document_fk")
+  user            User?            @relation(fields: [userId], references: [id])
+  provider        Provider?        @relation(fields: [providerId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  conversation    Conversation?    @relation(name: "ConversationAudit", fields: [entityId], references: [id], map: "audit_conversation_fk")
+  healthData      HealthData?      @relation(name: "HealthDataAudit", fields: [entityId], references: [id], map: "audit_health_data_fk")
+  authorization   Authorization?   @relation(name: "AuthorizationAudit", fields: [entityId], references: [id], map: "audit_authorization_fk")
+  document        Document?        @relation(name: "DocumentAudit", fields: [entityId], references: [id], map: "audit_document_fk")
   tasyIntegration TasyIntegration? @relation(name: "TasyIntegrationAudit", fields: [entityId], references: [id], map: "audit_tasy_integration_fk")
 
-  @@map("audit_logs")
   @@index([organizationId, occurredAt])
   @@index([userId, action])
   @@index([entity, entityId])
   @@index([riskLevel, sensitiveData])
   @@index([hipaaRelevant, lgpdRelevant])
+  @@map("audit_logs")
 }
 
 // ==========================================
@@ -1068,4 +1203,41 @@ enum RiskLevel {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum VitalSignType {
+  BLOOD_PRESSURE_SYSTOLIC
+  BLOOD_PRESSURE_DIASTOLIC
+  HEART_RATE
+  TEMPERATURE
+  WEIGHT
+  HEIGHT
+  BMI
+  BLOOD_GLUCOSE
+  OXYGEN_SATURATION
+  RESPIRATORY_RATE
+}
+
+enum AchievementType {
+  ONBOARDING_COMPLETE
+  HEALTH_DATA_ENTERED
+  MEDICATION_ADHERENCE
+  APPOINTMENT_KEPT
+  QUESTIONNAIRE_COMPLETED
+  VITAL_SIGNS_LOGGED
+  DAILY_CHECK_IN
+  WEEKLY_STREAK
+  MONTHLY_STREAK
+  HEALTH_GOAL_MET
+  REFERRAL_MADE
+  POINTS_MILESTONE
+  LEVEL_UP
+  CUSTOM
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

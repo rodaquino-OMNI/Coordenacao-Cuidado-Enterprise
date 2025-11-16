@@ -367,11 +367,24 @@ codegen/
 !docker-compose.*.yml
 
 
+
+# Additional TypeScript error logs
+typescript-errors.log
+typescript-full-errors.log
+
+# Claude Flow Swarm files
+.ruv-swarm/
+.claude-flow/
+
 # Claude Flow generated files
 .claude/settings.local.json
-.claude/mcp.json
+.mcp.json
+claude-flow.config.json
 .swarm/
 .hive-mind/
+.claude-flow/
+memory/
+coordination/
 memory/claude-flow-data.json
 memory/sessions/*
 !memory/sessions/README.md
@@ -387,14 +400,40 @@ coordination/orchestration/*
 *.sqlite-journal
 *.sqlite-wal
 claude-flow
-claude-flow.bat
-claude-flow.ps1
+# Removed Windows wrapper files per user request
 hive-mind-prompt-*.txt
 
-# Additional TypeScript error logs
-typescript-errors.log
-typescript-full-errors.log
+# Tesseract OCR training data (large binaries)
+*.traineddata
+tessdata/
 
-# Claude Flow Swarm files
-.ruv-swarm/
-.claude-flow/
+# Temporary verification files
+/tmp/
+test-suite-*.log
+verification-*.log
+forensics-*.log
+
+# Claude Code workspace state (keep settings, commands, agents)
+.claude/settings.local.json
+.claude/.mcp-server-*
+.claude/workspace-state.json
+
+# Additional swarm coordination files
+.hive-mind/
+.collective-intelligence/
+swarm-*.txt
+agent-coordination-*.json
+
+# Testing artifacts
+playwright/.cache/
+.stryker-tmp/
+mutation-report/
+
+# Prisma generated client (regenerated from schema)
+**/node_modules/.prisma/
+**/@prisma/client/
+
+# Build artifacts from subprojects
+austa-care-platform/backend/dist/
+austa-care-platform/frontend/dist/
+austa-care-platform/*/build/

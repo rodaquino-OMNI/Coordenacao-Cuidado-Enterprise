@@ -15,12 +15,13 @@ const createConversationSchema = z.object({
 
 const createMessageSchema = z.object({
   content: z.string().min(1, 'Conteúdo da mensagem é obrigatório'),
-  role: z.enum(['user', 'assistant', 'system'], { errorMap: () => ({ message: 'Tipo de mensagem inválido' }) }),
+  direction: z.enum(['inbound', 'outbound']).transform(val => val.toUpperCase() as 'INBOUND' | 'OUTBOUND'),
+  type: z.enum(['text', 'audio', 'image', 'document', 'video', 'location', 'contact']).transform(val => val.toUpperCase() as 'TEXT' | 'AUDIO' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION' | 'CONTACT').default('text'),
   metadata: z.record(z.any()).optional(),
 });
 
 const updateConversationSchema = z.object({
-  status: z.enum(['active', 'archived', 'deleted']).optional(),
+  status: z.enum(['active', 'archived', 'paused', 'completed', 'escalated']).transform(val => val?.toUpperCase() as 'ACTIVE' | 'ARCHIVED' | 'PAUSED' | 'COMPLETED' | 'ESCALATED').optional(),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -42,8 +43,10 @@ router.post('/', async (req: Request, res: Response) => {
     const conversation = await prisma.conversation.create({
       data: {
         userId: validated.userId,
+        organizationId: 'default-org-id', // TODO: Get from user context
+        whatsappChatId: `chat_${Date.now()}`, // TODO: Get from WhatsApp webhook
         channel: validated.channel,
-        status: 'active',
+        status: 'ACTIVE',
         metadata: validated.metadata || {},
       },
       include: {
@@ -243,7 +246,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     // Soft delete by updating status
     await prisma.conversation.update({
       where: { id },
-      data: { status: 'deleted' }
+      data: { status: 'ARCHIVED' } // Soft delete by archiving
     });
 
     logger.info('Conversation deleted', { conversationId: id });
@@ -278,8 +281,10 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
     const message = await prisma.message.create({
       data: {
         conversationId: id,
+        userId: conversation.userId,
         content: validated.content,
-        role: validated.role,
+        direction: validated.direction,
+        type: validated.type,
         metadata: validated.metadata || {},
       }
     });
@@ -365,7 +370,7 @@ router.post('/:id/archive', async (req: Request, res: Response) => {
 
     await prisma.conversation.update({
       where: { id },
-      data: { status: 'archived' }
+      data: { status: 'ARCHIVED' }
     });
 
     logger.info('Conversation archived', { conversationId: id });

@@ -3,7 +3,7 @@
  * Optimized for Brazilian Portuguese medical triage
  */
 
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 import { logger } from '../../utils/logger';
 import { eventPublisher } from '../../infrastructure/kafka/events/event.publisher';
 import {
