@@ -160,10 +160,14 @@ async function initializeServices() {
     ]);
     logger.info('✅ Kafka connected and topics created');
 
-    // Initialize Redis
+    // Initialize Redis (non-blocking - optional for development)
     logger.info('Connecting to Redis...');
     await redisCluster.connect();
-    logger.info('✅ Redis connected');
+    if (redisCluster.isRedisAvailable()) {
+      logger.info('✅ Redis connected');
+    } else {
+      logger.warn('⚠️  Redis unavailable - server operating in degraded mode (caching disabled)');
+    }
 
     // Initialize MongoDB
     logger.info('Connecting to MongoDB...');

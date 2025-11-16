@@ -1,21 +1,23 @@
-import Redis from 'redis';
+import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/config';
 import { logger } from '../utils/logger';
 
 export class RedisService {
-  private client: Redis.RedisClientType;
+  private client: RedisClientType;
   private isConnected: boolean = false;
 
   constructor() {
-    this.client = Redis.createClient({
+    this.client = createClient({
       url: config.redis.url,
       socket: {
-        reconnectDelay: 1000,
         connectTimeout: 10000,
-      },
-      retryDelayOnClusterDown: 300,
-      retryDelayOnFailover: 100,
-      maxRetriesPerRequest: 3,
+        reconnectStrategy: (retries) => {
+          if (retries > 3) {
+            return false; // Stop reconnecting after 3 attempts
+          }
+          return Math.min(retries * 100, 3000);
+        }
+      }
     });
 
     this.setupEventHandlers();
@@ -148,7 +150,7 @@ export class RedisService {
     }
   }
 
-  getClient(): Redis.RedisClientType {
+  getClient(): RedisClientType {
     return this.client;
   }
 

@@ -15,6 +15,7 @@ export class RedisClusterClient {
   private isClusterMode: boolean;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 10;
+  private isAvailable: boolean = false;
 
   private constructor() {
     this.isClusterMode = config.redis?.cluster?.enabled || false;
@@ -27,7 +28,7 @@ export class RedisClusterClient {
     return RedisClusterClient.instance;
   }
 
-  // Initialize Redis connection
+  // Initialize Redis connection (non-blocking, graceful degradation)
   async connect(): Promise<void> {
     try {
       if (this.isClusterMode) {
@@ -35,12 +36,16 @@ export class RedisClusterClient {
       } else {
         await this.connectStandalone();
       }
-      
-      logger.info('Redis connection established successfully');
+
+      logger.info('✅ Redis connection established successfully');
+      this.isAvailable = true;
       this.setupEventHandlers();
     } catch (error) {
-      logger.error('Failed to connect to Redis:', error);
-      throw error;
+      logger.warn('⚠️  Redis unavailable - server will operate in degraded mode (no caching):', error instanceof Error ? error.message : error);
+      this.isAvailable = false;
+      this.cluster = null;
+      this.standalone = null;
+      // DON'T throw - allow server to continue without Redis
     }
   }
 
@@ -81,151 +86,253 @@ export class RedisClusterClient {
     });
   }
 
-  // Connect to standalone Redis
+  // Connect to standalone Redis (with timeout for faster failure)
   private async connectStandalone(): Promise<void> {
     // Parse Redis URL if provided, otherwise use defaults
     const redisUrl = config.redis?.url || 'redis://localhost:6379';
-    
+
     this.standalone = new Redis(redisUrl, {
       retryStrategy: (times: number) => {
-        if (times > this.maxReconnectAttempts) {
-          logger.error('Max reconnection attempts reached for Redis');
-          return null;
+        if (times > 3) {
+          logger.warn('Redis connection failed after 3 attempts, operating without cache');
+          this.isAvailable = false;
+          return null; // Stop retrying
         }
-        return Math.min(times * 100, 3000);
+        return Math.min(times * 100, 1000);
       },
       maxRetriesPerRequest: 3,
-      connectTimeout: 10000,
+      connectTimeout: 3000, // Reduced from 10s to 3s for faster failure detection
       commandTimeout: 5000,
       keepAlive: 10000,
       enableReadyCheck: true,
       lazyConnect: false,
     });
 
-    // Wait for connection to be ready
-    await new Promise<void>((resolve, reject) => {
-      this.standalone!.once('ready', resolve);
-      this.standalone!.once('error', reject);
-    });
+    // Wait for connection with timeout
+    await Promise.race([
+      new Promise<void>((resolve, reject) => {
+        this.standalone!.once('ready', resolve);
+        this.standalone!.once('error', reject);
+      }),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error('Redis connection timeout after 3s')), 3000)
+      )
+    ]);
   }
 
   // Setup event handlers
   private setupEventHandlers(): void {
+    if (!this.isAvailable) {
+      return; // Skip if Redis is not available
+    }
+
     const client = this.getClient();
 
     client.on('error', (error: Error) => {
-      logger.error('Redis error:', error);
+      logger.warn('Redis error (operating in degraded mode):', error.message);
+      this.isAvailable = false;
     });
 
     client.on('connect', () => {
       logger.info('Redis client connected');
       this.reconnectAttempts = 0;
+      this.isAvailable = true;
     });
 
     client.on('reconnecting', () => {
       this.reconnectAttempts++;
       logger.warn(`Redis client reconnecting (attempt ${this.reconnectAttempts})`);
+      this.isAvailable = false;
     });
 
     client.on('end', () => {
-      logger.warn('Redis client connection ended');
+      logger.warn('Redis client connection ended - operating without cache');
+      this.isAvailable = false;
     });
 
     if (this.cluster) {
       this.cluster.on('node error', (error: Error, node: string) => {
-        logger.error(`Redis cluster node error (${node}):`, error);
+        logger.warn(`Redis cluster node error (${node}):`, error.message);
       });
     }
   }
 
-  // Get the active Redis client
-  getClient(): Redis | Cluster {
+  // Get the active Redis client (returns null if unavailable)
+  getClient(): Redis | Cluster | null {
+    if (!this.isAvailable) {
+      return null;
+    }
     if (this.isClusterMode && this.cluster) {
       return this.cluster;
     } else if (this.standalone) {
       return this.standalone;
     }
-    throw new Error('Redis client not initialized');
+    return null;
   }
 
-  // Session management methods
+  // Check if Redis is available
+  isRedisAvailable(): boolean {
+    return this.isAvailable && (this.cluster !== null || this.standalone !== null);
+  }
+
+  // Session management methods (with graceful degradation)
   async setSession(sessionId: string, data: any, ttl: number = 1800): Promise<void> {
-    const key = `session:${sessionId}`;
-    const value = JSON.stringify(data);
-    
-    await this.getClient().setex(key, ttl, value);
-    logger.debug(`Session stored: ${sessionId}`);
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - session not cached: ${sessionId}`);
+      return; // Graceful fallback - rely on JWT tokens only
+    }
+
+    try {
+      const key = `session:${sessionId}`;
+      const value = JSON.stringify(data);
+      await client.setex(key, ttl, value);
+      logger.debug(`Session stored: ${sessionId}`);
+    } catch (error) {
+      logger.warn(`Failed to store session ${sessionId}:`, error);
+    }
   }
 
   async getSession(sessionId: string): Promise<any | null> {
-    const key = `session:${sessionId}`;
-    const value = await this.getClient().get(key);
-    
-    if (!value) {
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - session cache miss: ${sessionId}`);
+      return null; // Graceful fallback
+    }
+
+    try {
+      const key = `session:${sessionId}`;
+      const value = await client.get(key);
+
+      if (!value) {
+        return null;
+      }
+
+      return JSON.parse(value);
+    } catch (error) {
+      logger.warn(`Failed to get session ${sessionId}:`, error);
       return null;
     }
-    
-    return JSON.parse(value);
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    const key = `session:${sessionId}`;
-    await this.getClient().del(key);
-    logger.debug(`Session deleted: ${sessionId}`);
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - session deletion skipped: ${sessionId}`);
+      return;
+    }
+
+    try {
+      const key = `session:${sessionId}`;
+      await client.del(key);
+      logger.debug(`Session deleted: ${sessionId}`);
+    } catch (error) {
+      logger.warn(`Failed to delete session ${sessionId}:`, error);
+    }
   }
 
   async extendSession(sessionId: string, ttl: number = 1800): Promise<boolean> {
-    const key = `session:${sessionId}`;
-    const result = await this.getClient().expire(key, ttl);
-    return result === 1;
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - session extension skipped: ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const key = `session:${sessionId}`;
+      const result = await client.expire(key, ttl);
+      return result === 1;
+    } catch (error) {
+      logger.warn(`Failed to extend session ${sessionId}:`, error);
+      return false;
+    }
   }
 
-  // Cache management methods
+  // Cache management methods (with graceful degradation)
   async setCache(key: string, value: any, ttl?: number): Promise<void> {
-    const cacheKey = `cache:${key}`;
-    const data = JSON.stringify(value);
-    
-    if (ttl) {
-      await this.getClient().setex(cacheKey, ttl, data);
-    } else {
-      await this.getClient().set(cacheKey, data);
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - cache set skipped: ${key}`);
+      return;
+    }
+
+    try {
+      const cacheKey = `cache:${key}`;
+      const data = JSON.stringify(value);
+
+      if (ttl) {
+        await client.setex(cacheKey, ttl, data);
+      } else {
+        await client.set(cacheKey, data);
+      }
+    } catch (error) {
+      logger.warn(`Failed to set cache ${key}:`, error);
     }
   }
 
   async getCache<T = any>(key: string): Promise<T | null> {
-    const cacheKey = `cache:${key}`;
-    const value = await this.getClient().get(cacheKey);
-    
-    if (!value) {
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - cache miss: ${key}`);
       return null;
     }
-    
-    return JSON.parse(value) as T;
+
+    try {
+      const cacheKey = `cache:${key}`;
+      const value = await client.get(cacheKey);
+
+      if (!value) {
+        return null;
+      }
+
+      return JSON.parse(value) as T;
+    } catch (error) {
+      logger.warn(`Failed to get cache ${key}:`, error);
+      return null;
+    }
   }
 
   async deleteCache(key: string): Promise<void> {
-    const cacheKey = `cache:${key}`;
-    await this.getClient().del(cacheKey);
+    const client = this.getClient();
+    if (!client) {
+      logger.debug(`Redis unavailable - cache deletion skipped: ${key}`);
+      return;
+    }
+
+    try {
+      const cacheKey = `cache:${key}`;
+      await client.del(cacheKey);
+    } catch (error) {
+      logger.warn(`Failed to delete cache ${key}:`, error);
+    }
   }
 
   async clearCachePattern(pattern: string): Promise<void> {
     const client = this.getClient();
-    
-    if (this.isClusterMode) {
-      // For cluster mode, we need to run the command on all nodes
-      const nodes = (client as Cluster).nodes('master');
-      const promises = nodes.map(async (node) => {
-        const keys = await node.keys(`cache:${pattern}`);
+    if (!client) {
+      logger.debug(`Redis unavailable - cache pattern clear skipped: ${pattern}`);
+      return;
+    }
+
+    try {
+      if (this.isClusterMode) {
+        // For cluster mode, we need to run the command on all nodes
+        const nodes = (client as Cluster).nodes('master');
+        const promises = nodes.map(async (node) => {
+          const keys = await node.keys(`cache:${pattern}`);
+          if (keys.length > 0) {
+            await node.del(...keys);
+          }
+        });
+        await Promise.all(promises);
+      } else {
+        const keys = await client.keys(`cache:${pattern}`);
         if (keys.length > 0) {
-          await node.del(...keys);
+          await client.del(...keys);
         }
-      });
-      await Promise.all(promises);
-    } else {
-      const keys = await client.keys(`cache:${pattern}`);
-      if (keys.length > 0) {
-        await client.del(...keys);
       }
+    } catch (error) {
+      logger.warn(`Failed to clear cache pattern ${pattern}:`, error);
     }
   }
 
@@ -494,11 +601,17 @@ export class RedisClusterClient {
 
   // Health check
   async healthCheck(): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) {
+      return false;
+    }
+
     try {
-      await this.getClient().ping();
+      await client.ping();
       return true;
     } catch (error) {
-      logger.error('Redis health check failed:', error);
+      logger.warn('Redis health check failed:', error);
+      this.isAvailable = false;
       return false;
     }
   }

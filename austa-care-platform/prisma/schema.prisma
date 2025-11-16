@@ -48,7 +48,7 @@ model Organization {
 
 model User {
   id              String   @id @default(cuid())
-  
+
   // Personal Information (Encrypted)
   firstName       String
   lastName        String
@@ -57,23 +57,30 @@ model User {
   cpf             String?  @unique // Brazilian tax ID (encrypted)
   dateOfBirth     DateTime?
   gender          Gender?
-  
+
+  // Authentication & Security
+  password        String?  // Hashed password (nullable for WhatsApp-only users)
+  resetToken      String?  @unique // Password reset token
+  resetTokenExpiry DateTime? // Reset token expiration
+  refreshToken    String?  // JWT refresh token
+  lastLoginAt     DateTime? // Track last login timestamp
+
   // WhatsApp Integration
   whatsappId      String?  @unique // WhatsApp Business API user ID
   preferredLanguage String @default("pt-BR")
   timezone        String   @default("America/Sao_Paulo")
-  
+
   // System Status
   isActive        Boolean  @default(true)
   isVerified      Boolean  @default(false)
   lastActiveAt    DateTime @default(now())
-  
+
   // Multi-tenancy
   organizationId  String
-  
+
   // Emergency Contact (Encrypted)
   emergencyContact Json?   // { name, phone, relationship }
-  
+
   // Timestamps & Audit
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -95,6 +102,7 @@ model User {
   @@index([phone])
   @@index([whatsappId])
   @@index([cpf])
+  @@index([resetToken])
 }
 
 model Provider {

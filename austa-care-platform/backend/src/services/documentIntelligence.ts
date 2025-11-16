@@ -29,12 +29,13 @@ export class DocumentIntelligenceService extends EventEmitter {
   private async initializeOCREngines(): Promise<void> {
     try {
       // Initialize Tesseract.js for basic OCR
-      this.tesseractWorker = await createWorker({
-        logger: (m: any) => logger.debug('Tesseract:', m)
-      });
-      
-      await this.tesseractWorker.loadLanguage('eng+por');
-      await this.tesseractWorker.initialize('eng+por');
+      // Use console.log instead of arrow function to avoid DataClone error
+      // createWorker signature: (langs, oem, options, config)
+      this.tesseractWorker = await createWorker(
+        'eng+por',
+        undefined,
+        { logger: console.log }
+      );
 
       // Google Vision client already initialized in constructor
 
