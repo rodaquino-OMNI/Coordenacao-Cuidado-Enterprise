@@ -84,10 +84,12 @@ export class WhatsAppAIIntegration {
           urgency: nlpAnalysis.intent.urgencyLevel
         });
         
+        const mappedUrgency = nlpAnalysis.intent.urgencyLevel === 'emergency' ? 'critical' : nlpAnalysis.intent.urgencyLevel;
+
         return {
-          message: await this.getAdvancedEmergencyResponse(persona, nlpAnalysis),
+          message: await this.getEmergencyResponse(persona, nlpAnalysis),
           shouldEscalate: true,
-          urgency: nlpAnalysis.intent.urgencyLevel,
+          urgency: mappedUrgency,
           escalationReason: `${nlpAnalysis.intent.primaryIntent} with ${nlpAnalysis.intent.urgencyLevel} urgency`,
           conversationInsights: nlpAnalysis,
           sessionContinuity
@@ -336,7 +338,7 @@ export class WhatsAppAIIntegration {
     const isAna = persona === 'ana';
     const greeting = isAna ? 'Querida' : 'Cara';
     const concern = isAna ? 'Estou preocupada' : 'Estou preocupado';
-    
+
     return `🚨 **${greeting}, ${concern} com você!**
 
 Esta situação pode necessitar atendimento médico imediato!
@@ -354,6 +356,42 @@ ${isAna ? '💕' : '💪'} **Posso te ajudar a:**
 **NÃO ESPERE - BUSQUE ATENDIMENTO MÉDICO IMEDIATAMENTE!**
 
 Vou notificar nossa equipe de saúde sobre sua situação.`;
+  }
+
+  /**
+   * Simplify response for better comprehension
+   */
+  private simplifyResponse(response: string): string {
+    // Remove complex formatting and shorten sentences
+    const simplified = response
+      .replace(/\*\*/g, '') // Remove bold markers
+      .replace(/##/g, '') // Remove headers
+      .split('\n')
+      .filter(line => line.trim().length > 0)
+      .slice(0, 3) // Keep only first 3 lines
+      .join('\n');
+
+    return simplified;
+  }
+
+  /**
+   * Generate intelligent fallback response when error occurs
+   */
+  private async generateIntelligentFallback(messageData: WhatsAppMessageData, error: unknown): Promise<string> {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    logger.error('Generating fallback response', {
+      phone: messageData.phone.substring(0, 5) + '***',
+      error: errorMessage
+    });
+
+    const userProfile = await this.getUserProfile(messageData.phone);
+    const persona = this.determinePersona(userProfile);
+    const isAna = persona === 'ana';
+
+    return isAna
+      ? 'Desculpe, querida! Tive um problema técnico. Pode repetir sua mensagem? 💕'
+      : 'Desculpe! Tive um problema técnico. Pode repetir sua mensagem? 💪';
   }
 
   /**

@@ -21,6 +21,11 @@ export class PrometheusMetrics {
   public wsConnectionsActive: Gauge<string>;
   public wsMessagesTotal: Counter<string>;
   public wsMessageSize: Histogram<string>;
+  public websocketEvents: Counter<string>;
+  public websocketConnections: Counter<string>;
+  public websocketAuthDuration: Histogram<string>;
+  public websocketRateLimitHits: Counter<string>;
+  public websocketEventDuration: Histogram<string>;
 
   // Business Metrics
   public conversationsTotal: Counter<string>;
@@ -34,6 +39,8 @@ export class PrometheusMetrics {
   public aiPredictionDuration: Histogram<string>;
   public aiModelAccuracy: Gauge<string>;
   public aiTokensUsed: Counter<string>;
+  public mlInferenceLatency: Histogram<string>;
+  public mlInferenceRequests: Counter<string>;
 
   // Health Metrics
   public healthRiskScoresCalculated: Counter<string>;
@@ -128,6 +135,38 @@ export class PrometheusMetrics {
       buckets: [100, 1000, 10000, 100000, 1000000],
     });
 
+    this.websocketEvents = new Counter({
+      name: 'websocket_events_total',
+      help: 'Total number of WebSocket events',
+      labelNames: ['event', 'status'],
+    });
+
+    this.websocketConnections = new Counter({
+      name: 'websocket_connections_total_v2',
+      help: 'Total number of WebSocket connection attempts',
+      labelNames: ['status', 'reason'],
+    });
+
+    this.websocketAuthDuration = new Histogram({
+      name: 'websocket_auth_duration_seconds',
+      help: 'Duration of WebSocket authentication in seconds',
+      labelNames: ['status'],
+      buckets: [0.01, 0.05, 0.1, 0.5, 1, 2],
+    });
+
+    this.websocketRateLimitHits = new Counter({
+      name: 'websocket_rate_limit_hits_total',
+      help: 'Total number of WebSocket rate limit hits',
+      labelNames: ['limit_type', 'action'],
+    });
+
+    this.websocketEventDuration = new Histogram({
+      name: 'websocket_event_duration_seconds',
+      help: 'Duration of WebSocket event processing in seconds',
+      labelNames: ['event'],
+      buckets: [0.001, 0.01, 0.05, 0.1, 0.5, 1],
+    });
+
     // Initialize Business metrics
     this.conversationsTotal = new Counter({
       name: 'conversations_total',
@@ -184,6 +223,19 @@ export class PrometheusMetrics {
       name: 'ai_tokens_used_total',
       help: 'Total number of AI tokens used',
       labelNames: ['model', 'operation'],
+    });
+
+    this.mlInferenceLatency = new Histogram({
+      name: 'ml_inference_latency_seconds',
+      help: 'Latency of ML inference in seconds',
+      labelNames: ['model', 'type'],
+      buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5],
+    });
+
+    this.mlInferenceRequests = new Counter({
+      name: 'ml_inference_requests_total',
+      help: 'Total number of ML inference requests',
+      labelNames: ['model', 'status'],
     });
 
     // Initialize Health metrics

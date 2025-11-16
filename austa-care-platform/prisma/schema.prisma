@@ -82,6 +82,7 @@ model User {
   // Relations
   organization    Organization @relation(fields: [organizationId], references: [id])
   conversations   Conversation[]
+  messages        Message[]
   healthData      HealthData[]
   onboardingProgress OnboardingProgress[]
   healthPoints    HealthPoints[]
@@ -176,7 +177,7 @@ model Conversation {
   // Relations
   user            User     @relation(fields: [userId], references: [id])
   messages        Message[]
-  auditLogs       AuditLog[]
+  auditLogs       AuditLog[] @relation(name: "ConversationAudit")
 
   @@map("conversations")
   @@index([userId, status])
@@ -289,7 +290,7 @@ model HealthData {
   // Relations
   user            User     @relation(fields: [userId], references: [id])
   authorizations  Authorization[]
-  auditLogs       AuditLog[]
+  auditLogs       AuditLog[] @relation(name: "HealthDataAudit")
 
   @@map("health_data")
   @@index([userId, type, isActive])
@@ -522,7 +523,7 @@ model Authorization {
   provider        Provider? @relation(fields: [providerId], references: [id])
   organization    Organization @relation(fields: [organizationId], references: [id])
   healthData      HealthData? @relation(fields: [healthDataId], references: [id])
-  auditLogs       AuditLog[]
+  auditLogs       AuditLog[] @relation(name: "AuthorizationAudit")
 
   @@map("authorizations")
   @@index([userId, status])
@@ -589,7 +590,7 @@ model Document {
 
   // Relations
   user            User     @relation(fields: [userId], references: [id])
-  auditLogs       AuditLog[]
+  auditLogs       AuditLog[] @relation(name: "DocumentAudit")
 
   @@map("documents")
   @@index([userId, type, isActive])
@@ -645,7 +646,7 @@ model TasyIntegration {
   // Relations
   organization    Organization @relation(fields: [organizationId], references: [id])
   syncLogs        TasySyncLog[]
-  auditLogs       AuditLog[]
+  auditLogs       AuditLog[] @relation(name: "TasyIntegrationAudit")
 
   @@map("tasy_integrations")
   @@index([organizationId, isActive])
@@ -744,11 +745,11 @@ model AuditLog {
   user            User?    @relation(fields: [userId], references: [id])
   provider        Provider? @relation(fields: [providerId], references: [id])
   organization    Organization @relation(fields: [organizationId], references: [id])
-  conversation    Conversation? @relation(fields: [entityId], references: [id])
-  healthData      HealthData? @relation(fields: [entityId], references: [id])
-  authorization   Authorization? @relation(fields: [entityId], references: [id])
-  document        Document? @relation(fields: [entityId], references: [id])
-  tasyIntegration TasyIntegration? @relation(fields: [entityId], references: [id])
+  conversation    Conversation? @relation(name: "ConversationAudit", fields: [entityId], references: [id], map: "audit_conversation_fk")
+  healthData      HealthData? @relation(name: "HealthDataAudit", fields: [entityId], references: [id], map: "audit_health_data_fk")
+  authorization   Authorization? @relation(name: "AuthorizationAudit", fields: [entityId], references: [id], map: "audit_authorization_fk")
+  document        Document? @relation(name: "DocumentAudit", fields: [entityId], references: [id], map: "audit_document_fk")
+  tasyIntegration TasyIntegration? @relation(name: "TasyIntegrationAudit", fields: [entityId], references: [id], map: "audit_tasy_integration_fk")
 
   @@map("audit_logs")
   @@index([organizationId, occurredAt])

@@ -92,7 +92,7 @@ export interface MedicalEntity {
   type: string;
   text: string;
   confidence: number;
-  category: 'MEDICATION' | 'DIAGNOSIS' | 'LAB_VALUE' | 'DOSAGE' | 'FREQUENCY' | 'PROVIDER' | 'PATIENT_INFO';
+  category: 'MEDICATION' | 'DIAGNOSIS' | 'LAB_VALUE' | 'DOSAGE' | 'FREQUENCY' | 'PROVIDER' | 'PATIENT_INFO' | 'PROVIDER_INFO' | 'IMAGING';
   normalizedValue?: string;
   unit?: string;
   referenceRange?: {

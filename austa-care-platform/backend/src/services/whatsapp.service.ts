@@ -194,15 +194,17 @@ export class WhatsAppService {
         return response.data.value;
       } catch (error) {
         lastError = error as Error;
-        
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
         logger.warn(`API request attempt ${attempt} failed`, {
-          error: lastError.message,
+          error: errorMessage,
           attempt,
           maxAttempts: attempts,
         });
 
         // Don't retry on client errors (4xx except 429)
-        if (error.response?.status >= 400 && error.response?.status < 500 && error.response?.status !== 429) {
+        const errorWithResponse = error as any;
+        if (errorWithResponse?.response?.status >= 400 && errorWithResponse?.response?.status < 500 && errorWithResponse?.response?.status !== 429) {
           throw lastError;
         }
 

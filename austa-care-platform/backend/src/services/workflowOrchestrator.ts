@@ -14,7 +14,8 @@ import {
   AuthorizationState,
   Priority,
   WorkflowContext,
-  WorkflowMetrics
+  WorkflowMetrics,
+  ProcedureCategory
 } from '../types/authorization';
 
 /**
@@ -72,7 +73,16 @@ export class WorkflowOrchestrator extends EventEmitter {
       appealRate: 0,
       slaComplianceRate: 0,
       bottlenecks: [],
-      performanceByCategory: {}
+      performanceByCategory: {
+        [ProcedureCategory.CONSULTATION]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.DIAGNOSTIC]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.THERAPEUTIC]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.SURGICAL]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.EMERGENCY]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.PREVENTIVE]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.REHABILITATION]: { count: 0, averageTime: 0, approvalRate: 0 },
+        [ProcedureCategory.MENTAL_HEALTH]: { count: 0, averageTime: 0, approvalRate: 0 }
+      }
     };
   }
 
@@ -206,8 +216,9 @@ export class WorkflowOrchestrator extends EventEmitter {
 
     // Audit workflow start
     await this.auditService.recordEvent({
+      id: `evt-${Date.now()}`,
       authorizationId: request.id,
-      action: 'workflow_started',
+      action: WorkflowAction.WORKFLOW_STARTED,
       performedBy: userId,
       timestamp: new Date(),
       metadata: { workflowDefinitionId: 'standard-authorization' }

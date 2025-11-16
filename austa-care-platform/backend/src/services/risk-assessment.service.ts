@@ -27,7 +27,7 @@ import { logger } from '../utils/logger';
 
 export class AdvancedRiskAssessmentService {
   private medicalKnowledgeRules: Map<string, MedicalKnowledgeRule> = new Map();
-  private correlationMatrix: RiskCorrelationMatrix;
+  private correlationMatrix!: RiskCorrelationMatrix;
   private emergencyThresholds: Map<string, number> = new Map();
 
   constructor() {
@@ -534,7 +534,7 @@ export class AdvancedRiskAssessmentService {
   private extractMedicalData(questionnaire: ProcessedQuestionnaire): ExtractedMedicalData {
     return {
       symptoms: questionnaire.extractedSymptoms,
-      riskFactors: questionnaire.extractedRiskFactors,
+      riskFactors: questionnaire.riskFactors,
       emergencyFlags: questionnaire.emergencyFlags,
       responses: questionnaire.responses
     };
@@ -554,23 +554,995 @@ export class AdvancedRiskAssessmentService {
     return genderResponse && genderResponse.answer === 'masculino' ? 'M' : 'F';
   }
 
-  // Additional helper methods would be implemented here...
-  private extractCardiovascularFactors(data: ExtractedMedicalData): any {
-    // Implementation details...
-    return {};
+  // ==================== CARDIOVASCULAR METHODS ====================
+
+  private extractCardiovascularFactors(data: ExtractedMedicalData): CardiovascularRisk['factors'] {
+    return {
+      chestPain: this.hasSymptom(data, 'dor_peito') || this.hasSymptom(data, 'dor_toracica'),
+      shortnessOfBreath: this.hasSymptom(data, 'falta_ar') || this.hasSymptom(data, 'dispneia'),
+      palpitations: this.hasSymptom(data, 'palpitacoes') || this.hasSymptom(data, 'batedeira'),
+      syncope: this.hasSymptom(data, 'desmaio') || this.hasSymptom(data, 'sincope'),
+      familyHistory: data.riskFactors.some(rf => rf.factor.includes('familiar') && rf.factor.includes('cardiaco')),
+      hypertension: this.hasSymptom(data, 'hipertensao') || this.hasSymptom(data, 'pressao_alta'),
+      diabetes: this.hasSymptom(data, 'diabetes'),
+      smoking: data.riskFactors.some(rf => rf.factor.includes('fumante') || rf.factor.includes('tabagismo')),
+      cholesterol: data.riskFactors.some(rf => rf.factor.includes('colesterol')),
+      age: this.extractAge(data),
+      gender: this.extractGender(data)
+    };
   }
 
-  private calculateFraminghamScore(factors: any): number {
-    // Framingham risk score implementation
-    return 0;
+  private calculateFraminghamScore(factors: CardiovascularRisk['factors']): number {
+    // Simplified Framingham Risk Score adapted for Brazilian population
+    let score = 0;
+
+    // Age points
+    if (factors.gender === 'M') {
+      if (factors.age >= 70) score += 8;
+      else if (factors.age >= 60) score += 6;
+      else if (factors.age >= 50) score += 4;
+      else if (factors.age >= 40) score += 2;
+    } else {
+      if (factors.age >= 70) score += 7;
+      else if (factors.age >= 60) score += 5;
+      else if (factors.age >= 50) score += 3;
+      else if (factors.age >= 40) score += 1;
+    }
+
+    // Risk factor points
+    if (factors.smoking) score += 4;
+    if (factors.diabetes) score += 3;
+    if (factors.hypertension) score += 3;
+    if (factors.cholesterol) score += 2;
+    if (factors.familyHistory) score += 2;
+
+    return score;
   }
 
-  private generateCardiovascularRecommendations(riskLevel: string, factors: any): string[] {
-    // Implementation details...
-    return [];
+  private generateCardiovascularRecommendations(
+    riskLevel: CardiovascularRisk['riskLevel'],
+    factors: CardiovascularRisk['factors']
+  ): string[] {
+    const recommendations: string[] = [];
+
+    if (riskLevel === 'very_high') {
+      recommendations.push('Avaliação cardiológica emergencial requerida');
+      recommendations.push('Eletrocardiograma (ECG) imediato');
+      recommendations.push('Exames laboratoriais: troponina, BNP, D-dímero');
+    } else if (riskLevel === 'high') {
+      recommendations.push('Consulta cardiológica em até 48h');
+      recommendations.push('ECG e ecocardiograma dentro de 1 semana');
+      recommendations.push('Perfil lipídico completo');
+    }
+
+    if (factors.hypertension) {
+      recommendations.push('Monitoramento de pressão arterial (MAPA 24h)');
+      recommendations.push('Ajuste de terapia anti-hipertensiva conforme Diretriz Brasileira de Hipertensão (SBC)');
+    }
+
+    if (factors.smoking) {
+      recommendations.push('Encaminhamento para programa de cessação de tabagismo (SUS)');
+    }
+
+    if (factors.diabetes && riskLevel !== 'low') {
+      recommendations.push('Controle glicêmico rigoroso (meta HbA1c < 7%)');
+    }
+
+    return recommendations;
   }
 
-  // More methods would be implemented...
+  // ==================== DIABETES METHODS ====================
+
+  private extractDiabetesFactors(data: ExtractedMedicalData): DiabetesRisk['classicTriad'] {
+    return {
+      polydipsia: this.hasSymptom(data, 'sede_excessiva') || this.hasSymptom(data, 'polidipsia'),
+      polyphagia: this.hasSymptom(data, 'fome_excessiva') || this.hasSymptom(data, 'polifagia'),
+      polyuria: this.hasSymptom(data, 'urina_frequente') || this.hasSymptom(data, 'poliuria'),
+      triadComplete: false,
+      triadScore: 0
+    };
+  }
+
+  private extractAdditionalDiabetesFactors(data: ExtractedMedicalData): DiabetesRisk['additionalFactors'] {
+    const age = this.extractAge(data);
+
+    return {
+      weightLoss: this.hasSymptom(data, 'perda_peso') || this.hasSymptom(data, 'emagrecimento'),
+      fatigue: this.hasSymptom(data, 'fadiga') || this.hasSymptom(data, 'cansaco'),
+      blurredVision: this.hasSymptom(data, 'visao_turva') || this.hasSymptom(data, 'visao_embacada'),
+      slowHealing: this.hasSymptom(data, 'cicatrizacao_lenta') || this.hasSymptom(data, 'feridas_demoradas'),
+      frequentInfections: this.hasSymptom(data, 'infeccoes_frequentes'),
+      familyHistory: data.riskFactors.some(rf =>
+        rf.factor.toLowerCase().includes('diabetes') &&
+        rf.factor.toLowerCase().includes('familiar')
+      ),
+      obesity: data.riskFactors.some(rf =>
+        rf.factor.toLowerCase().includes('obesidade') ||
+        rf.factor.toLowerCase().includes('sobrepeso')
+      ),
+      age,
+      gestationalDiabetes: data.riskFactors.some(rf =>
+        rf.factor.toLowerCase().includes('gestacional') &&
+        rf.factor.toLowerCase().includes('diabetes')
+      )
+    };
+  }
+
+  private calculateDKARisk(
+    classicTriad: DiabetesRisk['classicTriad'],
+    additionalFactors: DiabetesRisk['additionalFactors'],
+    data: ExtractedMedicalData
+  ): number {
+    // Diabetic Ketoacidosis Risk - Evidence-based Brazilian guidelines
+    let dkaRisk = 0;
+
+    // Classic triad is a strong indicator
+    if (classicTriad.triadComplete) dkaRisk += 40;
+    else dkaRisk += classicTriad.triadScore / 3; // Partial triad
+
+    // Weight loss + triad = very high DKA risk
+    if (additionalFactors.weightLoss && classicTriad.triadComplete) dkaRisk += 30;
+
+    // Ketosis symptoms
+    if (this.hasSymptom(data, 'cetose') || this.hasSymptom(data, 'halito_cetonico')) dkaRisk += 20;
+    if (this.hasSymptom(data, 'nausea') || this.hasSymptom(data, 'vomito')) dkaRisk += 15;
+    if (this.hasSymptom(data, 'dor_abdominal')) dkaRisk += 10;
+    if (this.hasSymptom(data, 'confusao_mental') || this.hasSymptom(data, 'letargia')) dkaRisk += 15;
+
+    // Respiratory signs (Kussmaul breathing)
+    if (this.hasSymptom(data, 'respiracao_profunda') || this.hasSymptom(data, 'hiperventilacao')) dkaRisk += 20;
+
+    return Math.min(dkaRisk, 100);
+  }
+
+  private calculateKetosisRisk(data: ExtractedMedicalData): number {
+    let ketosisRisk = 0;
+
+    // Direct ketosis indicators
+    if (this.hasSymptom(data, 'cetose')) ketosisRisk += 50;
+    if (this.hasSymptom(data, 'halito_cetonico') || this.hasSymptom(data, 'halito_frutal')) ketosisRisk += 40;
+
+    // Metabolic indicators
+    if (this.hasSymptom(data, 'nausea') || this.hasSymptom(data, 'vomito')) ketosisRisk += 15;
+    if (this.hasSymptom(data, 'dor_abdominal')) ketosisRisk += 10;
+    if (this.hasSymptom(data, 'desidratacao')) ketosisRisk += 20;
+
+    // Mental status changes
+    if (this.hasSymptom(data, 'confusao_mental')) ketosisRisk += 15;
+
+    return Math.min(ketosisRisk, 100);
+  }
+
+  // ==================== MENTAL HEALTH METHODS ====================
+
+  private assessDepressionIndicators(data: ExtractedMedicalData): MentalHealthRisk['depressionIndicators'] {
+    // PHQ-9 based assessment adapted for Brazilian context
+    const indicators = {
+      persistentSadness: this.hasSymptom(data, 'tristeza') || this.hasSymptom(data, 'melancolia'),
+      anhedonia: this.hasSymptom(data, 'anedonia') || this.hasSymptom(data, 'perda_interesse'),
+      fatigue: this.hasSymptom(data, 'fadiga') || this.hasSymptom(data, 'cansaco'),
+      sleepDisturbances: this.hasSymptom(data, 'insonia') || this.hasSymptom(data, 'sono_excessivo'),
+      appetiteChanges: this.hasSymptom(data, 'perda_apetite') || this.hasSymptom(data, 'apetite_aumentado'),
+      concentrationProblems: this.hasSymptom(data, 'dificuldade_concentracao') || this.hasSymptom(data, 'falta_foco'),
+      guilt: this.hasSymptom(data, 'culpa') || this.hasSymptom(data, 'inutilidade'),
+      hopelessness: this.hasSymptom(data, 'desesperanca') || this.hasSymptom(data, 'sem_futuro'),
+      suicidalIdeation: this.hasSymptom(data, 'pensamento_suicida') || this.hasSymptom(data, 'ideacao_suicida'),
+      phq9Score: 0
+    };
+
+    // Calculate PHQ-9 score (0-27 scale)
+    let phq9Score = 0;
+    if (indicators.persistentSadness) phq9Score += 3;
+    if (indicators.anhedonia) phq9Score += 3;
+    if (indicators.fatigue) phq9Score += 2;
+    if (indicators.sleepDisturbances) phq9Score += 2;
+    if (indicators.appetiteChanges) phq9Score += 2;
+    if (indicators.concentrationProblems) phq9Score += 2;
+    if (indicators.guilt) phq9Score += 2;
+    if (indicators.hopelessness) phq9Score += 3;
+    if (indicators.suicidalIdeation) phq9Score += 8; // Critical indicator
+
+    indicators.phq9Score = phq9Score;
+    return indicators;
+  }
+
+  private assessAnxietyIndicators(data: ExtractedMedicalData): MentalHealthRisk['anxietyIndicators'] {
+    // GAD-7 based assessment adapted for Brazilian context
+    const indicators = {
+      excessiveWorry: this.hasSymptom(data, 'preocupacao_excessiva') || this.hasSymptom(data, 'ansiedade'),
+      restlessness: this.hasSymptom(data, 'inquietacao') || this.hasSymptom(data, 'agitacao'),
+      fatigue: this.hasSymptom(data, 'fadiga') || this.hasSymptom(data, 'cansaco'),
+      concentrationDifficulty: this.hasSymptom(data, 'dificuldade_concentracao'),
+      irritability: this.hasSymptom(data, 'irritabilidade') || this.hasSymptom(data, 'nervosismo'),
+      muscularTension: this.hasSymptom(data, 'tensao_muscular') || this.hasSymptom(data, 'dor_muscular'),
+      sleepProblems: this.hasSymptom(data, 'insonia') || this.hasSymptom(data, 'sono_ruim'),
+      gad7Score: 0
+    };
+
+    // Calculate GAD-7 score (0-21 scale)
+    let gad7Score = 0;
+    if (indicators.excessiveWorry) gad7Score += 3;
+    if (indicators.restlessness) gad7Score += 3;
+    if (indicators.fatigue) gad7Score += 2;
+    if (indicators.concentrationDifficulty) gad7Score += 3;
+    if (indicators.irritability) gad7Score += 3;
+    if (indicators.muscularTension) gad7Score += 2;
+    if (indicators.sleepProblems) gad7Score += 2;
+
+    indicators.gad7Score = gad7Score;
+    return indicators;
+  }
+
+  private assessSuicideRisk(data: ExtractedMedicalData): MentalHealthRisk['suicideRisk'] {
+    // Comprehensive suicide risk assessment - Brazilian Mental Health Guidelines
+    const riskFactors: string[] = [];
+    const protectiveFactors: string[] = [];
+
+    // Risk factors
+    if (this.hasSymptom(data, 'pensamento_suicida')) riskFactors.push('Ideação suicida ativa');
+    if (this.hasSymptom(data, 'plano_suicida')) riskFactors.push('Plano suicida estruturado');
+    if (this.hasSymptom(data, 'tentativa_anterior')) riskFactors.push('Tentativa prévia de suicídio');
+    if (this.hasSymptom(data, 'desesperanca')) riskFactors.push('Desesperança severa');
+    if (this.hasSymptom(data, 'isolamento_social')) riskFactors.push('Isolamento social');
+    if (this.hasSymptom(data, 'abuso_substancia')) riskFactors.push('Abuso de substâncias');
+    if (this.hasSymptom(data, 'psicose')) riskFactors.push('Sintomas psicóticos');
+
+    // Protective factors
+    if (data.riskFactors.some(rf => rf.factor.includes('apoio_familiar'))) {
+      protectiveFactors.push('Apoio familiar presente');
+    }
+    if (data.riskFactors.some(rf => rf.factor.includes('religiosidade'))) {
+      protectiveFactors.push('Religiosidade/espiritualidade');
+    }
+    if (data.riskFactors.some(rf => rf.factor.includes('filhos'))) {
+      protectiveFactors.push('Responsabilidade com filhos');
+    }
+
+    // Determine risk level
+    let riskLevel: MentalHealthRisk['suicideRisk']['riskLevel'] = 'none';
+    let immediateIntervention = false;
+
+    if (this.hasSymptom(data, 'plano_suicida') && this.hasSymptom(data, 'pensamento_suicida')) {
+      riskLevel = 'imminent';
+      immediateIntervention = true;
+    } else if (riskFactors.length >= 4 || this.hasSymptom(data, 'tentativa_anterior')) {
+      riskLevel = 'high';
+    } else if (riskFactors.length >= 2 || this.hasSymptom(data, 'pensamento_suicida')) {
+      riskLevel = 'moderate';
+    } else if (riskFactors.length === 1) {
+      riskLevel = 'low';
+    }
+
+    return {
+      riskLevel,
+      riskFactors,
+      protectiveFactors,
+      immediateIntervention
+    };
+  }
+
+  // ==================== RESPIRATORY METHODS ====================
+
+  private assessAsthmaIndicators(data: ExtractedMedicalData): RespiratoryRisk['asthmaIndicators'] {
+    return {
+      wheezing: this.hasSymptom(data, 'chiado') || this.hasSymptom(data, 'sibilo'),
+      shortnessOfBreath: this.hasSymptom(data, 'falta_ar') || this.hasSymptom(data, 'dispneia'),
+      chestTightness: this.hasSymptom(data, 'aperto_peito') || this.hasSymptom(data, 'opressao_toracica'),
+      coughing: this.hasSymptom(data, 'tosse'),
+      nighttimeSymptoms: this.hasSymptom(data, 'sintomas_noturnos') || this.hasSymptom(data, 'tosse_noturna'),
+      exerciseTriggered: this.hasSymptom(data, 'dispneia_esforco') || this.hasSymptom(data, 'sintomas_exercicio'),
+      allergenTriggered: this.hasSymptom(data, 'alergia') || this.hasSymptom(data, 'gatilhos_alergicos'),
+      peakFlowReduction: data.riskFactors.some(rf => rf.factor.includes('pico_fluxo_reduzido'))
+    };
+  }
+
+  private assessCOPDIndicators(data: ExtractedMedicalData): RespiratoryRisk['copdIndicators'] {
+    return {
+      chronicCough: this.hasSymptom(data, 'tosse_cronica'),
+      sputumProduction: this.hasSymptom(data, 'expectoracao') || this.hasSymptom(data, 'catarro'),
+      dyspnea: this.hasSymptom(data, 'dispneia') || this.hasSymptom(data, 'falta_ar'),
+      smokingHistory: data.riskFactors.some(rf =>
+        rf.factor.toLowerCase().includes('fumante') ||
+        rf.factor.toLowerCase().includes('ex-fumante') ||
+        rf.factor.toLowerCase().includes('tabagismo')
+      ),
+      age: this.extractAge(data),
+      occupationalExposure: data.riskFactors.some(rf =>
+        rf.factor.toLowerCase().includes('exposicao_ocupacional') ||
+        rf.factor.toLowerCase().includes('poeira') ||
+        rf.factor.toLowerCase().includes('quimicos')
+      )
+    };
+  }
+
+  private assessSleepApneaIndicators(data: ExtractedMedicalData): RespiratoryRisk['sleepApneaIndicators'] {
+    const bmiResponse = data.responses.find(r => r.question.toLowerCase().includes('imc') || r.question.toLowerCase().includes('peso'));
+    const bmi = bmiResponse ? Number(bmiResponse.answer) : 0;
+
+    const neckResponse = data.responses.find(r => r.question.toLowerCase().includes('pescoco') || r.question.toLowerCase().includes('circunferencia'));
+    const neckCircumference = neckResponse ? Number(neckResponse.answer) : 0;
+
+    const indicators = {
+      snoring: this.hasSymptom(data, 'ronco'),
+      breathingPauses: this.hasSymptom(data, 'apneia') || this.hasSymptom(data, 'pausas_respiratorias'),
+      daytimeSleepiness: this.hasSymptom(data, 'sonolencia_diurna') || this.hasSymptom(data, 'cansaco_diurno'),
+      morningHeadaches: this.hasSymptom(data, 'cefaleia_matinal') || this.hasSymptom(data, 'dor_cabeca_manha'),
+      obesityBMI: bmi,
+      neckCircumference,
+      hypertension: this.hasSymptom(data, 'hipertensao') || this.hasSymptom(data, 'pressao_alta'),
+      berlinScore: 0,
+      stopBangScore: 0
+    };
+
+    // Berlin Questionnaire Score (simplified)
+    let berlinScore = 0;
+    if (indicators.snoring) berlinScore += 1;
+    if (indicators.breathingPauses) berlinScore += 1;
+    if (indicators.daytimeSleepiness) berlinScore += 1;
+    if (indicators.obesityBMI > 30) berlinScore += 1;
+    if (indicators.hypertension) berlinScore += 1;
+    indicators.berlinScore = berlinScore;
+
+    // STOP-BANG Score
+    let stopBangScore = 0;
+    if (indicators.snoring) stopBangScore += 1;
+    if (indicators.daytimeSleepiness) stopBangScore += 1;
+    if (indicators.breathingPauses) stopBangScore += 1;
+    if (indicators.obesityBMI > 35) stopBangScore += 1;
+    if (this.extractAge(data) > 50) stopBangScore += 1;
+    if (indicators.neckCircumference > 40) stopBangScore += 1;
+    if (this.extractGender(data) === 'M') stopBangScore += 1;
+    if (indicators.hypertension) stopBangScore += 1;
+    indicators.stopBangScore = stopBangScore;
+
+    return indicators;
+  }
+
+  private calculateAsthmaScore(indicators: RespiratoryRisk['asthmaIndicators']): number {
+    // Evidence-based asthma severity scoring
+    let score = 0;
+
+    // Core symptoms
+    if (indicators.wheezing) score += 8;
+    if (indicators.shortnessOfBreath) score += 10;
+    if (indicators.chestTightness) score += 6;
+    if (indicators.coughing) score += 4;
+
+    // Severity indicators
+    if (indicators.nighttimeSymptoms) score += 8; // Indicates poor control
+    if (indicators.exerciseTriggered) score += 5;
+    if (indicators.allergenTriggered) score += 3;
+    if (indicators.peakFlowReduction) score += 10;
+
+    return score;
+  }
+
+  private calculateCOPDScore(indicators: RespiratoryRisk['copdIndicators']): number {
+    // mMRC + GOLD criteria adapted scoring
+    let score = 0;
+
+    // Classic COPD triad
+    if (indicators.chronicCough) score += 6;
+    if (indicators.sputumProduction) score += 6;
+    if (indicators.dyspnea) score += 10;
+
+    // Major risk factors
+    if (indicators.smokingHistory) score += 12; // Most important risk factor
+    if (indicators.age > 40) score += 5;
+    if (indicators.age > 60) score += 8;
+    if (indicators.occupationalExposure) score += 6;
+
+    return score;
+  }
+
+  private calculateSleepApneaScore(indicators: RespiratoryRisk['sleepApneaIndicators']): number {
+    // STOP-BANG based scoring
+    let score = indicators.stopBangScore * 5; // 0-40 scale
+
+    // Additional severity modifiers
+    if (indicators.berlinScore >= 2) score += 10;
+    if (indicators.obesityBMI > 35) score += 8;
+    if (indicators.neckCircumference > 43) score += 5;
+
+    return score;
+  }
+
+  // ==================== COMPOSITE METHODS ====================
+
+  private prioritizeConditions(
+    individualRisks: {
+      cardiovascular: CardiovascularRisk;
+      diabetes: DiabetesRisk;
+      mentalHealth: MentalHealthRisk;
+      respiratory: RespiratoryRisk;
+    }
+  ): string[] {
+    const { cardiovascular, diabetes, mentalHealth, respiratory } = individualRisks;
+
+    interface ConditionPriority {
+      condition: string;
+      priority: number;
+      urgency: number;
+    }
+
+    const conditions: ConditionPriority[] = [];
+
+    // Emergency conditions always first
+    if (cardiovascular.emergencyIndicators.length > 0) {
+      conditions.push({
+        condition: 'Emergência Cardiovascular',
+        priority: 100,
+        urgency: cardiovascular.timeToEscalation
+      });
+    }
+
+    if (mentalHealth.suicideRisk.immediateIntervention) {
+      conditions.push({
+        condition: 'Risco Suicida Iminente',
+        priority: 100,
+        urgency: 0
+      });
+    }
+
+    if (diabetes.emergencyIndicators.includes('DIABETIC_KETOACIDOSIS_RISK')) {
+      conditions.push({
+        condition: 'Cetoacidose Diabética',
+        priority: 95,
+        urgency: diabetes.timeToEscalation
+      });
+    }
+
+    if (respiratory.emergencyIndicators.length > 0) {
+      conditions.push({
+        condition: 'Emergência Respiratória',
+        priority: 90,
+        urgency: respiratory.timeToEscalation
+      });
+    }
+
+    // High-risk chronic conditions
+    if (cardiovascular.riskLevel === 'very_high' || cardiovascular.riskLevel === 'high') {
+      conditions.push({
+        condition: 'Risco Cardiovascular Alto',
+        priority: 80,
+        urgency: cardiovascular.timeToEscalation
+      });
+    }
+
+    if (diabetes.riskLevel === 'critical' || diabetes.riskLevel === 'high') {
+      conditions.push({
+        condition: 'Diabetes de Alto Risco',
+        priority: 75,
+        urgency: diabetes.timeToEscalation
+      });
+    }
+
+    if (mentalHealth.riskLevel === 'severe' || mentalHealth.riskLevel === 'high') {
+      conditions.push({
+        condition: 'Transtorno Mental Grave',
+        priority: 70,
+        urgency: mentalHealth.timeToEscalation
+      });
+    }
+
+    if (respiratory.riskLevel === 'critical' || respiratory.riskLevel === 'high') {
+      conditions.push({
+        condition: 'Doença Respiratória Grave',
+        priority: 65,
+        urgency: respiratory.timeToEscalation
+      });
+    }
+
+    // Sort by priority (descending), then by urgency (ascending - lower hours = more urgent)
+    conditions.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.urgency - b.urgency;
+    });
+
+    return conditions.map(c => c.condition);
+  }
+
+  // ==================== ALERT & RECOMMENDATION METHODS ====================
+
+  private generateEmergencyAlerts(risks: {
+    cardiovascular: CardiovascularRisk;
+    diabetes: DiabetesRisk;
+    mentalHealth: MentalHealthRisk;
+    respiratory: RespiratoryRisk;
+    composite: CompositeRisk;
+  }): EmergencyAlert[] {
+    const alerts: EmergencyAlert[] = [];
+
+    // Cardiovascular emergencies
+    if (risks.cardiovascular.emergencyIndicators.includes('ACUTE_CORONARY_SYNDROME_SUSPECTED')) {
+      alerts.push({
+        id: `alert_${Date.now()}_acs`,
+        severity: 'immediate',
+        condition: 'Suspeita de Síndrome Coronariana Aguda',
+        symptoms: ['Dor no peito', 'Falta de ar'],
+        timeToAction: 15, // 15 minutes
+        actions: [
+          'Ligar 192 (SAMU) imediatamente',
+          'Não dirigir até o hospital - aguardar ambulância',
+          'Mascar 200mg de AAS se disponível',
+          'Permanecer em repouso absoluto'
+        ],
+        contactNumbers: ['192', '193'],
+        automated: true
+      });
+    }
+
+    if (risks.cardiovascular.emergencyIndicators.includes('CARDIAC_SYNCOPE_SUSPECTED')) {
+      alerts.push({
+        id: `alert_${Date.now()}_syncope`,
+        severity: 'critical',
+        condition: 'Síncope de Origem Cardíaca',
+        symptoms: ['Desmaio', 'Dor no peito'],
+        timeToAction: 30,
+        actions: [
+          'Avaliação médica urgente em até 1 hora',
+          'ECG e monitoramento cardíaco',
+          'Não ficar sozinho até avaliação médica'
+        ],
+        contactNumbers: ['192'],
+        automated: true
+      });
+    }
+
+    // Diabetes emergencies
+    if (risks.diabetes.emergencyIndicators.includes('DIABETIC_KETOACIDOSIS_RISK')) {
+      alerts.push({
+        id: `alert_${Date.now()}_dka`,
+        severity: 'critical',
+        condition: 'Risco de Cetoacidose Diabética',
+        symptoms: ['Tríade clássica do diabetes', 'Perda de peso'],
+        timeToAction: 120, // 2 hours
+        actions: [
+          'Procurar pronto-socorro imediatamente',
+          'Exames urgentes: glicemia, gasometria, cetonas',
+          'Hidratação venosa e insulinoterapia urgente',
+          'Não aguardar agendamento - ir ao PS agora'
+        ],
+        contactNumbers: ['192'],
+        automated: true
+      });
+    }
+
+    if (risks.diabetes.emergencyIndicators.includes('KETOSIS_DETECTED')) {
+      alerts.push({
+        id: `alert_${Date.now()}_ketosis`,
+        severity: 'high',
+        condition: 'Cetose Detectada',
+        symptoms: ['Hálito cetônico', 'Náuseas'],
+        timeToAction: 180, // 3 hours
+        actions: [
+          'Medir glicemia capilar',
+          'Hidratação oral abundante',
+          'Procurar atendimento médico em até 3 horas',
+          'Monitorar sintomas de piora'
+        ],
+        contactNumbers: [],
+        automated: true
+      });
+    }
+
+    // Mental health emergencies
+    if (risks.mentalHealth.suicideRisk.immediateIntervention) {
+      alerts.push({
+        id: `alert_${Date.now()}_suicide`,
+        severity: 'immediate',
+        condition: 'Risco Suicida Iminente',
+        symptoms: ['Ideação suicida', 'Plano estruturado'],
+        timeToAction: 0, // Immediate
+        actions: [
+          'CVV - 188 (24h, gratuito e sigiloso)',
+          'SAMU 192 se tentativa em andamento',
+          'Não deixar a pessoa sozinha',
+          'Remover meios letais do ambiente',
+          'Encaminhar para CAPS ou emergência psiquiátrica'
+        ],
+        contactNumbers: ['188', '192'],
+        automated: true
+      });
+    }
+
+    // Respiratory emergencies
+    if (risks.respiratory.emergencyIndicators.includes('SEVERE_ASTHMA_EXACERBATION')) {
+      alerts.push({
+        id: `alert_${Date.now()}_asthma`,
+        severity: 'immediate',
+        condition: 'Crise Asmática Grave',
+        symptoms: ['Falta de ar intensa', 'Chiado', 'Dificuldade para falar'],
+        timeToAction: 30,
+        actions: [
+          'Usar broncodilatador de resgate (até 3 doses)',
+          'Ligar 192 se não houver melhora',
+          'Sentar-se em posição ereta',
+          'Pronto-socorro imediatamente se lábios/unhas azulados'
+        ],
+        contactNumbers: ['192'],
+        automated: true
+      });
+    }
+
+    if (risks.respiratory.emergencyIndicators.includes('COPD_EXACERBATION')) {
+      alerts.push({
+        id: `alert_${Date.now()}_copd`,
+        severity: 'critical',
+        condition: 'Exacerbação de DPOC',
+        symptoms: ['Dispneia', 'Expectoração purulenta', 'Febre'],
+        timeToAction: 60,
+        actions: [
+          'Procurar pronto-socorro em até 2 horas',
+          'Levar medicações em uso',
+          'Oxigenoterapia pode ser necessária',
+          'Antibioticoterapia e corticoides urgentes'
+        ],
+        contactNumbers: ['192'],
+        automated: true
+      });
+    }
+
+    return alerts;
+  }
+
+  private generateClinicalRecommendations(risks: {
+    cardiovascular: CardiovascularRisk;
+    diabetes: DiabetesRisk;
+    mentalHealth: MentalHealthRisk;
+    respiratory: RespiratoryRisk;
+    composite: CompositeRisk;
+  }): ClinicalRecommendation[] {
+    const recommendations: ClinicalRecommendation[] = [];
+
+    // Cardiovascular recommendations
+    if (risks.cardiovascular.riskLevel !== 'low') {
+      recommendations.push({
+        id: `rec_${Date.now()}_cv_eval`,
+        category: risks.cardiovascular.riskLevel === 'very_high' ? 'immediate' : 'urgent',
+        condition: 'Risco Cardiovascular',
+        recommendation: 'Avaliação cardiológica completa com ECG, ecocardiograma e perfil lipídico',
+        evidenceLevel: 'A',
+        timeframe: risks.cardiovascular.riskLevel === 'very_high' ? '24 horas' : '1 semana',
+        priority: risks.cardiovascular.riskLevel === 'very_high' ? 95 : 80,
+        costEffectiveness: 'high'
+      });
+
+      if (risks.cardiovascular.factors.smoking) {
+        recommendations.push({
+          id: `rec_${Date.now()}_smoking`,
+          category: 'preventive',
+          condition: 'Tabagismo',
+          recommendation: 'Programa de cessação de tabagismo (disponível no SUS)',
+          evidenceLevel: 'A',
+          timeframe: 'Iniciar em até 2 semanas',
+          priority: 85,
+          costEffectiveness: 'high'
+        });
+      }
+    }
+
+    // Diabetes recommendations
+    if (risks.diabetes.classicTriad.triadComplete) {
+      recommendations.push({
+        id: `rec_${Date.now()}_dm_diagnosis`,
+        category: 'urgent',
+        condition: 'Suspeita de Diabetes Mellitus',
+        recommendation: 'Exames diagnósticos urgentes: glicemia de jejum, HbA1c, glicemia 2h pós-prandial',
+        evidenceLevel: 'A',
+        timeframe: risks.diabetes.riskLevel === 'critical' ? '24 horas' : '3 dias',
+        priority: 90,
+        costEffectiveness: 'high'
+      });
+    }
+
+    if (risks.diabetes.riskLevel === 'high' || risks.diabetes.riskLevel === 'critical') {
+      recommendations.push({
+        id: `rec_${Date.now()}_dm_endo`,
+        category: 'urgent',
+        condition: 'Diabetes de Alto Risco',
+        recommendation: 'Consulta endocrinológica urgente para avaliação e início de tratamento',
+        evidenceLevel: 'A',
+        timeframe: '1 semana',
+        priority: 85,
+        costEffectiveness: 'high'
+      });
+    }
+
+    // Mental health recommendations
+    if (risks.mentalHealth.depressionIndicators.phq9Score >= 15) {
+      recommendations.push({
+        id: `rec_${Date.now()}_depression`,
+        category: risks.mentalHealth.riskLevel === 'severe' ? 'urgent' : 'routine',
+        condition: 'Depressão Moderada a Grave',
+        recommendation: 'Avaliação psiquiátrica e início de tratamento (psicoterapia + farmacoterapia)',
+        evidenceLevel: 'A',
+        timeframe: risks.mentalHealth.riskLevel === 'severe' ? '48 horas' : '1 semana',
+        priority: 80,
+        costEffectiveness: 'high'
+      });
+    }
+
+    if (risks.mentalHealth.anxietyIndicators.gad7Score >= 10) {
+      recommendations.push({
+        id: `rec_${Date.now()}_anxiety`,
+        category: 'routine',
+        condition: 'Transtorno de Ansiedade',
+        recommendation: 'Terapia cognitivo-comportamental (disponível no CAPS) e avaliação para farmacoterapia',
+        evidenceLevel: 'A',
+        timeframe: '2 semanas',
+        priority: 70,
+        costEffectiveness: 'high'
+      });
+    }
+
+    // Respiratory recommendations
+    if (risks.respiratory.asthmaIndicators.wheezing || risks.respiratory.asthmaIndicators.shortnessOfBreath) {
+      recommendations.push({
+        id: `rec_${Date.now()}_asthma`,
+        category: risks.respiratory.riskLevel === 'critical' ? 'immediate' : 'urgent',
+        condition: 'Asma',
+        recommendation: 'Avaliação pneumológica, espirometria e plano de ação para asma',
+        evidenceLevel: 'A',
+        timeframe: risks.respiratory.riskLevel === 'critical' ? '24 horas' : '1 semana',
+        priority: 75,
+        costEffectiveness: 'high'
+      });
+    }
+
+    if (risks.respiratory.sleepApneaIndicators.stopBangScore >= 3) {
+      recommendations.push({
+        id: `rec_${Date.now()}_sleep_apnea`,
+        category: 'routine',
+        condition: 'Suspeita de Apneia do Sono',
+        recommendation: 'Polissonografia e avaliação para CPAP se confirmado',
+        evidenceLevel: 'A',
+        timeframe: '1 mês',
+        priority: 60,
+        costEffectiveness: 'medium'
+      });
+    }
+
+    // Composite recommendations
+    if (risks.composite.multipleConditionsPenalty > 1.5) {
+      recommendations.push({
+        id: `rec_${Date.now()}_multimorbidity`,
+        category: 'urgent',
+        condition: 'Múltiplas Condições Crônicas',
+        recommendation: 'Programa de cuidado integrado com equipe multidisciplinar (médico, enfermeiro, nutricionista)',
+        evidenceLevel: 'B',
+        timeframe: '2 semanas',
+        priority: 85,
+        costEffectiveness: 'high'
+      });
+    }
+
+    // Sort by priority (descending)
+    recommendations.sort((a, b) => b.priority - a.priority);
+
+    return recommendations;
+  }
+
+  private createFollowupSchedule(risks: {
+    cardiovascular: CardiovascularRisk;
+    diabetes: DiabetesRisk;
+    mentalHealth: MentalHealthRisk;
+    respiratory: RespiratoryRisk;
+    composite: CompositeRisk;
+  }): FollowupSchedule {
+    const schedule: FollowupSchedule = {
+      immediate: [],
+      within24h: [],
+      within1week: [],
+      within1month: [],
+      routine: []
+    };
+
+    // Immediate actions (emergencies)
+    if (risks.cardiovascular.emergencyIndicators.length > 0) {
+      schedule.immediate.push({
+        action: 'Avaliação em pronto-socorro - Síndrome Coronariana Aguda',
+        specialistType: 'Cardiologista',
+        urgency: 'stat',
+        automated: true
+      });
+    }
+
+    if (risks.mentalHealth.suicideRisk.immediateIntervention) {
+      schedule.immediate.push({
+        action: 'Intervenção psiquiátrica de emergência - Risco suicida',
+        specialistType: 'Psiquiatra',
+        urgency: 'stat',
+        automated: true
+      });
+    }
+
+    if (risks.respiratory.emergencyIndicators.includes('SEVERE_ASTHMA_EXACERBATION')) {
+      schedule.immediate.push({
+        action: 'Atendimento emergencial - Crise asmática grave',
+        specialistType: 'Pneumologista/Emergencista',
+        urgency: 'stat',
+        automated: true
+      });
+    }
+
+    // Within 24 hours
+    if (risks.cardiovascular.riskLevel === 'very_high' && risks.cardiovascular.emergencyIndicators.length === 0) {
+      schedule.within24h.push({
+        action: 'Consulta cardiológica urgente com ECG',
+        specialistType: 'Cardiologista',
+        urgency: 'urgent',
+        automated: true
+      });
+    }
+
+    if (risks.diabetes.riskLevel === 'critical') {
+      schedule.within24h.push({
+        action: 'Exames laboratoriais: glicemia, HbA1c, função renal',
+        urgency: 'urgent',
+        automated: true
+      });
+    }
+
+    // Within 1 week
+    if (risks.cardiovascular.riskLevel === 'high') {
+      schedule.within1week.push({
+        action: 'Consulta cardiológica + ecocardiograma',
+        specialistType: 'Cardiologista',
+        urgency: 'urgent',
+        automated: false
+      });
+    }
+
+    if (risks.diabetes.classicTriad.triadComplete) {
+      schedule.within1week.push({
+        action: 'Consulta endocrinológica para diagnóstico e tratamento',
+        specialistType: 'Endocrinologista',
+        urgency: 'urgent',
+        automated: false
+      });
+    }
+
+    if (risks.mentalHealth.riskLevel === 'severe' || risks.mentalHealth.riskLevel === 'high') {
+      schedule.within1week.push({
+        action: 'Avaliação psiquiátrica e início de tratamento',
+        specialistType: 'Psiquiatra',
+        urgency: 'urgent',
+        automated: false
+      });
+    }
+
+    if (risks.respiratory.riskLevel === 'high' || risks.respiratory.riskLevel === 'critical') {
+      schedule.within1week.push({
+        action: 'Consulta pneumológica + espirometria',
+        specialistType: 'Pneumologista',
+        urgency: 'urgent',
+        automated: false
+      });
+    }
+
+    // Within 1 month
+    if (risks.diabetes.riskLevel === 'moderate' || risks.diabetes.riskLevel === 'high') {
+      schedule.within1month.push({
+        action: 'Avaliação oftalmológica (fundo de olho)',
+        specialistType: 'Oftalmologista',
+        urgency: 'routine',
+        automated: false
+      });
+
+      schedule.within1month.push({
+        action: 'Consulta com nutricionista',
+        specialistType: 'Nutricionista',
+        urgency: 'routine',
+        automated: false
+      });
+    }
+
+    if (risks.respiratory.sleepApneaIndicators.stopBangScore >= 3) {
+      schedule.within1month.push({
+        action: 'Polissonografia',
+        specialistType: 'Médico do Sono',
+        urgency: 'routine',
+        automated: false
+      });
+    }
+
+    // Routine follow-up
+    if (risks.composite.routineFollowup) {
+      schedule.routine.push({
+        action: 'Consulta de acompanhamento em medicina de família',
+        specialistType: 'Clínico Geral',
+        urgency: 'routine',
+        automated: false,
+        estimatedCost: 0 // SUS gratuito
+      });
+    }
+
+    if (risks.cardiovascular.riskLevel !== 'low' || risks.diabetes.riskLevel !== 'low') {
+      schedule.routine.push({
+        action: 'Exames de rotina trimestrais (glicemia, lipidograma, função renal)',
+        urgency: 'routine',
+        automated: false,
+        estimatedCost: 0
+      });
+    }
+
+    return schedule;
+  }
+
+  private determineEscalationProtocol(risks: {
+    cardiovascular: CardiovascularRisk;
+    diabetes: DiabetesRisk;
+    mentalHealth: MentalHealthRisk;
+    respiratory: RespiratoryRisk;
+    composite: CompositeRisk;
+  }): EscalationProtocol {
+    // Determine if immediate emergency services needed
+    const immediate =
+      risks.cardiovascular.emergencyIndicators.length > 0 ||
+      risks.mentalHealth.suicideRisk.immediateIntervention ||
+      risks.respiratory.emergencyIndicators.includes('SEVERE_ASTHMA_EXACERBATION');
+
+    // Determine if urgent physician review needed
+    const urgent = !immediate && (
+      risks.composite.urgentEscalation ||
+      risks.cardiovascular.riskLevel === 'very_high' ||
+      risks.diabetes.riskLevel === 'critical' ||
+      risks.mentalHealth.riskLevel === 'severe' ||
+      risks.respiratory.riskLevel === 'critical'
+    );
+
+    // Calculate time to escalation (in hours)
+    let timeToEscalation = 72; // Default: 3 days for routine
+
+    if (immediate) {
+      timeToEscalation = 0; // Immediate
+    } else if (urgent) {
+      // Use the shortest time from all conditions
+      const times = [
+        risks.cardiovascular.timeToEscalation,
+        risks.diabetes.timeToEscalation,
+        risks.mentalHealth.timeToEscalation,
+        risks.respiratory.timeToEscalation
+      ].filter(t => t > 0);
+
+      timeToEscalation = times.length > 0 ? Math.min(...times) : 24;
+    }
+
+    // Determine escalation level
+    let escalationLevel: EscalationProtocol['escalationLevel'] = 'ai_only';
+
+    if (immediate) {
+      escalationLevel = 'emergency_services';
+    } else if (urgent) {
+      escalationLevel = 'physician_review';
+    } else if (risks.composite.riskLevel === 'moderate' || risks.composite.riskLevel === 'high') {
+      escalationLevel = 'nurse_review';
+    }
+
+    // Determine notification channels
+    const notificationChannels: EscalationProtocol['notificationChannels'] = ['email'];
+
+    if (immediate) {
+      notificationChannels.push('call', 'sms', 'whatsapp'); // All channels for emergency
+    } else if (urgent) {
+      notificationChannels.push('sms', 'whatsapp');
+    } else if (escalationLevel === 'nurse_review') {
+      notificationChannels.push('whatsapp');
+    }
+
+    // Automatic scheduling
+    const automaticScheduling = urgent || immediate;
+
+    return {
+      immediate,
+      urgent,
+      timeToEscalation,
+      escalationLevel,
+      notificationChannels,
+      automaticScheduling
+    };
+  }
   
   private async storeAssessment(assessment: AdvancedRiskAssessment): Promise<void> {
     // Store in database for temporal analysis

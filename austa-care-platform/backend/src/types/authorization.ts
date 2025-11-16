@@ -33,7 +33,10 @@ export enum WorkflowAction {
   PUT_ON_HOLD = 'put_on_hold',
   RESUME = 'resume',
   EXPIRE = 'expire',
-  ESCALATE = 'escalate'
+  ESCALATE = 'escalate',
+  WORKFLOW_STARTED = 'workflow_started',
+  ASSIGN_REVIEWER = 'assign_reviewer',
+  EXPIRATION_WARNING = 'expiration_warning'
 }
 
 // Document Types

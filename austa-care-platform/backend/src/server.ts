@@ -10,12 +10,25 @@ import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { metricsMiddleware, errorMetricsMiddleware } from './middleware/metrics.middleware';
-import { authRoutes } from './controllers/auth';
+// Controller-based routes (legacy)
+import { authRoutes as legacyAuthRoutes } from './controllers/auth';
 import { healthRoutes } from './controllers/health';
-import { whatsappRoutes } from './controllers/whatsapp';
-import { userRoutes } from './controllers/user';
+import { whatsappRoutes as legacyWhatsappRoutes } from './controllers/whatsapp';
+import { userRoutes as legacyUserRoutes } from './controllers/user';
+
+// New route modules
+import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
+import conversationRoutes from './routes/conversation.routes';
+import healthDataRoutes from './routes/health-data.routes';
+import documentRoutes from './routes/document.routes';
+import gamificationRoutes from './routes/gamification.routes';
+import adminRoutes from './routes/admin.routes';
+import whatsappRoutes from './routes/whatsapp.routes';
+import ocrRoutes from './routes/ocr.routes';
 import aiRoutes from './routes/ai';
 import authorizationRoutes from './routes/authorization';
+import advancedRiskRoutes from './routes/advanced-risk';
 
 // Infrastructure imports
 import { kafkaClient } from './infrastructure/kafka/kafka.client';
@@ -89,11 +102,27 @@ app.get('/metrics', async (req, res) => {
   }
 });
 
-// Routes
+// Health check routes (non-versioned)
 app.use('/health', healthRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/users', userRoutes);
+
+// API v1 routes
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/conversations', conversationRoutes);
+app.use('/api/v1/health-data', healthDataRoutes);
+app.use('/api/v1/documents', documentRoutes);
+app.use('/api/v1/gamification', gamificationRoutes);
+app.use('/api/v1/authorizations', authorizationRoutes);
+app.use('/api/v1/risk-assessment', advancedRiskRoutes);
+app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/ocr', ocrRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/webhooks/whatsapp', whatsappRoutes);
+
+// Legacy routes (for backward compatibility - to be deprecated)
+app.use('/api/auth', legacyAuthRoutes);
+app.use('/api/whatsapp', legacyWhatsappRoutes);
+app.use('/api/users', legacyUserRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/authorization', authorizationRoutes);
 

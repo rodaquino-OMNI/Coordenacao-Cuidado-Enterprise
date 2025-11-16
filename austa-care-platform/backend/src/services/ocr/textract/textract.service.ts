@@ -3,7 +3,17 @@
  * Core implementation for medical document OCR processing
  */
 
-import { TextractClient } from '@aws-sdk/client-textract';
+import {
+  TextractClient,
+  DetectDocumentTextCommand,
+  AnalyzeDocumentCommand,
+  StartDocumentAnalysisCommand,
+  StartDocumentTextDetectionCommand,
+  GetDocumentAnalysisCommand,
+  GetDocumentTextDetectionCommand,
+  FeatureType
+} from '@aws-sdk/client-textract';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import {
   TextractConfiguration,
@@ -20,32 +30,25 @@ import { TextractError } from '../errors/textract.errors';
 import { logger } from '../../../utils/logger';
 
 export class TextractService {
-  private textract: AWS.Textract;
-  private s3: AWS.S3;
+  private textract: TextractClient;
+  private s3: S3Client;
   private config: TextractConfiguration;
 
   constructor(config?: Partial<TextractConfiguration>) {
     this.config = { ...TEXTRACT_CONFIG, ...config };
-    
-    AWS.config.update({
-      region: this.config.region,
-      accessKeyId: this.config.accessKeyId,
-      secretAccessKey: this.config.secretAccessKey
-    });
 
-    this.textract = new AWS.Textract({
-      apiVersion: '2018-06-27',
+    // AWS SDK v3 uses client configuration instead of global config
+    const clientConfig = {
       region: this.config.region,
-      maxRetries: 3,
-      retryDelayOptions: {
-        customBackoff: (retryCount: number) => Math.pow(2, retryCount) * 1000
-      }
-    });
+      credentials: {
+        accessKeyId: this.config.accessKeyId,
+        secretAccessKey: this.config.secretAccessKey
+      },
+      maxAttempts: 3
+    };
 
-    this.s3 = new AWS.S3({
-      apiVersion: '2006-03-01',
-      region: this.config.region
-    });
+    this.textract = new TextractClient(clientConfig);
+    this.s3 = new S3Client(clientConfig);
   }
 
   /**
@@ -156,14 +159,17 @@ export class TextractService {
       return completedDoc;
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
       logger.error(`Textract processing failed for document: ${s3Key}`, {
         documentId,
-        error: error.message,
-        stack: error.stack
+        error: errorMessage,
+        stack: errorStack
       });
 
       throw new TextractError(
-        `Failed to process document ${s3Key}: ${error.message}`,
+        `Failed to process document ${s3Key}: ${errorMessage}`,
         'PROCESSING_FAILED',
         { documentId, s3Key, originalError: error }
       );
@@ -177,55 +183,69 @@ export class TextractService {
     s3Key: string,
     options: TextractProcessingOptions
   ): Promise<TextractResponse> {
-    const params: AWS.Textract.DetectDocumentTextRequest = {
-      Document: {
-        S3Object: {
-          Bucket: this.config.bucketName,
-          Name: s3Key
-        }
+    const documentInput = {
+      S3Object: {
+        Bucket: this.config.bucketName,
+        Name: s3Key
       }
     };
 
     try {
-      let result: AWS.Textract.DetectDocumentTextResponse;
-
       if (options.enableForms || options.enableTables) {
         // Use AnalyzeDocument for forms and tables
-        const analyzeParams: AWS.Textract.AnalyzeDocumentRequest = {
-          Document: params.Document,
-          FeatureTypes: []
-        };
+        const featureTypes: FeatureType[] = [];
 
         if (options.enableForms) {
-          analyzeParams.FeatureTypes!.push('FORMS');
+          featureTypes.push('FORMS' as FeatureType);
         }
         if (options.enableTables) {
-          analyzeParams.FeatureTypes!.push('TABLES');
+          featureTypes.push('TABLES' as FeatureType);
         }
         if (options.enableQueries && options.customQueries?.length) {
-          analyzeParams.FeatureTypes!.push('QUERIES');
-          analyzeParams.QueriesConfig = {
-            Queries: options.customQueries.map(query => ({ Text: query }))
-          };
+          featureTypes.push('QUERIES' as FeatureType);
         }
 
-        result = await this.textract.analyzeDocument(analyzeParams).promise();
+        const analyzeCommand = new AnalyzeDocumentCommand({
+          Document: documentInput,
+          FeatureTypes: featureTypes,
+          QueriesConfig: (options.enableQueries && options.customQueries?.length)
+            ? { Queries: options.customQueries.map(query => ({ Text: query })) }
+            : undefined
+        });
+
+        const result = await this.textract.send(analyzeCommand);
+        const rawBlocks = result.Blocks || [];
+
+        return {
+          status: 'SUCCEEDED',
+          blocks: this.parseTextractBlocks(rawBlocks),
+          metadata: {
+            pages: this.countPages(rawBlocks),
+            processingTime: 0,
+            documentMetadata: result.DocumentMetadata
+          }
+        };
       } else {
         // Use DetectDocumentText for simple text extraction
-        result = await this.textract.detectDocumentText(params).promise();
+        const detectCommand = new DetectDocumentTextCommand({
+          Document: documentInput
+        });
+
+        const result = await this.textract.send(detectCommand);
+        const rawBlocks = result.Blocks || [];
+
+        return {
+          status: 'SUCCEEDED',
+          blocks: this.parseTextractBlocks(rawBlocks),
+          metadata: {
+            pages: this.countPages(rawBlocks),
+            processingTime: 0,
+            documentMetadata: result.DocumentMetadata
+          }
+        };
       }
 
-      return {
-        status: 'SUCCEEDED',
-        blocks: result.Blocks || [],
-        metadata: {
-          pages: this.countPages(result.Blocks || []),
-          processingTime: 0,
-          documentMetadata: result.DocumentMetadata
-        }
-      };
-
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Synchronous Textract processing failed', {
         s3Key,
         error: error.message
@@ -244,60 +264,66 @@ export class TextractService {
     const startTime = Date.now();
 
     try {
-      // Start async job
-      let jobParams: any = {
-        DocumentLocation: {
-          S3Object: {
-            Bucket: this.config.bucketName,
-            Name: s3Key
-          }
-        },
-        OutputConfig: {
-          S3Bucket: this.config.bucketName,
-          S3Prefix: `textract-output/${s3Key.replace(/\//g, '_')}`
+      const documentLocation = {
+        S3Object: {
+          Bucket: this.config.bucketName,
+          Name: s3Key
         }
       };
 
-      let startJobResult: any;
+      const outputConfig = {
+        S3Bucket: this.config.bucketName,
+        S3Prefix: `textract-output/${s3Key.replace(/\//g, '_')}`
+      };
+
+      let jobId: string;
 
       if (options.enableForms || options.enableTables) {
-        const featureTypes = [];
-        if (options.enableForms) featureTypes.push('FORMS');
-        if (options.enableTables) featureTypes.push('TABLES');
-        if (options.enableQueries) featureTypes.push('QUERIES');
+        const featureTypes: FeatureType[] = [];
+        if (options.enableForms) featureTypes.push('FORMS' as FeatureType);
+        if (options.enableTables) featureTypes.push('TABLES' as FeatureType);
+        if (options.enableQueries) featureTypes.push('QUERIES' as FeatureType);
 
-        jobParams.FeatureTypes = featureTypes;
+        const startCommand = new StartDocumentAnalysisCommand({
+          DocumentLocation: documentLocation,
+          FeatureTypes: featureTypes,
+          OutputConfig: outputConfig,
+          QueriesConfig: (options.enableQueries && options.customQueries?.length)
+            ? { Queries: options.customQueries.map(query => ({ Text: query })) }
+            : undefined
+        });
 
-        if (options.enableQueries && options.customQueries?.length) {
-          jobParams.QueriesConfig = {
-            Queries: options.customQueries.map(query => ({ Text: query }))
-          };
-        }
-
-        startJobResult = await this.textract.startDocumentAnalysis(jobParams).promise();
+        const startResult = await this.textract.send(startCommand);
+        jobId = startResult.JobId!;
       } else {
-        startJobResult = await this.textract.startDocumentTextDetection(jobParams).promise();
+        const startCommand = new StartDocumentTextDetectionCommand({
+          DocumentLocation: documentLocation,
+          OutputConfig: outputConfig
+        });
+
+        const startResult = await this.textract.send(startCommand);
+        jobId = startResult.JobId!;
       }
 
-      const jobId = startJobResult.JobId;
       logger.info(`Started async Textract job: ${jobId}`, { s3Key });
 
       // Poll for job completion
       const result = await this.pollJobCompletion(jobId, options.enableForms || options.enableTables);
+      const rawBlocks = result.Blocks || [];
 
       return {
         jobId,
         status: result.JobStatus === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED',
-        blocks: result.Blocks || [],
-        warnings: result.Warnings?.map(w => w.ErrorCode + ': ' + w.Pages?.join(',')) || [],
+        blocks: this.parseTextractBlocks(rawBlocks),
+        warnings: result.Warnings?.map((w: any) => w.ErrorCode + ': ' + w.Pages?.join(',')) || [],
         metadata: {
-          pages: this.countPages(result.Blocks || []),
+          pages: this.countPages(rawBlocks),
           processingTime: Date.now() - startTime,
           documentMetadata: result.DocumentMetadata
         }
       };
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Asynchronous Textract processing failed', {
         s3Key,
         error: error.message
@@ -319,9 +345,11 @@ export class TextractService {
 
     while (Date.now() - startTime < maxPollingTime) {
       try {
-        const result = isAnalyzeJob
-          ? await this.textract.getDocumentAnalysis({ JobId: jobId }).promise()
-          : await this.textract.getDocumentTextDetection({ JobId: jobId }).promise();
+        const getCommand = isAnalyzeJob
+          ? new GetDocumentAnalysisCommand({ JobId: jobId })
+          : new GetDocumentTextDetectionCommand({ JobId: jobId });
+
+        const result = await this.textract.send(getCommand);
 
         if (result.JobStatus === 'SUCCEEDED') {
           // Get all pages if multi-page
@@ -329,10 +357,11 @@ export class TextractService {
           let nextToken = result.NextToken;
 
           while (nextToken) {
-            const nextResult = isAnalyzeJob
-              ? await this.textract.getDocumentAnalysis({ JobId: jobId, NextToken: nextToken }).promise()
-              : await this.textract.getDocumentTextDetection({ JobId: jobId, NextToken: nextToken }).promise();
+            const nextCommand = isAnalyzeJob
+              ? new GetDocumentAnalysisCommand({ JobId: jobId, NextToken: nextToken })
+              : new GetDocumentTextDetectionCommand({ JobId: jobId, NextToken: nextToken });
 
+            const nextResult = await this.textract.send(nextCommand);
             allBlocks.push(...(nextResult.Blocks || []));
             nextToken = nextResult.NextToken;
           }
@@ -354,7 +383,7 @@ export class TextractService {
         // Continue polling
         await new Promise(resolve => setTimeout(resolve, pollingInterval));
 
-      } catch (error) {
+      } catch (error: any) {
         if (error instanceof TextractError) {
           throw error;
         }
@@ -489,10 +518,10 @@ export class TextractService {
     const childIds = block.relationships?.find(rel => rel.type === 'CHILD')?.ids || [];
     const words = childIds
       .map(id => allBlocks.find(b => b.id === id))
-      .filter(b => b && b.blockType === 'WORD')
+      .filter((b): b is TextractBlock => b !== undefined && b.blockType === 'WORD')
       .map(b => b.text)
       .filter(Boolean);
-    
+
     return words.join(' ');
   }
 
@@ -523,10 +552,12 @@ export class TextractService {
    */
   private async getDocumentMetadata(s3Key: string): Promise<any> {
     try {
-      const headResult = await this.s3.headObject({
+      const headCommand = new HeadObjectCommand({
         Bucket: this.config.bucketName,
         Key: s3Key
-      }).promise();
+      });
+
+      const headResult = await this.s3.send(headCommand);
 
       return {
         sizeBytes: headResult.ContentLength || 0,
@@ -534,7 +565,7 @@ export class TextractService {
         contentType: headResult.ContentType,
         pages: 1 // Default, will be updated after processing
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.warn(`Could not get metadata for ${s3Key}:`, error.message);
       return { sizeBytes: 0, pages: 1 };
     }
@@ -590,12 +621,13 @@ export class TextractService {
    */
   async getJobStatus(jobId: string): Promise<{ status: string; progress?: number }> {
     try {
-      const result = await this.textract.getDocumentAnalysis({ JobId: jobId }).promise();
+      const command = new GetDocumentAnalysisCommand({ JobId: jobId });
+      const result = await this.textract.send(command);
       return {
         status: result.JobStatus || 'UNKNOWN',
         progress: this.calculateJobProgress(result)
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error(`Failed to get job status for ${jobId}:`, error.message);
       throw new TextractError(
         `Failed to get job status: ${error.message}`,

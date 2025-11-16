@@ -85,11 +85,12 @@ export const getKafkaConfig = (): AustaKafkaConfig => {
 
   // Add SASL authentication if configured
   if (config.kafka?.sasl || process.env.KAFKA_SASL_USERNAME) {
+    const mechanism = (process.env.KAFKA_SASL_MECHANISM || 'plain') as 'plain' | 'scram-sha-256' | 'scram-sha-512';
     kafkaConfig.sasl = config.kafka?.sasl || {
-      mechanism: (process.env.KAFKA_SASL_MECHANISM as 'plain' | 'scram-sha-256' | 'scram-sha-512') || 'plain',
+      mechanism: mechanism,
       username: process.env.KAFKA_SASL_USERNAME || '',
       password: process.env.KAFKA_SASL_PASSWORD || '',
-    };
+    } as any;
   }
 
   return kafkaConfig;
@@ -262,8 +263,13 @@ export const validateKafkaConfig = (kafkaConfig: AustaKafkaConfig): boolean => {
     throw new Error('Kafka clientId must be configured');
   }
 
-  if (kafkaConfig.sasl && (!kafkaConfig.sasl.username || !kafkaConfig.sasl.password)) {
-    throw new Error('Kafka SASL credentials must be configured');
+  if (kafkaConfig.sasl) {
+    // Type guard to check if SASL has username/password
+    if ('username' in kafkaConfig.sasl && 'password' in kafkaConfig.sasl) {
+      if (!kafkaConfig.sasl.username || !kafkaConfig.sasl.password) {
+        throw new Error('Kafka SASL credentials must be configured');
+      }
+    }
   }
 
   return true;

@@ -365,7 +365,7 @@ export const productionSchema = baseEnvSchema
       'AWS_ACCESS_KEY_ID',
       'AWS_SECRET_ACCESS_KEY',
     ],
-    (schema) => schema.min(64) // Stronger secrets in production
+    (schema: any) => (schema as Joi.StringSchema).min(64) // Stronger secrets in production
   );
 
 /**

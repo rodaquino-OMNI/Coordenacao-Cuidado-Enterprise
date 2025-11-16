@@ -307,7 +307,7 @@ export class OCROrchestrator {
       } catch (error) {
         errors.push({
           s3Key,
-          error: error instanceof TextractError ? error.toJSON() : error.message
+          error: error instanceof TextractError ? error.toJSON() : (error instanceof Error ? error.message : String(error))
         });
       }
     });
@@ -405,7 +405,7 @@ export class OCROrchestrator {
 
     // Check retention period
     const documentType = document.documentType;
-    const retentionPeriod = LGPD_COMPLIANCE_CONFIG.retentionPeriods[documentType];
+    const retentionPeriod = (LGPD_COMPLIANCE_CONFIG.retentionPeriods as any)[documentType];
     if (retentionPeriod) {
       document.processingHistory.push({
         timestamp: new Date(),
@@ -622,9 +622,9 @@ export class OCROrchestrator {
       case 'patientInfo':
         return document.medicalEntities.some(e => e.category === 'PATIENT_INFO');
       case 'labResults':
-        return document.labResults && document.labResults.length > 0;
+        return Boolean(document.labResults && document.labResults.length > 0);
       case 'prescriptions':
-        return document.prescriptions && document.prescriptions.length > 0;
+        return Boolean(document.prescriptions && document.prescriptions.length > 0);
       default:
         return true; // Assume field exists for now
     }

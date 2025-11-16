@@ -14,6 +14,7 @@ export interface SessionRecoveryData {
   lastActiveNode: string;
   conversationSummary: string;
   contextSnapshot: ConversationContext;
+  contextBridge?: string;
   recoveryConfidence: number;
   timeGap: number; // minutes since last activity
   recoveryStrategies: RecoveryStrategy[];

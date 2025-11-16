@@ -9,7 +9,7 @@ import { AuthorizationRequest, TasyIntegration } from '../types/authorization';
  * Handles all integrations with the Tasy healthcare ERP system
  */
 export class TasyIntegrationService extends EventEmitter implements TasyIntegration {
-  private apiClient: AxiosInstance;
+  private apiClient!: AxiosInstance;
   private authToken: string | null = null;
   private tokenExpiresAt: Date | null = null;
   private requestQueue: Map<string, Promise<any>>;
@@ -23,6 +23,28 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     this.lastRequestTime = new Map();
     this.initializeApiClient();
     this.setupInterceptors();
+  }
+
+  /**
+   * Check patient eligibility for a procedure
+   */
+  async eligibilityCheck(patientId: string, procedureCode: string): Promise<boolean> {
+    try {
+      await this.ensureAuthenticated();
+
+      const response = await this.apiClient.get(`/eligibility/${patientId}`, {
+        params: { procedureCode }
+      });
+
+      return response.data?.eligible || false;
+    } catch (error) {
+      logger.error('Eligibility check failed', {
+        patientId,
+        procedureCode,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return false;
+    }
   }
 
   /**

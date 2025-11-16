@@ -214,7 +214,7 @@ export interface TemporalRiskProgression {
   assessments: AdvancedRiskAssessment[];
   trends: {
     condition: string;
-    progression: 'improving' | 'stable' | 'worsening' | 'rapid_decline';
+    progression: 'improving' | 'stable' | 'worsening' | 'rapid_decline' | 'fluctuating';
     timeframe: number; // days
     confidenceLevel: number;
   }[];
@@ -328,6 +328,9 @@ export interface SuccessMetric {
 // Note: QuestionnaireResponse is defined in questionnaire.types.ts
 // Import from there to avoid duplication
 // export interface QuestionnaireResponse { ... } // Moved to questionnaire.types.ts
+
+// Type alias for compatibility
+export type QuestionnaireResponse = QuestionResponse;
 
 export interface QuestionResponse {
   questionId: string;

@@ -99,7 +99,7 @@ export class FHIRMapperService {
     } catch (error) {
       logger.error('FHIR mapping failed', {
         documentId: document.id,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }

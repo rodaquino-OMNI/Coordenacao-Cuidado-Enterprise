@@ -16,36 +16,31 @@ import { logger } from '../../../utils/logger';
 import { metrics } from '../../monitoring/prometheus.metrics';
 import { redisCluster } from '../../redis/redis.cluster';
 import { eventPublisher } from '../../kafka/events/event.publisher';
+import {
+  ConversationJoinData,
+  ConversationLeaveData,
+  ConversationTypingData,
+  ConversationMessageData,
+  ConversationReadReceiptData,
+  ConversationPresenceData,
+  ConversationJoinedPayload,
+  ConversationUserJoinedPayload,
+  ConversationUserLeftPayload,
+  ConversationTypingIndicatorPayload,
+  ConversationMessageNewPayload,
+  ConversationMessageReadPayload,
+  ConversationPresenceUpdatedPayload,
+} from '../types/websocket-events.types';
 
 /**
- * Conversation event data interfaces
+ * Type aliases for backward compatibility
+ * @deprecated Use imported types from websocket-events.types instead
  */
-export interface JoinConversationData {
-  conversationId: string;
-  metadata?: Record<string, any>;
-}
-
-export interface LeaveConversationData {
-  conversationId: string;
-}
-
-export interface TypingIndicatorData {
-  conversationId: string;
-  isTyping: boolean;
-}
-
-export interface MessageData {
-  conversationId: string;
-  content: string;
-  messageType: 'text' | 'image' | 'file' | 'audio';
-  metadata?: Record<string, any>;
-}
-
-export interface ReadReceiptData {
-  conversationId: string;
-  messageId: string;
-  readAt: string;
-}
+export type JoinConversationData = ConversationJoinData;
+export type LeaveConversationData = ConversationLeaveData;
+export type TypingIndicatorData = ConversationTypingData;
+export type MessageData = ConversationMessageData;
+export type ReadReceiptData = ConversationReadReceiptData;
 
 /**
  * Setup conversation event handlers
@@ -58,7 +53,7 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle conversation join
    */
-  socket.on('conversation:join', async (data: JoinConversationData) => {
+  socket.on('conversation:join', async (data: ConversationJoinData) => {
     try {
       const { conversationId, metadata } = data;
       const room = `conversation:${conversationId}`;
@@ -77,19 +72,23 @@ export const setupConversationHandlers = (socket: Socket): void => {
         3600 // 1 hour TTL
       );
 
-      // Acknowledge join
-      socket.emit('conversation:joined', {
+      // Acknowledge join with proper typing
+      const joinedPayload: ConversationJoinedPayload = {
         conversationId,
+        socketId: socket.id,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.emit('conversation:joined', joinedPayload);
 
-      // Notify others in the conversation
-      socket.to(room).emit('conversation:user-joined', {
+      // Notify others in the conversation with proper typing
+      const userJoinedPayload: ConversationUserJoinedPayload = {
         userId: user.userId,
         conversationId,
         userName: user.name,
+        socketId: socket.id,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.to(room).emit('conversation:user-joined', userJoinedPayload);
 
       // Publish Kafka event
       await eventPublisher.publish({
@@ -119,7 +118,7 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle conversation leave
    */
-  socket.on('conversation:leave', async (data: LeaveConversationData) => {
+  socket.on('conversation:leave', async (data: ConversationLeaveData) => {
     try {
       const { conversationId } = data;
       const room = `conversation:${conversationId}`;
@@ -130,12 +129,13 @@ export const setupConversationHandlers = (socket: Socket): void => {
       // Remove subscription from Redis
       await redisCluster.deleteCache(`conversation:${conversationId}:user:${user.userId}`);
 
-      // Notify others in the conversation
-      socket.to(room).emit('conversation:user-left', {
+      // Notify others in the conversation with proper typing
+      const userLeftPayload: ConversationUserLeftPayload = {
         userId: user.userId,
         conversationId,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.to(room).emit('conversation:user-left', userLeftPayload);
 
       // Publish Kafka event
       await eventPublisher.publish({
@@ -159,18 +159,19 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle typing indicators
    */
-  socket.on('conversation:typing', async (data: TypingIndicatorData) => {
+  socket.on('conversation:typing', async (data: ConversationTypingData) => {
     try {
       const { conversationId, isTyping } = data;
       const room = `conversation:${conversationId}`;
 
-      // Broadcast typing indicator to others in the room
-      socket.to(room).emit('conversation:typing-indicator', {
+      // Broadcast typing indicator to others in the room with proper typing
+      const typingPayload: ConversationTypingIndicatorPayload = {
         userId: user.userId,
         conversationId,
         isTyping,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.to(room).emit('conversation:typing-indicator', typingPayload);
 
       // Store typing state in Redis with short TTL
       if (isTyping) {
@@ -193,13 +194,13 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle new messages (broadcast only, actual saving done via HTTP API)
    */
-  socket.on('conversation:message:sent', async (data: MessageData) => {
+  socket.on('conversation:message:sent', async (data: ConversationMessageData) => {
     try {
       const { conversationId, content, messageType, metadata } = data;
       const room = `conversation:${conversationId}`;
 
-      // Broadcast message to conversation participants
-      socket.to(room).emit('conversation:message:new', {
+      // Broadcast message to conversation participants with proper typing
+      const messagePayload: ConversationMessageNewPayload = {
         conversationId,
         senderId: user.userId,
         senderName: user.name,
@@ -207,7 +208,8 @@ export const setupConversationHandlers = (socket: Socket): void => {
         messageType,
         metadata,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.to(room).emit('conversation:message:new', messagePayload);
 
       metrics.websocketEvents.inc({ event: 'conversation:message', status: 'success' });
       logger.debug('Message broadcasted', { userId: user.userId, conversationId });
@@ -220,18 +222,20 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle read receipts
    */
-  socket.on('conversation:read-receipt', async (data: ReadReceiptData) => {
+  socket.on('conversation:read-receipt', async (data: ConversationReadReceiptData) => {
     try {
       const { conversationId, messageId, readAt } = data;
       const room = `conversation:${conversationId}`;
 
-      // Broadcast read receipt to conversation participants
-      socket.to(room).emit('conversation:message:read', {
+      // Broadcast read receipt to conversation participants with proper typing
+      const readPayload: ConversationMessageReadPayload = {
         conversationId,
         messageId,
         readBy: user.userId,
         readAt,
-      });
+        socketId: socket.id,
+      };
+      socket.to(room).emit('conversation:message:read', readPayload);
 
       // Store read receipt in Redis
       await redisCluster.setCache(
@@ -263,18 +267,19 @@ export const setupConversationHandlers = (socket: Socket): void => {
   /**
    * Handle presence updates
    */
-  socket.on('conversation:presence', async (data: { conversationId: string; status: 'active' | 'away' }) => {
+  socket.on('conversation:presence', async (data: ConversationPresenceData) => {
     try {
       const { conversationId, status } = data;
       const room = `conversation:${conversationId}`;
 
-      // Broadcast presence to conversation participants
-      socket.to(room).emit('conversation:presence-updated', {
+      // Broadcast presence to conversation participants with proper typing
+      const presencePayload: ConversationPresenceUpdatedPayload = {
         userId: user.userId,
         conversationId,
         status,
         timestamp: new Date().toISOString(),
-      });
+      };
+      socket.to(room).emit('conversation:presence-updated', presencePayload);
 
       // Store presence in Redis
       await redisCluster.setCache(

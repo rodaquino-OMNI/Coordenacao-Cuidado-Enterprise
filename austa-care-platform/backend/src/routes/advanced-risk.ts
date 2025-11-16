@@ -204,7 +204,7 @@ router.post('/bulk-assess',
             return {
               userId: assessment.userId,
               status: 'failed',
-              error: error.message,
+              error: error instanceof Error ? error.message : String(error),
               timestamp: new Date()
             };
           }

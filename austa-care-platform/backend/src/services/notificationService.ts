@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
-import { NotificationTemplate } from '../types/authorization';
+import { NotificationTemplate, WorkflowAction } from '../types/authorization';
 
 /**
  * Notification Service for Authorization Workflow
@@ -32,7 +32,7 @@ export class NotificationService extends EventEmitter {
         id: 'auth-approved',
         name: 'Authorization Approved',
         type: 'email',
-        trigger: 'approve',
+        trigger: WorkflowAction.APPROVE,
         recipients: ['patient', 'provider'],
         subject: 'Autorização Aprovada - {{procedureName}}',
         template: `
@@ -62,7 +62,7 @@ export class NotificationService extends EventEmitter {
         id: 'auth-rejected',
         name: 'Authorization Rejected',
         type: 'email',
-        trigger: 'reject',
+        trigger: WorkflowAction.REJECT,
         recipients: ['patient', 'provider'],
         subject: 'Autorização Negada - {{procedureName}}',
         template: `
@@ -95,7 +95,7 @@ export class NotificationService extends EventEmitter {
         id: 'additional-info-request',
         name: 'Additional Information Request',
         type: 'whatsapp',
-        trigger: 'request_additional_info',
+        trigger: WorkflowAction.REQUEST_ADDITIONAL_INFO,
         recipients: ['patient', 'provider'],
         subject: 'Documentação Adicional Necessária',
         template: `
@@ -125,7 +125,7 @@ export class NotificationService extends EventEmitter {
         id: 'reviewer-assignment',
         name: 'Reviewer Assignment',
         type: 'system',
-        trigger: 'assign_reviewer',
+        trigger: WorkflowAction.ASSIGN_REVIEWER,
         recipients: ['reviewer'],
         subject: 'Nova Autorização para Revisão',
         template: `
@@ -147,7 +147,7 @@ export class NotificationService extends EventEmitter {
         id: 'escalation-notice',
         name: 'Escalation Notice',
         type: 'email',
-        trigger: 'escalate',
+        trigger: WorkflowAction.ESCALATE,
         recipients: ['senior_reviewer', 'manager'],
         subject: 'Autorização Escalada - Ação Necessária',
         template: `
@@ -168,7 +168,7 @@ export class NotificationService extends EventEmitter {
         id: 'expiration-warning',
         name: 'Authorization Expiration Warning',
         type: 'sms',
-        trigger: 'expiration_warning',
+        trigger: WorkflowAction.EXPIRATION_WARNING,
         recipients: ['patient'],
         subject: '',
         template: `
@@ -182,7 +182,7 @@ export class NotificationService extends EventEmitter {
         id: 'appeal-submitted',
         name: 'Appeal Submitted',
         type: 'email',
-        trigger: 'appeal',
+        trigger: WorkflowAction.APPEAL,
         recipients: ['patient', 'appeals_team'],
         subject: 'Recurso Recebido - {{authorizationNumber}}',
         template: `

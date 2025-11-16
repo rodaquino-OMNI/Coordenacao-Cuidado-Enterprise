@@ -494,7 +494,7 @@ export class MedicalEntityExtractorService {
 
   private validateAndNormalizeEntities(entities: MedicalEntity[]): MedicalEntity[] {
     return entities
-      .filter(entity => entity.confidence >= MEDICAL_ENTITIES_CONFIG[entity.category]?.confidence || 0.7)
+      .filter(entity => entity.confidence >= (MEDICAL_ENTITIES_CONFIG as any)[entity.category]?.confidence || 0.7)
       .map(entity => ({
         ...entity,
         normalizedValue: entity.normalizedValue?.toLowerCase().trim()

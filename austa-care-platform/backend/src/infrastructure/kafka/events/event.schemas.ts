@@ -285,6 +285,58 @@ export const MlTrainingCompletedEventSchema = BaseEventSchema.extend({
   }),
 });
 
+// WebSocket conversation events
+export const ConversationUserJoinedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('conversation.user.joined'),
+  data: z.object({
+    conversationId: z.string(),
+    userId: z.string(),
+    socketId: z.string(),
+    metadata: z.record(z.string(), z.any()).optional(),
+  }),
+});
+
+export const ConversationUserLeftEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('conversation.user.left'),
+  data: z.object({
+    conversationId: z.string(),
+    userId: z.string(),
+    socketId: z.string().optional(),
+  }),
+});
+
+export const ConversationMessageReadEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('conversation.message.read'),
+  data: z.object({
+    conversationId: z.string(),
+    messageId: z.string(),
+    userId: z.string(),
+    readAt: z.string(),
+    socketId: z.string().optional(),
+  }),
+});
+
+// WebSocket notification events
+export const NotificationAcknowledgedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('notification.acknowledged'),
+  data: z.object({
+    notificationId: z.string(),
+    userId: z.string(),
+    acknowledgedAt: z.string(),
+    socketId: z.string().optional(),
+  }),
+});
+
+export const NotificationReadEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('notification.read'),
+  data: z.object({
+    notificationId: z.string(),
+    userId: z.string(),
+    readAt: z.string(),
+    socketId: z.string().optional(),
+  }),
+});
+
 // Type exports
 export type UserRegisteredEvent = z.infer<typeof UserRegisteredEventSchema>;
 export type ConversationStartedEvent = z.infer<typeof ConversationStartedEventSchema>;
@@ -304,9 +356,14 @@ export type FhirResourceDeletedEvent = z.infer<typeof FhirResourceDeletedEventSc
 export type MlPredictionCompletedEvent = z.infer<typeof MlPredictionCompletedEventSchema>;
 export type MlPredictionFailedEvent = z.infer<typeof MlPredictionFailedEventSchema>;
 export type MlTrainingCompletedEvent = z.infer<typeof MlTrainingCompletedEventSchema>;
+export type ConversationUserJoinedEvent = z.infer<typeof ConversationUserJoinedEventSchema>;
+export type ConversationUserLeftEvent = z.infer<typeof ConversationUserLeftEventSchema>;
+export type ConversationMessageReadEvent = z.infer<typeof ConversationMessageReadEventSchema>;
+export type NotificationAcknowledgedEvent = z.infer<typeof NotificationAcknowledgedEventSchema>;
+export type NotificationReadEvent = z.infer<typeof NotificationReadEventSchema>;
 
 // Union type for all events
-export type DomainEvent = 
+export type DomainEvent =
   | UserRegisteredEvent
   | ConversationStartedEvent
   | MessageReceivedEvent
@@ -324,4 +381,9 @@ export type DomainEvent =
   | FhirResourceDeletedEvent
   | MlPredictionCompletedEvent
   | MlPredictionFailedEvent
-  | MlTrainingCompletedEvent;
+  | MlTrainingCompletedEvent
+  | ConversationUserJoinedEvent
+  | ConversationUserLeftEvent
+  | ConversationMessageReadEvent
+  | NotificationAcknowledgedEvent
+  | NotificationReadEvent;

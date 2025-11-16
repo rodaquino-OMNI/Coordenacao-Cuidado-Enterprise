@@ -182,14 +182,14 @@ export class TemporalRiskTrackingService {
     const trends: RiskTrend[] = [];
 
     // Cardiovascular trend
-    trends.push(this.buildConditionTrend('cardiovascular', allAssessments, 
+    trends.push(this.buildConditionTrend('cardiovascular', allAssessments,
       assessments => assessments.map(a => ({
         timestamp: a.timestamp,
         riskScore: a.cardiovascular.overallScore,
         riskLevel: a.cardiovascular.riskLevel,
         symptoms: a.cardiovascular.emergencyIndicators,
         interventions: a.recommendations
-          .filter(r => r.category === 'cardiovascular' || r.condition.includes('cardiac'))
+          .filter(r => r.condition.includes('cardiovascular') || r.condition.includes('cardiac'))
           .map(r => r.recommendation),
         externalFactors: [],
         dataQuality: 'high'
@@ -204,7 +204,7 @@ export class TemporalRiskTrackingService {
         riskLevel: a.diabetes.riskLevel,
         symptoms: a.diabetes.emergencyIndicators,
         interventions: a.recommendations
-          .filter(r => r.category === 'diabetes' || r.condition.includes('diabetes'))
+          .filter(r => r.condition.includes('diabetes'))
           .map(r => r.recommendation),
         externalFactors: [],
         dataQuality: 'high'
@@ -219,7 +219,7 @@ export class TemporalRiskTrackingService {
         riskLevel: a.mentalHealth.riskLevel,
         symptoms: a.mentalHealth.suicideRisk.riskFactors,
         interventions: a.recommendations
-          .filter(r => r.category === 'mental_health' || r.condition.includes('mental'))
+          .filter(r => r.condition.includes('mental'))
           .map(r => r.recommendation),
         externalFactors: [],
         dataQuality: 'high'
@@ -234,7 +234,7 @@ export class TemporalRiskTrackingService {
         riskLevel: a.respiratory.riskLevel,
         symptoms: a.respiratory.emergencyIndicators,
         interventions: a.recommendations
-          .filter(r => r.category === 'respiratory' || r.condition.includes('respiratory'))
+          .filter(r => r.condition.includes('respiratory'))
           .map(r => r.recommendation),
         externalFactors: [],
         dataQuality: 'high'
