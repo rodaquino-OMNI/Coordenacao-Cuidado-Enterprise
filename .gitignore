@@ -418,6 +418,38 @@ forensics-*.log
 .claude/.mcp-server-*
 .claude/workspace-state.json
 
+# Claude Code - Enhanced Protection (preventive security)
+# Logs and cache
+.claude/cache/
+.claude/logs/
+.claude/tmp/
+.claude/**/*.log
+
+# Databases (preventive)
+.claude/**/*.db
+.claude/**/*.db-journal
+.claude/**/*.db-wal
+.claude/**/*.sqlite
+.claude/**/*.sqlite-journal
+.claude/**/*.sqlite-wal
+
+# Credentials (defense in depth - prevent accidental commits)
+.claude/**/*.env
+.claude/**/credentials.*
+.claude/**/secrets.*
+.claude/**/*-secret-*
+.claude/**/*-key-*
+.claude/**/*-token-*
+.claude/**/*-api-key-*
+
+# Personal customizations (optional - allow team to override agents/commands)
+.claude/agents/personal/
+.claude/commands/personal/
+.claude/skills/personal/
+
+# Node modules (if any agent has dependencies)
+.claude/**/node_modules/
+
 # Additional swarm coordination files
 .hive-mind/
 .collective-intelligence/
