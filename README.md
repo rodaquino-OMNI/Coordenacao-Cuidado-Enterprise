@@ -12,14 +12,14 @@
 
 Bem-vindo ao repositório oficial da **Plataforma AUSTA de Coordenação de Cuidados** - a solução HealthTech que vai mudar pra sempre a forma como operadoras de saúde cuidam dos seus beneficiários. Chega de correr atrás do prejuízo! Estamos trazendo um modelo **proativo, preditivo e personalizado** de verdade.
 
-> ### 🎉 **BORA PRO DEPLOY! 97% PRONTO PRA PRODUÇÃO!**
+> ### 🎉 **DEPLOY 97% PRONTO PRA PRODUÇÃO!**
 > Acabamos de fechar a validação completa em 16/11/2025 e confirmamos: a plataforma tá **97% pronta pra produção** com **97% de cobertura de testes** (130/134 testes passando). Todos os bugs críticos já foram resolvidos. Deploy em staging liberado pra sair agora. Deploy em produção aprovado, só aguardando setup da infra (checklist de 6-11 horas). Partiu! 🚀
 
-### 🌟 O Sonho que Estamos Construindo
+### 🌟 O que Estamos Construindo
 
 Criar a **primeira plataforma verdadeiramente preditiva de saúde do Brasil**, onde cada beneficiário recebe cuidado personalizado **antes mesmo de precisar pedir**, através de uma experiência digital matadora pelo WhatsApp - o app que TODO brasileiro já usa no dia a dia.
 
-## 🎯 O Pepino que a Gente Resolveu
+## 🎯 O Problema que Resolvemos
 
 Quem trabalha com saúde no Brasil sabe na pele os problemas que operadoras enfrentam:
 
