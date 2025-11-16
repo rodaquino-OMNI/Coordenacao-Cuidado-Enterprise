@@ -1,257 +1,356 @@
-# 🐝 SWARM EXECUTION PROMPT: AUSTA Care Platform 45% → 100%
+# 🐝 SWARM EXECUTION PROMPT: AUSTA Care Platform 85% → 100%
 
-**CRITICAL:** This prompt is designed for claude-flow swarm execution with MCP memory persistence.
-**Execute in parallel.** All agents MUST use coordination hooks.
+**CRITICAL:** This prompt is designed for claude-flow hive-mind swarm execution with MCP memory persistence.
+**Execute in parallel.** All agents MUST use coordination hooks and BatchTool operations.
 
 ---
 
-## 🎯 IMMEDIATE EXECUTION COMMAND
+## 🎯 CURRENT STATE VERIFICATION (ZERO-TRUST ANALYSIS)
 
+### ✅ COMPLETED COMPONENTS (85% Done - Can Skip These!)
+
+**Backend Implementation** (`/austa-care-platform/backend/`):
+- ✅ **172 TypeScript files** with **64,955 lines of code**
+- ✅ **13 Controllers** (user, conversation, health-data, document, gamification, admin, auth, authorization, ai, ocr, whatsapp, advanced-risk, health)
+- ✅ **12 Routes** (all mounted in server.ts with versioned API endpoints)
+- ✅ **42 Services** (all core business logic implemented)
+- ✅ **4 Integration Clients** (whatsapp, openai, tasy, fhir - fully implemented)
+- ✅ **7 Validation Schemas** (Zod schemas for all endpoints)
+- ✅ **Complete Infrastructure** (Kafka, Redis, MongoDB, WebSocket, ML Pipeline)
+- ✅ **Production Middleware** (metrics, error handling, security, CORS, rate limiting)
+- ✅ **Server Configuration** (server.ts fully configured with graceful shutdown)
+
+**Database Design**:
+- ✅ **Prisma schema** (25KB schema.prisma - complete design)
+- ✅ **Migration file** (001_init_austa_care_schema.sql - ready to execute)
+- ✅ **Seed directory** (structure exists)
+
+**Test Infrastructure**:
+- ✅ **Test framework** (Jest configured, setup.ts, directories created)
+- ✅ **10 test files** (basic tests exist)
+
+### ⚠️ WHAT ACTUALLY NEEDS TO BE DONE (15% Remaining)
+
+**Critical Missing Items**:
+1. ❌ **Environment Files** (.env.development, .env.staging, .env.production) - BLOCKER
+2. ❌ **Database Execution** (migration execution, seed data creation)
+3. ❌ **Comprehensive Test Suite** (need 200+ tests for >80% coverage)
+4. ❌ **Frontend Implementation** (ONLY package.json exists - 0% complete)
+5. ❌ **Production Readiness** (security audit, Grafana dashboards, OpenAPI specs)
+
+---
+
+## 🚨 CRITICAL: TWO BACKEND DIRECTORIES - READ THIS FIRST!
+
+**ATTENTION ALL AGENTS:** This repository has TWO backend directories. You MUST work on the CORRECT one!
+
+### Primary Backend (WORK HERE!)
+**Path:** `/home/user/Coordenacao-Cuidado-Enterprise/austa-care-platform/backend/`
+- **Size:** 172 TypeScript files, 64,955 lines of code
+- **Purpose:** Main production backend with full implementation
+- **Contains:** All controllers, routes, services, integrations, middleware
+- **Status:** 85% complete - THIS IS WHERE YOU WORK!
+
+**ALL file operations, tests, and development MUST happen in this directory:**
 ```bash
-# Initialize swarm with 6 specialized agents
-npx claude-flow@alpha swarm --agents 6 --topology hierarchical --task "Complete AUSTA Care Platform to 100%"
+# ✅ CORRECT working directory
+cd /home/user/Coordenacao-Cuidado-Enterprise/austa-care-platform/backend
+npm run dev
+npm test
+npx prisma migrate dev
+```
+
+### Secondary Backend (TEST INFRASTRUCTURE ONLY - DO NOT USE!)
+**Path:** `/home/user/Coordenacao-Cuidado-Enterprise/backend/`
+- **Size:** 38 TypeScript files, 6,941 lines of code
+- **Purpose:** Test infrastructure and utilities only
+- **Status:** Legacy/support files - DO NOT WORK HERE!
+
+### Critical Rules for All Agents:
+1. ✅ **ALWAYS** use `austa-care-platform/backend/` for ALL work
+2. ✅ **ALWAYS** prefix commands with `cd austa-care-platform/backend &&`
+3. ❌ **NEVER** work in the root `/backend/` directory
+4. ✅ **VERIFY** your working directory before EVERY command
+5. ✅ **STORE** all file paths in MCP memory with full paths to avoid confusion
+
+**Example of CORRECT agent workflow:**
+```bash
+# 1. Always change to correct directory first
+cd /home/user/Coordenacao-Cuidado-Enterprise/austa-care-platform/backend
+
+# 2. Then execute your work
+npm install
+npm run dev
+npx prisma migrate dev
+npm test
+
+# 3. Store in memory with FULL path
+mcp__claude-flow__memory_usage({
+  key: "austa/devops-db/working-directory",
+  value: "/home/user/Coordenacao-Cuidado-Enterprise/austa-care-platform/backend"
+})
 ```
 
 ---
 
-## 🧠 SWARM TOPOLOGY & ROLES
+## 🚀 IMMEDIATE EXECUTION COMMAND
 
-### Central Coordinator (Required)
+```bash
+# Initialize swarm with 4 specialized agents + 1 coordinator
+npx claude-flow@alpha swarm --agents 5 --topology hierarchical --task "Complete AUSTA Care Platform from 85% to 100%"
+```
+
+---
+
+## 🧠 OPTIMIZED SWARM TOPOLOGY (4 Agents + Coordinator)
+
+### Central Coordinator
 **Agent ID:** `coordinator-austa`
 **Role:** Hive-mind intelligence, dependency management, progress tracking
 **Memory Keys:** `austa/coordination/*`
 **Responsibilities:**
-- Monitor all agent progress via MCP memory
-- Resolve blocking dependencies
-- Optimize parallel execution
-- Generate status reports every 4 hours
+- Monitor all agent progress via MCP memory (every 2 hours)
+- Resolve blocking dependencies through shared memory
+- Optimize parallel execution across waves
+- Aggregate completion reports from all agents
 
-### Agent 1: DevOps Engineer
-**Agent ID:** `devops-env`
-**Memory Keys:** `austa/week1/devops/*`
-**Dependencies:** None (can start immediately)
+### Agent 1: DevOps + Database Engineer
+**Agent ID:** `devops-db`
+**Memory Keys:** `austa/wave1/devops-db/*`
+**Dependencies:** None (START IMMEDIATELY)
+**Priority:** 🔴 CRITICAL PATH
 **Tasks:**
-- Environment file creation (.env.development, .env.staging, .env.production)
-- Build fixes (@types/jest, @types/node)
-- Infrastructure connection testing
-- Server startup verification
+- Create .env.development, .env.staging, .env.production (50+ vars each)
+- Execute `npx prisma migrate dev --name init`
+- Create and execute seed data scripts
+- Verify server startup with `npm run dev`
+- Test all infrastructure connections (Kafka, Redis, MongoDB)
 
-### Agent 2: Database Engineer
-**Agent ID:** `database-init`
-**Memory Keys:** `austa/week1/database/*`
-**Dependencies:** `devops-env` (needs .env files)
-**Tasks:**
-- Prisma migration execution
-- Seed data creation
-- Database initialization
-- Connection verification
-
-### Agent 3: Integration Engineer
-**Agent ID:** `integration-dev`
-**Memory Keys:** `austa/week2/integrations/*`
-**Dependencies:** `devops-env`, `database-init`
-**Tasks:**
-- Create integrations/ directory structure
-- WhatsApp Business API client (official Meta API)
-- OpenAI client with function calling
-- Tasy ERP REST client
-- FHIR gateway client
-
-### Agent 4: API Engineer
-**Agent ID:** `api-dev`
-**Memory Keys:** `austa/week2-3/api/*`
-**Dependencies:** `database-init`, `integration-dev`
-**Tasks:**
-- Complete all controllers (user, conversation, health-data, document, gamification, admin)
-- Complete all routes
-- Validation schemas (Zod)
-- Route mounting in server.ts
-
-### Agent 5: Test Engineer
+### Agent 2: Test Engineer
 **Agent ID:** `test-qa`
-**Memory Keys:** `austa/week4/testing/*`
-**Dependencies:** `api-dev` (needs completed endpoints)
+**Memory Keys:** `austa/wave1/testing/*`
+**Dependencies:** `devops-db` (needs .env to run tests)
+**Priority:** 🔴 HIGH
 **Tasks:**
-- Unit tests for all 42 services
-- Unit tests for all controllers
-- Integration tests for API endpoints
-- E2E tests for critical flows
-- Target: >80% coverage
+- Unit tests for 42 services (target: 200+ tests)
+- Unit tests for 13 controllers
+- Integration tests for 12 API routes
+- E2E tests for critical flows (auth, conversation, risk assessment)
+- Verify >80% code coverage
 
-### Agent 6: Production Engineer
-**Agent ID:** `prod-ready`
-**Memory Keys:** `austa/week5-6/production/*`
-**Dependencies:** `test-qa` (needs passing tests)
+### Agent 3: Frontend Developer
+**Agent ID:** `frontend-dev`
+**Memory Keys:** `austa/wave2/frontend/*`
+**Dependencies:** `devops-db` (needs backend running for API integration)
+**Priority:** 🟡 MEDIUM
 **Tasks:**
-- Security hardening
-- Missing middleware (audit, sanitization)
-- Monitoring setup (Grafana dashboards)
-- Documentation (OpenAPI specs)
-- Production deployment preparation
+- React + TypeScript setup with Vite
+- Authentication UI (login, registration, password recovery)
+- Dashboard with health metrics and conversation history
+- Admin panel for user management
+- Responsive design with Tailwind CSS
+
+### Agent 4: Production Engineer
+**Agent ID:** `prod-ready`
+**Memory Keys:** `austa/wave3/production/*`
+**Dependencies:** `test-qa`, `frontend-dev` (needs passing tests + deployed frontend)
+**Priority:** 🟢 FINAL WAVE
+**Tasks:**
+- Security audit and OWASP compliance
+- Grafana dashboards for monitoring
+- OpenAPI 3.0 specification generation
+- Docker compose for local deployment
+- Kubernetes manifests for production
+- CI/CD pipeline configuration
 
 ---
 
-## 📊 DEPENDENCY GRAPH
+## 📊 DEPENDENCY GRAPH WITH PARALLEL OPTIMIZATION
 
 ```mermaid
 graph TD
-    COORD[Coordinator] --> A1[DevOps]
-    A1 --> A2[Database]
-    A1 --> A3[Integration]
-    A2 --> A3
-    A2 --> A4[API]
-    A3 --> A4
-    A4 --> A5[Test]
-    A5 --> A6[Production]
-    COORD -.monitors.-> A1
-    COORD -.monitors.-> A2
-    COORD -.monitors.-> A3
-    COORD -.monitors.-> A4
-    COORD -.monitors.-> A5
-    COORD -.monitors.-> A6
+    COORD[Coordinator - Hive Mind] --> W1A[Agent 1: DevOps+DB]
+    COORD --> W1B[Agent 2: Test QA]
+    W1A --> W1B
+    COORD --> W2[Agent 3: Frontend]
+    W1A --> W2
+    COORD --> W3[Agent 4: Production]
+    W1B --> W3
+    W2 --> W3
+
+    style COORD fill:#ff6b6b
+    style W1A fill:#4ecdc4
+    style W1B fill:#4ecdc4
+    style W2 fill:#ffe66d
+    style W3 fill:#95e1d3
 ```
 
 **Parallel Execution Waves:**
-- **Wave 1:** DevOps (starts immediately)
-- **Wave 2:** Database + Integration (after DevOps env files ready)
-- **Wave 3:** API (after Database + Integration complete)
-- **Wave 4:** Test (after API complete)
-- **Wave 5:** Production (after Test passing)
+- **Wave 1a:** DevOps+DB Agent (starts IMMEDIATELY)
+- **Wave 1b:** Test Agent (starts when .env ready, runs PARALLEL with DevOps)
+- **Wave 2:** Frontend Agent (starts when backend running)
+- **Wave 3:** Production Agent (starts when tests + frontend complete)
 
 ---
 
-## 🚀 SWARM INITIALIZATION (EXECUTE THIS)
+## 🔥 SWARM INITIALIZATION (SINGLE MESSAGE - BATCHTOOL MANDATORY)
 
-**CRITICAL:** Send this as ONE message with all BatchTool operations.
+**CRITICAL:** Execute this as ONE message with ALL operations batched together.
 
 ```javascript
-// Message 1: Initialize swarm and spawn ALL agents
-[BatchTool]:
-  // MCP: Initialize swarm coordination
-  mcp__claude-flow__swarm_init({
+// ✅ CORRECT PATTERN: Everything in ONE message
+[Message 1 - BatchTool with ALL operations]:
+
+// 1. MCP: Initialize swarm coordination
+mcp__claude-flow__swarm_init({
+  topology: "hierarchical",
+  maxAgents: 5,  // 4 workers + 1 coordinator
+  strategy: "parallel",
+  persistMemory: true,
+  sessionId: "austa-final-85to100-" + Date.now()
+})
+
+// 2. MCP: Spawn coordinator (central hive-mind)
+mcp__claude-flow__agent_spawn({
+  type: "coordinator",
+  name: "AUSTA Hive Coordinator",
+  role: "central_intelligence",
+  memoryPattern: "austa/coordination/*",
+  monitoringInterval: 7200000 // 2 hours
+})
+
+// 3. MCP: Spawn ALL worker agents in parallel
+mcp__claude-flow__agent_spawn({ type: "devops", name: "DevOps+Database Engineer", priority: "critical" })
+mcp__claude-flow__agent_spawn({ type: "tester", name: "QA Test Engineer", priority: "high" })
+mcp__claude-flow__agent_spawn({ type: "frontend", name: "Frontend Developer", priority: "medium" })
+mcp__claude-flow__agent_spawn({ type: "production", name: "Production Engineer", priority: "low" })
+
+// 4. TodoWrite: ALL tasks in ONE call (15+ todos with dependencies)
+TodoWrite({
+  todos: [
+    // Wave 1a - DevOps+Database (NO dependencies - START NOW!)
+    {id: "w1-env-dev", content: "Create .env.development with 50+ variables", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: []},
+    {id: "w1-env-staging", content: "Create .env.staging", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: []},
+    {id: "w1-env-prod", content: "Create .env.production with security hardening", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: []},
+    {id: "w1-db-migrate", content: "Execute npx prisma migrate dev --name init", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: ["w1-env-dev"]},
+    {id: "w1-db-seed", content: "Create seed data scripts and execute", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: ["w1-db-migrate"]},
+    {id: "w1-server-start", content: "Verify npm run dev starts without errors", status: "pending", priority: "critical", agent: "devops-db", wave: "1a", dependsOn: ["w1-env-dev", "w1-db-migrate"]},
+    {id: "w1-infra-test", content: "Test Kafka, Redis, MongoDB connections", status: "pending", priority: "high", agent: "devops-db", wave: "1a", dependsOn: ["w1-server-start"]},
+
+    // Wave 1b - Testing (depends on .env, runs PARALLEL with DevOps)
+    {id: "w1-unit-services", content: "Unit tests for 42 services (200+ tests)", status: "pending", priority: "high", agent: "test-qa", wave: "1b", dependsOn: ["w1-env-dev"]},
+    {id: "w1-unit-controllers", content: "Unit tests for 13 controllers", status: "pending", priority: "high", agent: "test-qa", wave: "1b", dependsOn: ["w1-env-dev"]},
+    {id: "w1-integration-api", content: "Integration tests for 12 routes", status: "pending", priority: "high", agent: "test-qa", wave: "1b", dependsOn: ["w1-server-start"]},
+    {id: "w1-e2e-flows", content: "E2E tests for critical user flows", status: "pending", priority: "medium", agent: "test-qa", wave: "1b", dependsOn: ["w1-server-start"]},
+    {id: "w1-coverage", content: "Verify >80% test coverage", status: "pending", priority: "high", agent: "test-qa", wave: "1b", dependsOn: ["w1-unit-services", "w1-unit-controllers", "w1-integration-api"]},
+
+    // Wave 2 - Frontend (depends on backend running)
+    {id: "w2-frontend-setup", content: "React + TypeScript + Vite setup", status: "pending", priority: "medium", agent: "frontend-dev", wave: "2", dependsOn: ["w1-server-start"]},
+    {id: "w2-auth-ui", content: "Authentication UI (login, register, recover)", status: "pending", priority: "medium", agent: "frontend-dev", wave: "2", dependsOn: ["w2-frontend-setup"]},
+    {id: "w2-dashboard", content: "Dashboard with metrics and conversations", status: "pending", priority: "medium", agent: "frontend-dev", wave: "2", dependsOn: ["w2-frontend-setup"]},
+    {id: "w2-admin-panel", content: "Admin panel for user management", status: "pending", priority: "medium", agent: "frontend-dev", wave: "2", dependsOn: ["w2-frontend-setup"]},
+
+    // Wave 3 - Production (depends on tests + frontend)
+    {id: "w3-security-audit", content: "OWASP security audit and fixes", status: "pending", priority: "critical", agent: "prod-ready", wave: "3", dependsOn: ["w1-coverage"]},
+    {id: "w3-grafana", content: "Grafana dashboards and alerts", status: "pending", priority: "high", agent: "prod-ready", wave: "3", dependsOn: ["w1-coverage"]},
+    {id: "w3-openapi", content: "OpenAPI 3.0 specification generation", status: "pending", priority: "medium", agent: "prod-ready", wave: "3", dependsOn: ["w1-integration-api"]},
+    {id: "w3-docker", content: "Docker compose for local deployment", status: "pending", priority: "high", agent: "prod-ready", wave: "3", dependsOn: ["w3-security-audit"]},
+    {id: "w3-k8s", content: "Kubernetes manifests for production", status: "pending", priority: "high", agent: "prod-ready", wave: "3", dependsOn: ["w3-docker"]},
+    {id: "w3-cicd", content: "CI/CD pipeline with GitHub Actions", status: "pending", priority: "medium", agent: "prod-ready", wave: "3", dependsOn: ["w1-coverage", "w2-frontend-setup"]}
+  ]
+})
+
+// 5. MCP: Store initial swarm state
+mcp__claude-flow__memory_usage({
+  action: "store",
+  key: "austa/coordination/init",
+  value: {
+    timestamp: Date.now(),
+    swarmId: "austa-final-85to100",
     topology: "hierarchical",
-    maxAgents: 7,  // 6 workers + 1 coordinator
-    strategy: "parallel",
-    persistMemory: true,
-    sessionId: "austa-complete-" + Date.now()
-  })
+    totalAgents: 5,
+    totalTasks: 22,
+    currentState: "backend_85_complete",
+    remainingWork: "env_files_db_tests_frontend_production",
+    estimatedCompletion: "2-3 weeks",
+    criticalPath: ["w1-env-dev", "w1-db-migrate", "w1-server-start", "w1-coverage", "w3-security-audit"]
+  }
+})
 
-  // MCP: Spawn coordinator (central intelligence)
-  mcp__claude-flow__agent_spawn({
-    type: "coordinator",
-    name: "AUSTA Coordinator",
-    role: "hive_mind",
-    memoryPattern: "austa/coordination/*"
-  })
-
-  // MCP: Spawn worker agents
-  mcp__claude-flow__agent_spawn({ type: "devops", name: "DevOps Engineer" })
-  mcp__claude-flow__agent_spawn({ type: "database", name: "Database Engineer" })
-  mcp__claude-flow__agent_spawn({ type: "integration", name: "Integration Engineer" })
-  mcp__claude-flow__agent_spawn({ type: "api", name: "API Engineer" })
-  mcp__claude-flow__agent_spawn({ type: "test", name: "Test Engineer" })
-  mcp__claude-flow__agent_spawn({ type: "production", name: "Production Engineer" })
-
-  // TodoWrite: ALL tasks in ONE call (20+ todos)
-  TodoWrite({
-    todos: [
-      // Week 1 - Wave 1
-      {id: "w1-env-dev", content: "Create .env.development with 50+ vars", status: "pending", priority: "high", agent: "devops-env", wave: 1},
-      {id: "w1-env-staging", content: "Create .env.staging", status: "pending", priority: "high", agent: "devops-env", wave: 1},
-      {id: "w1-env-prod", content: "Create .env.production", status: "pending", priority: "high", agent: "devops-env", wave: 1},
-      {id: "w1-build-fix", content: "Install @types/jest, @types/node", status: "pending", priority: "high", agent: "devops-env", wave: 1},
-      {id: "w1-compile", content: "Fix TypeScript compilation errors", status: "pending", priority: "high", agent: "devops-env", wave: 1},
-
-      // Week 1 - Wave 2 (depends on env files)
-      {id: "w1-db-migrate", content: "Run prisma migrate dev --name init", status: "pending", priority: "high", agent: "database-init", wave: 2, dependsOn: ["w1-env-dev"]},
-      {id: "w1-db-seed", content: "Create and execute seed data", status: "pending", priority: "high", agent: "database-init", wave: 2, dependsOn: ["w1-db-migrate"]},
-      {id: "w1-infra-test", content: "Test Kafka, Redis, MongoDB connections", status: "pending", priority: "high", agent: "devops-env", wave: 2, dependsOn: ["w1-env-dev"]},
-      {id: "w1-server-start", content: "Verify npm run dev succeeds", status: "pending", priority: "high", agent: "devops-env", wave: 2, dependsOn: ["w1-infra-test"]},
-
-      // Week 2 - Wave 2 (parallel with database)
-      {id: "w2-int-dir", content: "Create src/integrations/ structure", status: "pending", priority: "high", agent: "integration-dev", wave: 2, dependsOn: ["w1-env-dev"]},
-      {id: "w2-whatsapp", content: "WhatsApp Business API client (official)", status: "pending", priority: "high", agent: "integration-dev", wave: 2, dependsOn: ["w2-int-dir"]},
-      {id: "w2-openai", content: "OpenAI client with function calling", status: "pending", priority: "high", agent: "integration-dev", wave: 2, dependsOn: ["w2-int-dir"]},
-      {id: "w2-tasy", content: "Tasy ERP REST API client", status: "pending", priority: "high", agent: "integration-dev", wave: 2, dependsOn: ["w2-int-dir"]},
-      {id: "w2-validation", content: "Create src/validation/ with Zod schemas", status: "pending", priority: "medium", agent: "api-dev", wave: 2, dependsOn: ["w1-env-dev"]},
-
-      // Week 3 - Wave 3 (depends on integrations)
-      {id: "w3-controllers", content: "Complete all 12 controllers (full CRUD)", status: "pending", priority: "high", agent: "api-dev", wave: 3, dependsOn: ["w1-db-seed", "w2-openai"]},
-      {id: "w3-routes", content: "Complete all 8 routes and mount in server.ts", status: "pending", priority: "high", agent: "api-dev", wave: 3, dependsOn: ["w3-controllers"]},
-      {id: "w3-middleware", content: "Add audit, sanitization, cors middleware", status: "pending", priority: "medium", agent: "api-dev", wave: 3, dependsOn: ["w3-routes"]},
-
-      // Week 4 - Wave 4 (depends on API)
-      {id: "w4-unit-services", content: "Unit tests for 42 services", status: "pending", priority: "high", agent: "test-qa", wave: 4, dependsOn: ["w3-controllers"]},
-      {id: "w4-unit-controllers", content: "Unit tests for 12 controllers", status: "pending", priority: "high", agent: "test-qa", wave: 4, dependsOn: ["w3-controllers"]},
-      {id: "w4-integration", content: "Integration tests for API endpoints", status: "pending", priority: "high", agent: "test-qa", wave: 4, dependsOn: ["w3-routes"]},
-      {id: "w4-e2e", content: "E2E tests for critical flows", status: "pending", priority: "medium", agent: "test-qa", wave: 4, dependsOn: ["w4-integration"]},
-      {id: "w4-coverage", content: "Verify >80% test coverage", status: "pending", priority: "high", agent: "test-qa", wave: 4, dependsOn: ["w4-unit-services", "w4-unit-controllers"]},
-
-      // Week 5-6 - Wave 5 (depends on tests)
-      {id: "w5-security", content: "Security hardening and audit", status: "pending", priority: "high", agent: "prod-ready", wave: 5, dependsOn: ["w4-coverage"]},
-      {id: "w5-monitoring", content: "Grafana dashboards and alerts", status: "pending", priority: "high", agent: "prod-ready", wave: 5, dependsOn: ["w4-coverage"]},
-      {id: "w6-docs", content: "OpenAPI specs and documentation", status: "pending", priority: "medium", agent: "prod-ready", wave: 5, dependsOn: ["w3-routes"]},
-      {id: "w6-deploy", content: "Production deployment preparation", status: "pending", priority: "high", agent: "prod-ready", wave: 5, dependsOn: ["w5-security", "w5-monitoring"]}
-    ]
-  })
-
-  // MCP: Store initial state in memory
-  mcp__claude-flow__memory_usage({
-    action: "store",
-    key: "austa/coordination/init",
-    value: {
-      timestamp: Date.now(),
-      swarmId: "austa-complete",
-      topology: "hierarchical",
-      agents: 7,
-      totalTasks: 25,
-      currentWave: 1,
-      status: "initialized"
-    }
-  })
+// 6. MCP: Initialize task orchestration
+mcp__claude-flow__task_orchestrate({
+  task: "Complete AUSTA Care Platform from 85% to 100%",
+  strategy: "parallel",
+  priority: "critical",
+  memoryKey: "austa/coordination/orchestration"
+})
 ```
 
 ---
 
-## 🔗 COORDINATION PROTOCOL (MANDATORY FOR ALL AGENTS)
+## 🔗 MANDATORY COORDINATION PROTOCOL FOR ALL AGENTS
 
-### Before Starting Work
+### BEFORE Starting ANY Task
+
 ```bash
-# Load session context and check dependencies
+# 1. Load session context and dependencies
 npx claude-flow@alpha hooks pre-task \
-  --description "Your task description" \
-  --session-id "austa-complete" \
+  --description "Your specific task description" \
+  --session-id "austa-final-85to100" \
   --auto-spawn-agents false
 
-# Restore previous session state
+# 2. Restore previous session memory
 npx claude-flow@alpha hooks session-restore \
-  --session-id "austa-complete" \
+  --session-id "austa-final-85to100" \
   --load-memory true
+
+# 3. Check dependencies via MCP memory
+# Example: Check if .env files are ready before starting tests
+mcp__claude-flow__memory_usage({
+  action: "retrieve",
+  key: "austa/coordination/tasks/w1-env-dev"
+})
+
+# If dependencies NOT ready: mark task as "blocked" and WAIT
 ```
 
-### During Work (After EVERY File Operation)
+### DURING Work (After EVERY File Operation)
+
 ```bash
-# Store progress in MCP memory
+# 1. Store progress in MCP memory after each file edit
 npx claude-flow@alpha hooks post-edit \
   --file "path/to/file" \
-  --memory-key "austa/[agent-id]/[task-id]"
+  --memory-key "austa/[agent-id]/[task-id]/step-[N]"
 
-# Check if unblocking other agents
+# 2. Update coordination memory with progress
+mcp__claude-flow__memory_usage({
+  action: "store",
+  key: "austa/[agent-id]/progress/[timestamp]",
+  value: {
+    filesModified: ["file1.ts", "file2.ts"],
+    testsAdded: 5,
+    linesAdded: 350,
+    currentStep: "implementing_auth_tests"
+  }
+})
+
+# 3. Notify coordinator of milestone completion
 npx claude-flow@alpha hooks notification \
-  --message "Task [id] complete - unblocking [dependent-task-ids]" \
+  --message "Task [task-id] milestone reached: [description]" \
   --telemetry true
 ```
 
-### After Completing Task
+### AFTER Completing Task
+
 ```bash
-# Finalize task and analyze performance
+# 1. Finalize task with performance analysis
 npx claude-flow@alpha hooks post-task \
   --task-id "[task-id]" \
   --analyze-performance true \
   --update-memory true
 
-# Update coordination memory
-mcp__claude-flow__memory_usage {
+# 2. Store completion in coordination memory
+mcp__claude-flow__memory_usage({
   action: "store",
   key: "austa/coordination/tasks/[task-id]",
   value: {
@@ -259,427 +358,439 @@ mcp__claude-flow__memory_usage {
     agent: "[agent-id]",
     status: "completed",
     timestamp: Date.now(),
-    filesChanged: ["file1", "file2"],
-    nextTasks: ["dependent-task-1", "dependent-task-2"]
+    filesChanged: ["list", "of", "files"],
+    testsAdded: 15,
+    coverage: "85%",
+    unlockedTasks: ["dependent-task-1", "dependent-task-2"]
   }
-}
+})
+
+# 3. Notify dependent agents that task is complete
+npx claude-flow@alpha hooks notification \
+  --message "Task [task-id] COMPLETE - unblocking [dependent-tasks]" \
+  --telemetry true
 ```
 
 ---
 
-## 📋 COORDINATOR AGENT INSTRUCTIONS
+## 📋 COORDINATOR AGENT INSTRUCTIONS (HIVE-MIND INTELLIGENCE)
 
-**You are the central coordinator.** Execute these responsibilities:
+**You are the central coordinator with hive-mind capabilities.**
 
-### 1. Monitor Progress Every 4 Hours
+### 1. Monitor Progress Every 2 Hours
+
 ```javascript
-// Check all agent progress
+// Check all agent progress via MCP memory
 mcp__claude-flow__memory_usage({
   action: "list",
-  pattern: "austa/*/tasks/*"
+  pattern: "austa/*/progress/*"
 })
 
-// Generate status report
+// Aggregate status
 const completed = tasks.filter(t => t.status === "completed").length
 const inProgress = tasks.filter(t => t.status === "in_progress").length
 const blocked = tasks.filter(t => t.status === "blocked").length
+const pending = tasks.filter(t => t.status === "pending").length
 
-// Store report
+// Store status report
 mcp__claude-flow__memory_usage({
   action: "store",
   key: "austa/coordination/status/" + Date.now(),
-  value: { completed, inProgress, blocked, timestamp: Date.now() }
+  value: {
+    timestamp: Date.now(),
+    completed,
+    inProgress,
+    blocked,
+    pending,
+    totalTasks: 22,
+    percentComplete: (completed / 22) * 100,
+    estimatedTimeRemaining: calculateETA(),
+    criticalPathStatus: checkCriticalPath()
+  }
+})
+
+// Monitor swarm health
+mcp__claude-flow__swarm_monitor({
+  sessionId: "austa-final-85to100",
+  includeMetrics: true
 })
 ```
 
 ### 2. Resolve Blocking Dependencies
+
 ```javascript
 // Identify blocked tasks
-const blockedTasks = todos.filter(t => {
-  return t.status === "pending" &&
-         t.dependsOn.some(dep => !isCompleted(dep))
-})
+const blockedTasks = todos.filter(t => t.status === "blocked")
 
-// Notify agents when dependencies clear
+// For each blocked task, check if dependencies are now complete
 blockedTasks.forEach(task => {
-  if (task.dependsOn.every(dep => isCompleted(dep))) {
-    notifyAgent(task.agent, "Task " + task.id + " unblocked - ready to start")
+  const depsComplete = task.dependsOn.every(depId => {
+    const depStatus = mcp__claude-flow__memory_usage({
+      action: "retrieve",
+      key: "austa/coordination/tasks/" + depId
+    })
+    return depStatus?.status === "completed"
+  })
+
+  // If dependencies are clear, notify agent to start
+  if (depsComplete) {
+    npx claude-flow@alpha hooks notification \
+      --message "Task ${task.id} UNBLOCKED - dependencies complete, start work now!" \
+      --telemetry true
+
+    // Update task status to pending (ready to start)
+    TodoWrite({
+      todos: [{ ...task, status: "pending" }]
+    })
   }
 })
 ```
 
-### 3. Optimize Wave Execution
-```javascript
-// Start wave when all previous wave tasks complete
-function canStartWave(waveNum) {
-  const prevWave = todos.filter(t => t.wave === waveNum - 1)
-  return prevWave.every(t => t.status === "completed")
-}
+### 3. Optimize Parallel Execution
 
-// Trigger next wave
-if (canStartWave(currentWave + 1)) {
-  currentWave++
-  notifyAllAgents("Wave " + currentWave + " starting - begin your tasks")
+```javascript
+// Identify tasks that can run in parallel
+const readyTasks = todos.filter(t => {
+  return t.status === "pending" &&
+         t.dependsOn.every(dep => isCompleted(dep))
+})
+
+// Group by wave for batch execution
+const wave1Tasks = readyTasks.filter(t => t.wave === "1a" || t.wave === "1b")
+const wave2Tasks = readyTasks.filter(t => t.wave === "2")
+const wave3Tasks = readyTasks.filter(t => t.wave === "3")
+
+// Trigger wave execution when ready
+if (wave1Tasks.length > 0) {
+  console.log("🚀 Wave 1 ready: Starting DevOps+DB and Testing in parallel")
+  // Agents automatically start when dependencies clear
 }
 ```
 
 ### 4. Generate Completion Report
+
 ```javascript
-// When all tasks complete
+// When all tasks complete (100%)
 if (todos.every(t => t.status === "completed")) {
+  // Run final verification
+  const verification = {
+    envFiles: checkEnvFiles(),
+    database: checkDatabaseMigrated(),
+    tests: checkTestCoverage() > 80,
+    frontend: checkFrontendBuilds(),
+    production: checkProductionReady()
+  }
+
+  // Store final report
   mcp__claude-flow__memory_usage({
     action: "store",
     key: "austa/coordination/final-report",
     value: {
+      timestamp: Date.now(),
       completed: true,
       duration: Date.now() - startTime,
-      tasksCompleted: todos.length,
+      tasksCompleted: 22,
       filesChanged: getAllChangedFiles(),
       testsWritten: getTestCount(),
-      coverage: getCoveragePercent()
+      coverage: getCoveragePercent(),
+      verification,
+      readyForProduction: Object.values(verification).every(v => v === true)
     }
   })
+
+  console.log("🎉 AUSTA Care Platform 100% COMPLETE!")
 }
 ```
 
 ---
 
-## 🎯 AGENT TASK EXECUTION TEMPLATE
+## 🎯 AGENT TASK EXECUTION PATTERNS (BATCHTOOL MANDATORY)
 
-**Use this pattern for EVERY agent task:**
+### Agent 1: DevOps + Database Engineer
 
 ```javascript
-// 1. Check dependencies BEFORE starting
-const dependencies = todos.find(t => t.id === myTaskId).dependsOn
-const ready = dependencies.every(dep => {
-  const depTask = mcp__claude-flow__memory_usage({
-    action: "retrieve",
-    key: "austa/coordination/tasks/" + dep
-  })
-  return depTask?.status === "completed"
-})
+// ✅ CORRECT: Batch ALL operations in ONE message
+[BatchTool - Single Message]:
 
-if (!ready) {
-  updateStatus(myTaskId, "blocked")
-  return // Wait for coordinator to notify
-}
+// 1. Pre-task coordination
+Bash("npx claude-flow@alpha hooks pre-task --description 'environment-and-database-setup' --session-id 'austa-final-85to100'")
+Bash("npx claude-flow@alpha hooks session-restore --session-id 'austa-final-85to100' --load-memory true")
 
-// 2. Execute pre-task hooks
-Bash("npx claude-flow@alpha hooks pre-task --description '" + myTaskDescription + "'")
+// 2. Create ALL environment files in parallel
+Write("austa-care-platform/.env.development", envDevelopmentContent)
+Write("austa-care-platform/.env.staging", envStagingContent)
+Write("austa-care-platform/.env.production", envProductionContent)
 
-// 3. Do the actual work
-[BatchTool]:
-  Write("file1.ts", content1)
-  Write("file2.ts", content2)
-  Write("file3.ts", content3)
-  Bash("npm install dependency1 dependency2")
-  Bash("npm test -- file1.test.ts")
+// 3. Store progress
+Bash("npx claude-flow@alpha hooks post-edit --file 'austa-care-platform/.env.development' --memory-key 'austa/devops-db/w1-env-dev/complete'")
 
-// 4. Store progress after each major step
-Bash("npx claude-flow@alpha hooks post-edit --file 'file1.ts' --memory-key 'austa/" + agentId + "/" + taskId + "/step1'")
+// 4. Execute database migrations
+Bash("cd austa-care-platform/backend && npx prisma generate")
+Bash("cd austa-care-platform/backend && npx prisma migrate dev --name init")
 
-// 5. Complete task and update memory
-Bash("npx claude-flow@alpha hooks post-task --task-id '" + taskId + "' --analyze-performance true")
+// 5. Create and execute seed data
+Write("austa-care-platform/backend/prisma/seed/seed.ts", seedDataContent)
+Bash("cd austa-care-platform/backend && npm run db:seed")
 
+// 6. Verify server startup
+Bash("cd austa-care-platform/backend && timeout 10s npm run dev")
+
+// 7. Store completion in MCP memory
 mcp__claude-flow__memory_usage({
   action: "store",
-  key: "austa/coordination/tasks/" + taskId,
-  value: {
-    status: "completed",
-    agent: agentId,
-    timestamp: Date.now(),
-    filesChanged: ["file1.ts", "file2.ts", "file3.ts"],
-    testsAdded: ["file1.test.ts"]
-  }
+  key: "austa/coordination/tasks/w1-env-dev",
+  value: { status: "completed", timestamp: Date.now(), unlockedTasks: ["w1-unit-services", "w1-server-start"] }
 })
 
-// 6. Notify coordinator
-Bash("npx claude-flow@alpha hooks notification --message 'Task " + taskId + " completed - unblocking dependent tasks'")
+// 8. Post-task hooks
+Bash("npx claude-flow@alpha hooks post-task --task-id 'w1-env-dev' --analyze-performance true")
+```
+
+### Agent 2: Test Engineer
+
+```javascript
+// ✅ CORRECT: Batch ALL test operations
+[BatchTool - Single Message]:
+
+// 1. Check dependencies first
+const envReady = mcp__claude-flow__memory_usage({
+  action: "retrieve",
+  key: "austa/coordination/tasks/w1-env-dev"
+})
+
+// If not ready, mark as blocked and STOP
+if (envReady?.status !== "completed") {
+  TodoWrite({ todos: [{ id: "w1-unit-services", status: "blocked" }] })
+  return
+}
+
+// 2. Pre-task coordination
+Bash("npx claude-flow@alpha hooks pre-task --description 'comprehensive-test-suite' --session-id 'austa-final-85to100'")
+
+// 3. Create ALL test files in parallel
+Write("austa-care-platform/backend/tests/unit/services/conversationFlowEngine.test.ts", test1Content)
+Write("austa-care-platform/backend/tests/unit/services/riskAssessment.test.ts", test2Content)
+Write("austa-care-platform/backend/tests/unit/services/whatsapp.test.ts", test3Content)
+// ... create 200+ test files ...
+
+// 4. Run tests and check coverage
+Bash("cd austa-care-platform/backend && npm run test:coverage")
+
+// 5. Store results
+mcp__claude-flow__memory_usage({
+  action: "store",
+  key: "austa/coordination/tasks/w1-coverage",
+  value: { status: "completed", coverage: "85%", testsWritten: 250 }
+})
 ```
 
 ---
 
 ## 🔥 CRITICAL SUCCESS CRITERIA
 
-**Before marking ANY task complete, verify:**
-
-### DevOps Agent
-- [ ] `npm run dev` starts without errors
-- [ ] All infrastructure clients connect (Kafka, Redis, MongoDB)
-- [ ] Health endpoint returns 200
-- [ ] Metrics endpoint returns Prometheus data
-
-### Database Agent
+### Wave 1a: DevOps + Database
+- [ ] `.env.development`, `.env.staging`, `.env.production` all created with 50+ vars each
 - [ ] `npx prisma migrate status` shows migrations applied
-- [ ] Database has seed data
-- [ ] Prisma Client generates without errors
-- [ ] All models accessible via ORM
+- [ ] Seed data exists and executes successfully
+- [ ] `npm run dev` starts without errors
+- [ ] Health endpoint returns 200: `curl http://localhost:3000/health`
+- [ ] Metrics endpoint works: `curl http://localhost:3000/metrics`
+- [ ] Kafka, Redis, MongoDB all connect successfully
 
-### Integration Agent
-- [ ] `src/integrations/` directory exists
-- [ ] WhatsApp client can send test message
-- [ ] OpenAI client can make prediction
-- [ ] Tasy client can query patient data
+### Wave 1b: Testing
+- [ ] 200+ unit tests created for services and controllers
+- [ ] Integration tests for all 12 routes
+- [ ] E2E tests for critical flows (auth, conversation, risk)
+- [ ] `npm run test:coverage` shows >80% coverage
+- [ ] All tests pass: `npm test` returns exit code 0
 
-### API Agent
-- [ ] All 12 controllers have full CRUD
-- [ ] All 8 routes mounted and tested
-- [ ] Validation middleware works
-- [ ] Postman collection can hit all endpoints
+### Wave 2: Frontend
+- [ ] React + TypeScript + Vite configured
+- [ ] Authentication UI functional (login, register, recover)
+- [ ] Dashboard displays metrics and conversations
+- [ ] Admin panel manages users
+- [ ] `npm run build` succeeds with no errors
 
-### Test Agent
-- [ ] `npm test` passes with >80% coverage
-- [ ] All services have unit tests
-- [ ] All controllers have unit tests
-- [ ] E2E tests cover critical flows
-
-### Production Agent
-- [ ] Security audit passes
-- [ ] Grafana dashboards display metrics
-- [ ] OpenAPI spec generates
-- [ ] Deployment succeeds to staging
+### Wave 3: Production
+- [ ] OWASP security audit complete with all fixes applied
+- [ ] Grafana dashboards display all metrics
+- [ ] OpenAPI 3.0 spec generated and valid
+- [ ] Docker compose starts all services
+- [ ] Kubernetes manifests validated
+- [ ] CI/CD pipeline runs successfully
 
 ---
 
-## 📊 MEMORY PERSISTENCE STRUCTURE
-
-**All agents MUST use this memory hierarchy:**
+## 📊 MCP MEMORY PERSISTENCE STRUCTURE
 
 ```
 austa/
 ├── coordination/
-│   ├── init                    # Swarm initialization data
-│   ├── status/[timestamp]      # Progress reports every 4h
-│   ├── tasks/[task-id]         # Individual task completion
-│   └── final-report            # Completion summary
+│   ├── init                          # Swarm initialization
+│   ├── orchestration                 # Task orchestration state
+│   ├── status/[timestamp]            # Progress reports (every 2h)
+│   ├── tasks/[task-id]              # Individual task completion
+│   └── final-report                  # 100% completion summary
 │
-├── week1/
-│   ├── devops/
-│   │   ├── env-files           # .env creation progress
-│   │   ├── build-fixes         # TypeScript fixes
-│   │   └── server-startup      # Startup verification
-│   └── database/
-│       ├── migrations          # Migration execution
-│       └── seed-data           # Seed script creation
+├── devops-db/
+│   ├── w1-env-dev/complete          # Environment files created
+│   ├── w1-db-migrate/complete       # Migrations executed
+│   ├── w1-db-seed/complete          # Seed data loaded
+│   ├── w1-server-start/complete     # Server verified
+│   └── progress/[timestamp]         # Incremental progress
 │
-├── week2/
-│   ├── integrations/
-│   │   ├── whatsapp           # WhatsApp client
-│   │   ├── openai             # OpenAI client
-│   │   └── tasy               # Tasy client
-│   └── api/
-│       └── validation         # Zod schemas
+├── test-qa/
+│   ├── w1-unit-services/complete    # Service tests
+│   ├── w1-unit-controllers/complete # Controller tests
+│   ├── w1-integration-api/complete  # Integration tests
+│   ├── w1-coverage/complete         # Coverage verification
+│   └── progress/[timestamp]         # Test execution progress
 │
-├── week3/
-│   └── api/
-│       ├── controllers        # Controller completion
-│       ├── routes             # Route completion
-│       └── middleware         # Middleware additions
+├── frontend-dev/
+│   ├── w2-frontend-setup/complete   # React setup
+│   ├── w2-auth-ui/complete          # Auth UI
+│   ├── w2-dashboard/complete        # Dashboard
+│   └── progress/[timestamp]         # Frontend progress
 │
-├── week4/
-│   └── testing/
-│       ├── unit              # Unit test results
-│       ├── integration       # Integration test results
-│       └── coverage          # Coverage reports
-│
-└── week5-6/
-    └── production/
-        ├── security          # Security audit
-        ├── monitoring        # Grafana setup
-        ├── docs              # OpenAPI generation
-        └── deployment        # Production deployment
+└── prod-ready/
+    ├── w3-security-audit/complete   # Security audit
+    ├── w3-grafana/complete          # Monitoring
+    ├── w3-openapi/complete          # API docs
+    ├── w3-k8s/complete              # Kubernetes
+    └── progress/[timestamp]         # Production progress
 ```
 
 ---
 
-## ⚡ PARALLEL EXECUTION BATCHES
+## ⚡ EXECUTION START COMMANDS
 
-**Coordinator: Trigger these batches when dependencies clear**
-
-### Batch 1 (Wave 1) - Start Immediately
-```javascript
-[BatchTool]:
-  // DevOps agent - ALL environment tasks in parallel
-  Task(`DevOps Agent: You are devops-env.
-
-    MANDATORY COORDINATION:
-    1. Run: npx claude-flow@alpha hooks pre-task --description "environment-setup"
-    2. After EVERY file: npx claude-flow@alpha hooks post-edit --file "[file]" --memory-key "austa/week1/devops/[step]"
-    3. At end: npx claude-flow@alpha hooks post-task --task-id "w1-env-setup"
-
-    Tasks (execute in parallel):
-    - Create .env.development with 50+ required variables
-    - Create .env.staging with production-like config
-    - Create .env.production with strict security
-    - Install @types/jest, @types/node
-    - Fix all TypeScript compilation errors
-    - Verify npm run build succeeds
-
-    Store completion in: austa/week1/devops/complete
-  `)
-```
-
-### Batch 2 (Wave 2) - After .env files ready
-```javascript
-[BatchTool]:
-  // Database agent
-  Task(`Database Agent: You are database-init.
-
-    Dependencies: Wait for austa/week1/devops/env-files to be completed
-
-    MANDATORY COORDINATION:
-    1. Check dependency: mcp__claude-flow__memory_usage retrieve austa/week1/devops/env-files
-    2. If not ready: updateStatus("blocked") and wait
-    3. Run hooks pre-task, post-edit, post-task
-
-    Tasks:
-    - Run npx prisma generate
-    - Run npx prisma migrate dev --name init
-    - Create seed scripts in prisma/seed/
-    - Execute seed data
-    - Verify Prisma Client works
-
-    Store completion in: austa/week1/database/complete
-  `)
-
-  // Integration agent (parallel with database)
-  Task(`Integration Agent: You are integration-dev.
-
-    Dependencies: Wait for austa/week1/devops/env-files to be completed
-
-    MANDATORY COORDINATION:
-    1. Check dependency: mcp__claude-flow__memory_usage retrieve austa/week1/devops/env-files
-    2. Run coordination hooks
-
-    Tasks:
-    - Create src/integrations/ structure
-    - Build WhatsApp Business API client (official Meta API)
-    - Build OpenAI client with function calling
-    - Build Tasy ERP REST client
-    - Build FHIR gateway client
-
-    Store completion in: austa/week2/integrations/complete
-  `)
-```
-
-### Batch 3 (Wave 3) - After Database + Integrations
-```javascript
-[BatchTool]:
-  Task(`API Agent: You are api-dev.
-
-    Dependencies:
-    - austa/week1/database/complete
-    - austa/week2/integrations/complete
-
-    Tasks:
-    - Create src/validation/ with Zod schemas for all endpoints
-    - Complete all 12 controllers with full CRUD
-    - Complete all 8 routes
-    - Mount routes in server.ts
-    - Add audit, sanitization, cors middleware
-
-    Store completion in: austa/week3/api/complete
-  `)
-```
-
-### Batch 4 (Wave 4) - After API complete
-```javascript
-[BatchTool]:
-  Task(`Test Agent: You are test-qa.
-
-    Dependencies: austa/week3/api/complete
-
-    Tasks:
-    - Unit tests for all 42 services
-    - Unit tests for all 12 controllers
-    - Integration tests for all API endpoints
-    - E2E tests for critical flows
-    - Verify >80% coverage
-
-    Store completion in: austa/week4/testing/complete
-  `)
-```
-
-### Batch 5 (Wave 5) - After Tests pass
-```javascript
-[BatchTool]:
-  Task(`Production Agent: You are prod-ready.
-
-    Dependencies: austa/week4/testing/complete
-
-    Tasks:
-    - Security hardening and audit
-    - Grafana dashboards setup
-    - Alert rules configuration
-    - OpenAPI spec generation
-    - Production deployment preparation
-
-    Store completion in: austa/week5-6/production/complete
-  `)
-```
-
----
-
-## 🎯 EXECUTION START COMMAND
-
-**Run this SINGLE command to begin swarm execution:**
+### Option 1: Automated Claude Flow Execution
 
 ```bash
-npx claude-flow@alpha execute --prompt ./docs/SWARM_EXECUTION_PROMPT.md --parallel true --persist-memory true
+cd /home/user/Coordenacao-Cuidado-Enterprise
+npx claude-flow@alpha execute \
+  --prompt ./docs/SWARM_EXECUTION_PROMPT.md \
+  --parallel true \
+  --persist-memory true \
+  --agents 5 \
+  --topology hierarchical
 ```
 
-**Or spawn manually in Claude Code:**
+### Option 2: Manual Claude Code Execution
 
-Send this as ONE message:
+Send this as **ONE SINGLE MESSAGE** to Claude Code:
+
 ```
-Initialize AUSTA Care Platform swarm execution using the prompt at docs/SWARM_EXECUTION_PROMPT.md
+Initialize AUSTA Care Platform swarm execution from 85% to 100% completion.
 
-Execute with:
-- 7 agents (6 workers + 1 coordinator)
+Use the swarm execution prompt at: docs/SWARM_EXECUTION_PROMPT.md
+
+Configuration:
+- 5 agents (4 workers + 1 coordinator)
 - Hierarchical topology
-- Parallel execution where dependencies allow
+- Parallel execution with dependency management
 - MCP memory persistence enabled
 - All coordination hooks mandatory
+- BatchTool operations required
 
-Begin Wave 1 immediately.
+Current state: Backend 85% complete (172 files, 65K LOC)
+Remaining work: Environment files, database execution, tests, frontend, production
+
+Start Wave 1 immediately with DevOps+DB agent.
 ```
 
 ---
 
-## ✅ COMPLETION VERIFICATION
+## ✅ FINAL VERIFICATION CHECKLIST
 
-**Coordinator: Run this final check when all tasks complete**
+**Coordinator: Run this when all 22 tasks complete**
 
 ```javascript
-// Verify all success criteria
-const checks = [
-  verify("npm run dev starts", () => Bash("npm run dev --prefix ./austa-care-platform/backend")),
-  verify("Health endpoint works", () => Bash("curl http://localhost:3000/health")),
-  verify("Metrics endpoint works", () => Bash("curl http://localhost:3000/metrics")),
-  verify("Tests pass", () => Bash("npm test --prefix ./austa-care-platform/backend")),
-  verify("Coverage >80%", () => checkCoverage() > 80),
-  verify("Build succeeds", () => Bash("npm run build --prefix ./austa-care-platform/backend")),
-  verify("All integrations work", () => testIntegrations())
-]
+// Comprehensive verification
+const finalChecks = {
+  environment: {
+    devEnv: fileExists("austa-care-platform/.env.development"),
+    stagingEnv: fileExists("austa-care-platform/.env.staging"),
+    prodEnv: fileExists("austa-care-platform/.env.production")
+  },
+  database: {
+    migrated: checkMigrationStatus() === "applied",
+    seeded: checkSeedData() > 0,
+    connected: testDatabaseConnection()
+  },
+  backend: {
+    builds: runCommand("npm run build") === 0,
+    starts: runCommand("npm run dev") === 0,
+    health: fetch("http://localhost:3000/health").status === 200,
+    metrics: fetch("http://localhost:3000/metrics").status === 200
+  },
+  tests: {
+    passing: runCommand("npm test") === 0,
+    coverage: getCoverage() >= 80,
+    count: getTestCount() >= 200
+  },
+  frontend: {
+    builds: runCommand("cd frontend && npm run build") === 0,
+    components: countComponents() >= 10
+  },
+  production: {
+    securityAudit: checkSecurityAudit() === "passed",
+    monitoring: checkGrafana() === "configured",
+    docs: checkOpenAPI() === "valid",
+    docker: runCommand("docker-compose up -d") === 0
+  }
+}
 
-const allPassed = checks.every(c => c.result === true)
-
+// Store final verification
 mcp__claude-flow__memory_usage({
   action: "store",
-  key: "austa/coordination/completion",
+  key: "austa/coordination/final-verification",
   value: {
     timestamp: Date.now(),
-    allChecksPassed: allPassed,
-    checks: checks,
-    readyForProduction: allPassed
+    checks: finalChecks,
+    allPassed: deepCheck(finalChecks),
+    productionReady: deepCheck(finalChecks)
   }
 })
+
+// Generate completion certificate
+if (deepCheck(finalChecks)) {
+  console.log(`
+    🎉 AUSTA CARE PLATFORM 100% COMPLETE! 🎉
+
+    ✅ Backend: 172 files, 65K+ lines
+    ✅ Database: Migrated and seeded
+    ✅ Tests: 200+ tests, >80% coverage
+    ✅ Frontend: Full React app
+    ✅ Production: Secure, monitored, documented
+
+    Ready for deployment! 🚀
+  `)
+}
 ```
 
 ---
 
-**STATUS:** Ready for swarm execution
+**STATUS:** Ready for swarm execution (85% → 100%)
 **MEMORY PERSISTENCE:** MCP enabled via claude-flow hooks
-**PARALLEL OPTIMIZATION:** 5 execution waves with dependency management
-**COORDINATION:** Central coordinator with hive-mind intelligence
-**TIMELINE:** 4-6 weeks with 6 parallel agents
+**PARALLEL OPTIMIZATION:** 3 execution waves with BatchTool operations
+**COORDINATION:** Central hive-mind coordinator with 2-hour monitoring
+**CRITICAL PATH:** Environment files → Database → Tests → Frontend → Production
+**ESTIMATED TIMELINE:** 2-3 weeks with 4 parallel agents
+
+---
+
+## 🚨 MANDATORY REMINDER: PARALLEL EXECUTION RULES
+
+**ALL agents MUST follow these rules:**
+
+1. ✅ **TodoWrite**: ALWAYS batch 5-10+ todos in ONE call
+2. ✅ **Task spawning**: ALL agents in ONE message
+3. ✅ **File operations**: Batch ALL reads/writes/edits together
+4. ✅ **Bash commands**: Batch ALL terminal operations together
+5. ✅ **Memory operations**: Batch ALL MCP memory calls together
+
+**Golden Rule:** 1 MESSAGE = ALL RELATED OPERATIONS
+
+❌ **NEVER** operate sequentially after swarm init
+✅ **ALWAYS** use BatchTool for multiple operations
