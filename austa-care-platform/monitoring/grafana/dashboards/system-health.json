@@ -1,0 +1,181 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - System Health Dashboard",
+    "tags": ["austa", "health", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Response Time (p95)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
+            "legendFormat": "{{route}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Response Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (req/s)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (method, status)",
+            "legendFormat": "{{method}} - {{status}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Error Rate Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "Active Connections",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(websocket_connections_active)",
+            "legendFormat": "WebSocket Connections"
+          },
+          {
+            "expr": "sum(redis_connected_clients)",
+            "legendFormat": "Redis Clients"
+          },
+          {
+            "expr": "sum(pg_stat_activity_count)",
+            "legendFormat": "Database Connections"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "{{instance}}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+            "legendFormat": "Memory Usage %"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Disk I/O",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(node_disk_read_bytes_total[5m]))",
+            "legendFormat": "Read"
+          },
+          {
+            "expr": "sum(rate(node_disk_written_bytes_total[5m]))",
+            "legendFormat": "Write"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(redis_keyspace_hits_total) / (sum(redis_keyspace_hits_total) + sum(redis_keyspace_misses_total)) * 100"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Database Pool Size",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(pg_stat_database_numbackends)"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Kafka Consumer Lag",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(kafka_consumergroup_lag) by (consumergroup, topic)",
+            "legendFormat": "{{consumergroup}} - {{topic}}"
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "custom",
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ]
+        }
+      ]
+    }
+  }
+}

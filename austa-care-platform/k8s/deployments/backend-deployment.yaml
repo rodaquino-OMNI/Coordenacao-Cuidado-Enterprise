@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: austa-production
+  labels:
+    app: austa-backend
+    tier: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: austa-backend
+  template:
+    metadata:
+      labels:
+        app: austa-backend
+        tier: backend
+        version: v1
+    spec:
+      serviceAccountName: austa-backend-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+      - name: backend
+        image: ghcr.io/austa-care/backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: database-url
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: mongodb-uri
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: austa-config
+              key: redis-host
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: redis-password
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: austa-config
+              key: kafka-brokers
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: jwt-secret
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: austa-config
+              key: aws-region
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: aws-secret-access-key
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: austa-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: backend-logs-pvc
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: backend-uploads-pvc
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: austa-backend-sa
+  namespace: austa-production

@@ -1,0 +1,107 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'austa-production'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Backend API monitoring
+  - job_name: 'austa-backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:3000']
+        labels:
+          service: 'backend'
+          tier: 'api'
+
+  # PostgreSQL monitoring
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'database'
+          tier: 'data'
+
+  # MongoDB monitoring
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+        labels:
+          service: 'database'
+          tier: 'data'
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'cache'
+          tier: 'data'
+
+  # Kafka monitoring
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'messaging'
+          tier: 'data'
+
+  # Node exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'infrastructure'
+          tier: 'system'
+
+  # Nginx monitoring
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'frontend'
+          tier: 'web'
+
+  # Kubernetes metrics
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  # Kubernetes pods
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__

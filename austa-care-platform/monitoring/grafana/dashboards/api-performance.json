@@ -1,0 +1,102 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - API Performance Dashboard",
+    "tags": ["austa", "api", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Endpoint Performance (Response Time)",
+        "type": "heatmap",
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
+        "targets": [
+          {
+            "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Throughput by Endpoint",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 10, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (route, method)",
+            "legendFormat": "{{method}} {{route}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Status Code Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 10, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(http_requests_total[1h])) by (status)"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "AI Processing Time",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 18, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, model))",
+            "legendFormat": "{{model}} - p95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, model))",
+            "legendFormat": "{{model}} - p50"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "OCR Processing Queue",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 18, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(ocr_queue_size) by (queue_type)",
+            "legendFormat": "{{queue_type}}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "WhatsApp Message Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 26, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(whatsapp_messages_total[5m])) by (direction, type)",
+            "legendFormat": "{{direction}} - {{type}}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 26, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_read[5m])",
+            "legendFormat": "Blocks Read/s"
+          },
+          {
+            "expr": "rate(pg_stat_database_xact_commit[5m])",
+            "legendFormat": "Commits/s"
+          }
+        ]
+      }
+    ]
+  }
+}
