@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, CommunicationChannel, ConversationStatus } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
+import { getFullName, getUserHealthScore, hasCompletedOnboarding } from '@/utils/user.helpers';
+import { successResponse, errorResponse, ErrorCode } from '@/types/api-responses';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -9,19 +11,19 @@ const prisma = new PrismaClient();
 // Zod validation schemas
 const createConversationSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
-  channel: z.enum(['whatsapp', 'web', 'mobile'], { errorMap: () => ({ message: 'Canal inválido' }) }),
+  channel: z.enum(['WHATSAPP', 'SMS', 'EMAIL', 'IN_APP', 'VOICE'], { errorMap: () => ({ message: 'Canal inválido' }) }).transform(val => val as CommunicationChannel),
   metadata: z.record(z.any()).optional(),
 });
 
 const createMessageSchema = z.object({
   content: z.string().min(1, 'Conteúdo da mensagem é obrigatório'),
   direction: z.enum(['inbound', 'outbound']).transform(val => val.toUpperCase() as 'INBOUND' | 'OUTBOUND'),
-  type: z.enum(['text', 'audio', 'image', 'document', 'video', 'location', 'contact']).transform(val => val.toUpperCase() as 'TEXT' | 'AUDIO' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION' | 'CONTACT').default('text'),
+  contentType: z.enum(['text', 'audio', 'image', 'document', 'video', 'location']).transform(val => val.toUpperCase() as 'TEXT' | 'AUDIO' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION').default('text'),
   metadata: z.record(z.any()).optional(),
 });
 
 const updateConversationSchema = z.object({
-  status: z.enum(['active', 'archived', 'paused', 'completed', 'escalated']).transform(val => val?.toUpperCase() as 'ACTIVE' | 'ARCHIVED' | 'PAUSED' | 'COMPLETED' | 'ESCALATED').optional(),
+  status: z.enum(['ACTIVE', 'ARCHIVED', 'CLOSED']).transform(val => val as ConversationStatus).optional(),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -43,17 +45,16 @@ router.post('/', async (req: Request, res: Response) => {
     const conversation = await prisma.conversation.create({
       data: {
         userId: validated.userId,
-        organizationId: 'default-org-id', // TODO: Get from user context
-        whatsappChatId: `chat_${Date.now()}`, // TODO: Get from WhatsApp webhook
         channel: validated.channel,
-        status: 'ACTIVE',
+        status: ConversationStatus.ACTIVE,
         metadata: validated.metadata || {},
       },
       include: {
         user: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
           }
         }
@@ -62,24 +63,22 @@ router.post('/', async (req: Request, res: Response) => {
 
     logger.info('Conversation created', { conversationId: conversation.id, userId: validated.userId });
 
-    res.status(201).json({
-      success: true,
-      message: 'Conversa criada com sucesso',
-      data: conversation
-    });
+    const responseData = {
+      ...conversation,
+      user: {
+        ...conversation.user,
+        fullName: getFullName(conversation.user)
+      }
+    };
+
+    res.status(201).json(successResponse(responseData));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Dados inválidos',
-        errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
-      });
+      const validationErrors = error.errors.map(e => ({ field: e.path.join('.'), message: e.message }));
+      return res.status(400).json(errorResponse(ErrorCode.VALIDATION_ERROR, 'Dados inválidos', validationErrors));
     }
     logger.error('Error creating conversation', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao criar conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao criar conversa'));
   }
 });
 
@@ -104,7 +103,8 @@ router.get('/', async (req: Request, res: Response) => {
           user: {
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
               email: true,
             }
           },
@@ -118,22 +118,30 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.conversation.count({ where })
     ]);
 
-    res.status(200).json({
-      success: true,
-      data: conversations,
-      pagination: {
-        total,
-        page: query.page,
-        limit: query.limit,
-        totalPages: Math.ceil(total / query.limit)
+    const formattedConversations = conversations.map(conv => ({
+      ...conv,
+      user: {
+        ...conv.user,
+        fullName: getFullName(conv.user)
       }
-    });
+    }));
+
+    const totalPages = Math.ceil(total / query.limit);
+
+    res.status(200).json(successResponse(formattedConversations, {
+      timestamp: new Date().toISOString(),
+      pagination: {
+        page: query.page,
+        pageSize: query.limit,
+        totalItems: total,
+        totalPages,
+        hasNextPage: query.page < totalPages,
+        hasPreviousPage: query.page > 1
+      }
+    }));
   } catch (error) {
     logger.error('Error fetching conversations', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao buscar conversas'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao buscar conversas'));
   }
 });
 
@@ -148,7 +156,8 @@ router.get('/:id', async (req: Request, res: Response) => {
         user: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
           }
         },
@@ -160,22 +169,21 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
 
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
-    res.status(200).json({
-      success: true,
-      data: conversation
-    });
+    const responseData = {
+      ...conversation,
+      user: {
+        ...conversation.user,
+        fullName: getFullName(conversation.user)
+      }
+    };
+
+    res.status(200).json(successResponse(responseData));
   } catch (error) {
     logger.error('Error fetching conversation', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao buscar conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao buscar conversa'));
   }
 });
 
@@ -187,10 +195,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const existingConversation = await prisma.conversation.findUnique({ where: { id } });
     if (!existingConversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
     const conversation = await prisma.conversation.update({
@@ -200,7 +205,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         user: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
           }
         }
@@ -209,24 +215,22 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     logger.info('Conversation updated', { conversationId: id });
 
-    res.status(200).json({
-      success: true,
-      message: 'Conversa atualizada com sucesso',
-      data: conversation
-    });
+    const responseData = {
+      ...conversation,
+      user: {
+        ...conversation.user,
+        fullName: getFullName(conversation.user)
+      }
+    };
+
+    res.status(200).json(successResponse(responseData));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Dados inválidos',
-        errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
-      });
+      const validationErrors = error.errors.map(e => ({ field: e.path.join('.'), message: e.message }));
+      return res.status(400).json(errorResponse(ErrorCode.VALIDATION_ERROR, 'Dados inválidos', validationErrors));
     }
     logger.error('Error updating conversation', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao atualizar conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao atualizar conversa'));
   }
 });
 
@@ -237,30 +241,21 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
     // Soft delete by updating status
     await prisma.conversation.update({
       where: { id },
-      data: { status: 'ARCHIVED' } // Soft delete by archiving
+      data: { status: ConversationStatus.ARCHIVED } // Soft delete by archiving
     });
 
     logger.info('Conversation deleted', { conversationId: id });
 
-    res.status(200).json({
-      success: true,
-      message: 'Conversa excluída com sucesso'
-    });
+    res.status(200).json(successResponse({ message: 'Conversa excluída com sucesso' }));
   } catch (error) {
     logger.error('Error deleting conversation', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao excluir conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao excluir conversa'));
   }
 });
 
@@ -272,10 +267,7 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
     const message = await prisma.message.create({
@@ -284,7 +276,7 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
         userId: conversation.userId,
         content: validated.content,
         direction: validated.direction,
-        type: validated.type,
+        contentType: validated.contentType,
         metadata: validated.metadata || {},
       }
     });
@@ -297,24 +289,14 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
 
     logger.info('Message added to conversation', { conversationId: id, messageId: message.id });
 
-    res.status(201).json({
-      success: true,
-      message: 'Mensagem adicionada com sucesso',
-      data: message
-    });
+    res.status(201).json(successResponse(message));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Dados inválidos',
-        errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
-      });
+      const validationErrors = error.errors.map(e => ({ field: e.path.join('.'), message: e.message }));
+      return res.status(400).json(errorResponse(ErrorCode.VALIDATION_ERROR, 'Dados inválidos', validationErrors));
     }
     logger.error('Error adding message', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao adicionar mensagem'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao adicionar mensagem'));
   }
 });
 
@@ -326,10 +308,7 @@ router.get('/:id/messages', async (req: Request, res: Response) => {
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
     const messages = await prisma.message.findMany({
@@ -341,17 +320,15 @@ router.get('/:id/messages', async (req: Request, res: Response) => {
       take: parseInt(limit as string, 10),
     });
 
-    res.status(200).json({
-      success: true,
-      data: messages.reverse(), // Return in chronological order
+    const responseData = {
+      messages: messages.reverse(), // Return in chronological order
       hasMore: messages.length === parseInt(limit as string, 10)
-    });
+    };
+
+    res.status(200).json(successResponse(responseData));
   } catch (error) {
     logger.error('Error fetching messages', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao buscar mensagens'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao buscar mensagens'));
   }
 });
 
@@ -362,29 +339,20 @@ router.post('/:id/archive', async (req: Request, res: Response) => {
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
 
     await prisma.conversation.update({
       where: { id },
-      data: { status: 'ARCHIVED' }
+      data: { status: ConversationStatus.ARCHIVED }
     });
 
     logger.info('Conversation archived', { conversationId: id });
 
-    res.status(200).json({
-      success: true,
-      message: 'Conversa arquivada com sucesso'
-    });
+    res.status(200).json(successResponse({ message: 'Conversa arquivada com sucesso' }));
   } catch (error) {
     logger.error('Error archiving conversation', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao arquivar conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao arquivar conversa'));
   }
 });
 
@@ -399,9 +367,9 @@ router.get('/:id/context', async (req: Request, res: Response) => {
         user: {
           select: {
             id: true,
-            name: true,
-            healthScore: true,
-            onboardingComplete: true,
+            firstName: true,
+            lastName: true,
+            email: true,
           }
         },
         messages: {
@@ -412,32 +380,34 @@ router.get('/:id/context', async (req: Request, res: Response) => {
     });
 
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversa não encontrada'
-      });
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Conversa não encontrada'));
     }
+
+    // Fetch additional user data asynchronously
+    const [healthScore, onboardingComplete] = await Promise.all([
+      getUserHealthScore(conversation.userId),
+      hasCompletedOnboarding(conversation.userId)
+    ]);
 
     const context = {
       conversationId: conversation.id,
       userId: conversation.userId,
-      userProfile: conversation.user,
+      userProfile: {
+        ...conversation.user,
+        fullName: getFullName(conversation.user),
+        healthScore,
+        onboardingComplete
+      },
       channel: conversation.channel,
       recentMessages: conversation.messages.reverse(),
       metadata: conversation.metadata,
       lastInteraction: conversation.updatedAt,
     };
 
-    res.status(200).json({
-      success: true,
-      data: context
-    });
+    res.status(200).json(successResponse(context));
   } catch (error) {
     logger.error('Error fetching conversation context', { error });
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao buscar contexto da conversa'
-    });
+    res.status(500).json(errorResponse(ErrorCode.INTERNAL_ERROR, 'Erro ao buscar contexto da conversa'));
   }
 });
 

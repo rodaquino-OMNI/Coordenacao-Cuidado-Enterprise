@@ -490,14 +490,19 @@ export class WhatsAppBusinessClient {
 
         // Publish success event
         await eventPublisher.publish({
-          eventType: 'whatsapp.message.sent',
+          eventType: 'message.received',
           source: 'whatsapp-business-client',
           version: '1.0',
           data: {
             messageId: response.data.messages[0].id,
-            recipient: message.to,
-            type: message.type,
-            timestamp: new Date().toISOString(),
+            conversationId: '', // Will be set by conversation service
+            userId: '', // Will be set by conversation service
+            content: JSON.stringify(message),
+            type: this.normalizeMessageType(message.type),
+            metadata: {
+              recipient: message.to,
+              whatsappMessageId: response.data.messages[0].id,
+            },
           },
         });
 
@@ -516,17 +521,11 @@ export class WhatsAppBusinessClient {
       }
     }
 
-    // All retries failed
-    await eventPublisher.publish({
-      eventType: 'whatsapp.message.failed',
-      source: 'whatsapp-business-client',
-      version: '1.0',
-      data: {
-        recipient: message.to,
-        type: message.type,
-        error: lastError?.message,
-        timestamp: new Date().toISOString(),
-      },
+    // All retries failed - log error but don't publish event
+    logger.error('WhatsApp message send failed after all retries', {
+      recipient: message.to,
+      type: message.type,
+      error: lastError?.message,
     });
 
     throw lastError;
@@ -537,16 +536,20 @@ export class WhatsAppBusinessClient {
    */
   private async handleIncomingMessage(message: any, phoneNumberId: string): Promise<void> {
     await eventPublisher.publish({
-      eventType: 'whatsapp.message.received',
+      eventType: 'message.received',
       source: 'whatsapp-business-client',
       version: '1.0',
       data: {
         messageId: message.id,
-        from: message.from,
-        type: message.type,
-        phoneNumberId,
-        message,
-        timestamp: message.timestamp,
+        conversationId: '', // Will be set by conversation service
+        userId: message.from, // WhatsApp phone number
+        content: message.text?.body || JSON.stringify(message),
+        type: this.normalizeMessageType(message.type),
+        metadata: {
+          phoneNumberId,
+          timestamp: message.timestamp,
+          whatsappMessageId: message.id,
+        },
       },
     });
 
@@ -560,18 +563,32 @@ export class WhatsAppBusinessClient {
    * Handle message status update
    */
   private async handleMessageStatus(status: any): Promise<void> {
-    await eventPublisher.publish({
-      eventType: 'whatsapp.message.status',
-      source: 'whatsapp-business-client',
-      version: '1.0',
-      data: {
-        messageId: status.id,
-        status: status.status,
-        recipient: status.recipient_id,
-        timestamp: status.timestamp,
-        errors: status.errors,
-      },
+    // Log status updates but don't publish events for now
+    logger.info('WhatsApp message status update', {
+      messageId: status.id,
+      status: status.status,
+      recipient: status.recipient_id,
+      timestamp: status.timestamp,
+      errors: status.errors,
     });
+  }
+
+  /**
+   * Normalize WhatsApp message type to MessageContentType enum
+   */
+  private normalizeMessageType(type: string): 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'LOCATION' {
+    const typeMap: Record<string, 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'LOCATION'> = {
+      'text': 'TEXT',
+      'image': 'IMAGE',
+      'video': 'VIDEO',
+      'audio': 'AUDIO',
+      'document': 'DOCUMENT',
+      'location': 'LOCATION',
+      'template': 'TEXT',
+      'interactive': 'TEXT',
+    };
+
+    return typeMap[type] || 'TEXT';
   }
 
   /**

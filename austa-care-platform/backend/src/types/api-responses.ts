@@ -1,4 +1,4 @@
-import { UserStatus, UserRole, HealthDataType, MissionStatus, MissionDifficulty } from '@prisma/client';
+import { UserStatus, UserRole, HealthDataType, MissionDifficulty } from '@prisma/client';
 
 /**
  * Standard API response wrapper
@@ -101,7 +101,6 @@ export interface MissionData {
   requiredPoints: number;
   difficulty: MissionDifficulty;
   category: string | null;
-  status: MissionStatus;
   isCompleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -172,7 +171,7 @@ export interface LeaderboardEntry {
  */
 export interface UserProfileData extends UserResponse {
   healthScore: number;
-  onboardingStatus: OnboardingStatusData | null;
+  onboardingStatus?: OnboardingStatusData;
   gamificationStats?: GamificationStats;
   latestVitals?: LatestVitalsData;
 }

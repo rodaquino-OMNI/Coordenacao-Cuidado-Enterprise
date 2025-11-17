@@ -791,14 +791,17 @@ export class ConversationStateManager {
       // Clear Redis data
       const keys = await this.redis.keys(`conversation_state:${userId}:*`);
       if (keys.length > 0) {
-        await this.redis.del(...keys);
+        // Delete keys one by one to avoid tuple type issues
+        for (const key of keys) {
+          await this.redis.del(key);
+        }
       }
-      
+
       // Clear local caches
       this.conversationPatterns.delete(userId);
       this.contextualMemories.delete(userId);
       this.activeSessions.delete(userId);
-      
+
       logger.info(`User state reset for ${userId}`);
     } catch (error) {
       logger.error(`Error resetting user state for ${userId}`, error);

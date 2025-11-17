@@ -259,7 +259,8 @@ router.get(
         details: validationResult.error.errors
       });
     }
-    req.query = validationResult.data;
+    // Store validated data in req.body to avoid ParsedQs type issues
+    req.body = { ...req.body, validatedQuery: validationResult.data };
     next();
   },
   searchAuthorizations

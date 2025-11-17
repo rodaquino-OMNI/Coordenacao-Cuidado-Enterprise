@@ -1,5 +1,14 @@
 import { BaseEngagementService, Repository, MockRepository } from '../base/BaseEngagementService';
-import { UserBehaviorProfile, EngagementEvent } from '../../../types/engagement/behavioralTypes';
+import {
+  UserBehaviorProfile,
+  EngagementEvent,
+  EngagementPattern,
+  MotivationType,
+  CommunicationStyle,
+  RiskTolerance,
+  LiteracyLevel,
+  CulturalContext
+} from '../../../types/engagement/behavioralTypes';
 
 export class BehavioralIntelligenceEngine extends BaseEngagementService {
   private userBehaviorRepository: Repository<UserBehaviorProfile>;
@@ -28,20 +37,24 @@ export class BehavioralIntelligenceEngine extends BaseEngagementService {
     // Create a new behavior profile
     const profile: UserBehaviorProfile = {
       userId,
-      engagementLevel: 0.5,
-      communicationPreference: 'SUPPORTIVE' as any,
-      healthLiteracyLevel: 'INTERMEDIATE' as any,
-      culturalContext: 'WESTERN' as any,
-      motivationFactors: ['health_improvement'],
-      stressIndicators: [],
-      copingMechanisms: [],
-      socialSupport: 'moderate',
-      technologyComfort: 'comfortable',
-      preferredContactTimes: ['morning'],
-      responsePatterns: [],
-      goalAlignment: 0.5,
-      adaptationSpeed: 0.5,
-      lastUpdated: new Date()
+      engagementPattern: EngagementPattern.MODERATELY_ENGAGED,
+      motivationType: MotivationType.INTRINSIC,
+      communicationPreference: CommunicationStyle.SUPPORTIVE,
+      riskTolerance: RiskTolerance.MEDIUM,
+      healthLiteracyLevel: LiteracyLevel.INTERMEDIATE,
+      culturalContext: CulturalContext.INDIVIDUALISTIC,
+      preferredContactTimes: [{
+        dayOfWeek: 1, // Monday
+        startHour: 8,
+        endHour: 12,
+        timezone: 'America/Sao_Paulo'
+      }],
+      responseTimePattern: 30, // 30 minutes average
+      sessionLengthPreference: 15, // 15 minutes
+      topicInterests: ['health_improvement'],
+      avoidanceTopics: [],
+      lastProfileUpdate: new Date(),
+      confidenceScore: 0.5
     };
 
     return await this.userBehaviorRepository.save(profile);
@@ -59,15 +72,20 @@ export class BehavioralIntelligenceEngine extends BaseEngagementService {
 
   async trackEngagementEvent(event: EngagementEvent): Promise<void> {
     await this.engagementEventRepository.save(event);
-    
+
     // Update behavior profile based on engagement
     const profile = await this.analyzeBehavior(event.userId);
-    
-    // Simple engagement level calculation
-    const newEngagementLevel = Math.min(1, profile.engagementLevel + 0.1);
-    
+
+    // Update engagement pattern based on event quality
+    let newEngagementPattern = profile.engagementPattern;
+    if (event.quality && event.quality > 0.7) {
+      newEngagementPattern = EngagementPattern.HIGHLY_ENGAGED;
+    } else if (event.quality && event.quality > 0.4) {
+      newEngagementPattern = EngagementPattern.MODERATELY_ENGAGED;
+    }
+
     await this.updateBehaviorProfile(event.userId, {
-      engagementLevel: newEngagementLevel
+      engagementPattern: newEngagementPattern
     });
   }
 }

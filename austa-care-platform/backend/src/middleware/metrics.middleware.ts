@@ -27,7 +27,7 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
   const originalEnd = res.end;
 
   // Override res.end to capture metrics when response finishes
-  res.end = function(this: Response, ...args: any[]): Response {
+  res.end = function(this: Response, chunk?: any, encodingOrCallback?: BufferEncoding | (() => void), callback?: () => void): Response {
     // Calculate duration
     const endTime = process.hrtime.bigint();
     const duration = Number(endTime - startTime) / 1e9; // Convert to seconds
@@ -72,8 +72,18 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
       logger.error('Error recording HTTP metrics:', error);
     }
 
-    // Call original end function
-    return originalEnd.apply(this, args);
+    // Call original end function with proper signature
+    if (callback) {
+      return originalEnd.call(this, chunk, encodingOrCallback as BufferEncoding, callback);
+    } else if (typeof encodingOrCallback === 'function') {
+      return originalEnd.call(this, chunk, encodingOrCallback as any);
+    } else if (encodingOrCallback) {
+      return originalEnd.call(this, chunk, encodingOrCallback as BufferEncoding, undefined as any);
+    } else if (chunk !== undefined) {
+      return originalEnd.call(this, chunk, undefined as any, undefined as any);
+    } else {
+      return originalEnd.call(this, undefined as any, undefined as any, undefined as any);
+    }
   };
 
   next();

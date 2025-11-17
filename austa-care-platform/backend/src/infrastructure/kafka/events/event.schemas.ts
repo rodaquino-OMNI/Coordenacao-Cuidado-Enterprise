@@ -203,6 +203,53 @@ export const TasySyncCompletedEventSchema = BaseEventSchema.extend({
   }),
 });
 
+// Tasy ERP Integration events
+export const TasyAuthSuccessEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.auth.success'),
+  data: z.object({
+    expires_in: z.number(),
+  }),
+});
+
+export const TasyAuthFailedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.auth.failed'),
+  data: z.object({
+    error: z.string(),
+  }),
+});
+
+export const TasyAppointmentCreatedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.appointment.created'),
+  data: z.object({
+    appointmentId: z.number(),
+    patientId: z.number(),
+  }),
+});
+
+export const TasyAppointmentCancelledEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.appointment.cancelled'),
+  data: z.object({
+    appointmentId: z.number(),
+    reason: z.string(),
+  }),
+});
+
+export const TasyAppointmentConfirmedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.appointment.confirmed'),
+  data: z.object({
+    appointmentId: z.number(),
+  }),
+});
+
+export const TasyAuthorizationCreatedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('integration.tasy.authorization.created'),
+  data: z.object({
+    authorizationId: z.number(),
+    patientId: z.number(),
+    procedureCode: z.string(),
+  }),
+});
+
 // Notification events
 export const NotificationScheduledEventSchema = BaseEventSchema.extend({
   eventType: z.literal('notification.scheduled'),
@@ -381,6 +428,12 @@ export type HealthDataUpdatedEvent = z.infer<typeof HealthDataUpdatedEventSchema
 export type DocumentUploadedEvent = z.infer<typeof DocumentUploadedEventSchema>;
 export type DocumentProcessedEvent = z.infer<typeof DocumentProcessedEventSchema>;
 export type TasySyncCompletedEvent = z.infer<typeof TasySyncCompletedEventSchema>;
+export type TasyAuthSuccessEvent = z.infer<typeof TasyAuthSuccessEventSchema>;
+export type TasyAuthFailedEvent = z.infer<typeof TasyAuthFailedEventSchema>;
+export type TasyAppointmentCreatedEvent = z.infer<typeof TasyAppointmentCreatedEventSchema>;
+export type TasyAppointmentCancelledEvent = z.infer<typeof TasyAppointmentCancelledEventSchema>;
+export type TasyAppointmentConfirmedEvent = z.infer<typeof TasyAppointmentConfirmedEventSchema>;
+export type TasyAuthorizationCreatedEvent = z.infer<typeof TasyAuthorizationCreatedEventSchema>;
 export type NotificationScheduledEvent = z.infer<typeof NotificationScheduledEventSchema>;
 export type FhirResourceCreatedEvent = z.infer<typeof FhirResourceCreatedEventSchema>;
 export type FhirResourceUpdatedEvent = z.infer<typeof FhirResourceUpdatedEventSchema>;
@@ -410,6 +463,12 @@ export type DomainEvent =
   | DocumentUploadedEvent
   | DocumentProcessedEvent
   | TasySyncCompletedEvent
+  | TasyAuthSuccessEvent
+  | TasyAuthFailedEvent
+  | TasyAppointmentCreatedEvent
+  | TasyAppointmentCancelledEvent
+  | TasyAppointmentConfirmedEvent
+  | TasyAuthorizationCreatedEvent
   | NotificationScheduledEvent
   | FhirResourceCreatedEvent
   | FhirResourceUpdatedEvent

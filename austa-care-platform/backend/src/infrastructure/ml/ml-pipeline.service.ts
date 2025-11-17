@@ -391,6 +391,16 @@ export class MLPipelineService {
     await this.updateModelMetrics(modelId, history);
 
     // Emit training completed event
+    const lastAccValue = history.history.acc?.[history.history.acc.length - 1];
+    let accuracy = 0;
+    if (lastAccValue !== undefined) {
+      if (typeof lastAccValue === 'number') {
+        accuracy = lastAccValue;
+      } else if (typeof lastAccValue === 'object' && 'data' in lastAccValue) {
+        accuracy = (await lastAccValue.data())[0];
+      }
+    }
+
     await eventPublisher.publish({
       eventType: 'ml.training.completed',
       source: 'ml-pipeline',
@@ -398,9 +408,7 @@ export class MLPipelineService {
       data: {
         modelId,
         trainingId: `training-${Date.now()}`,
-        accuracy: (typeof history.history.acc?.[history.history.acc.length - 1] === 'number' 
-          ? history.history.acc[history.history.acc.length - 1] 
-          : await history.history.acc?.[history.history.acc.length - 1]?.data()[0]) || 0,
+        accuracy,
         metrics: {
           epochs,
           finalLoss: history.history.loss[history.history.loss.length - 1],
@@ -452,15 +460,23 @@ export class MLPipelineService {
   // Update model metrics
   private async updateModelMetrics(modelId: string, history: any): Promise<void> {
     const metricsCollection = mongoDBClient.getCollection('ml_metrics');
-    
+
+    const lastAccValue = history.history.acc?.[history.history.acc.length - 1];
+    let accuracy: number | undefined;
+    if (lastAccValue !== undefined) {
+      if (typeof lastAccValue === 'number') {
+        accuracy = lastAccValue;
+      } else if (typeof lastAccValue === 'object' && 'data' in lastAccValue) {
+        accuracy = (await lastAccValue.data())[0];
+      }
+    }
+
     await metricsCollection.insertOne({
       modelId,
       trainingHistory: history.history,
       finalMetrics: {
         loss: history.history.loss[history.history.loss.length - 1],
-        accuracy: typeof history.history.acc?.[history.history.acc.length - 1] === 'number' 
-          ? history.history.acc[history.history.acc.length - 1] 
-          : await history.history.acc?.[history.history.acc.length - 1]?.data()[0],
+        accuracy,
         valLoss: history.history.val_loss?.[history.history.val_loss.length - 1],
         valAccuracy: history.history.val_acc?.[history.history.val_acc.length - 1],
       },

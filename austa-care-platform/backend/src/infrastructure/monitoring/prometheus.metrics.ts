@@ -9,6 +9,11 @@ interface MetricLabels {
 export class PrometheusMetrics {
   private static instance: PrometheusMetrics;
 
+  // Interval IDs for cleanup
+  private lagIntervalId?: NodeJS.Timeout;
+  private memoryIntervalId?: NodeJS.Timeout;
+  private cpuIntervalId?: NodeJS.Timeout;
+
   // HTTP Metrics
   public httpRequestDuration: Histogram<string>;
   public httpRequestsTotal: Counter<string>;
@@ -416,7 +421,7 @@ export class PrometheusMetrics {
   private startCustomMetricsCollection(): void {
     // Collect event loop lag
     let lastCheck = process.hrtime.bigint();
-    setInterval(() => {
+    this.lagIntervalId = setInterval(() => {
       const now = process.hrtime.bigint();
       const lag = Number(now - lastCheck) / 1e9 - 5; // Subtract interval duration
       if (lag > 0) {
@@ -424,29 +429,32 @@ export class PrometheusMetrics {
       }
       lastCheck = now;
     }, 5000);
+    this.lagIntervalId.unref(); // Allow process to exit
 
     // Collect memory usage
-    setInterval(() => {
+    this.memoryIntervalId = setInterval(() => {
       const memUsage = process.memoryUsage();
       this.memoryUsage.labels('rss').set(memUsage.rss);
       this.memoryUsage.labels('heapTotal').set(memUsage.heapTotal);
       this.memoryUsage.labels('heapUsed').set(memUsage.heapUsed);
       this.memoryUsage.labels('external').set(memUsage.external);
     }, 10000);
+    this.memoryIntervalId.unref(); // Allow process to exit
 
     // Collect CPU usage
     let lastCpuUsage = process.cpuUsage();
-    setInterval(() => {
+    this.cpuIntervalId = setInterval(() => {
       const currentCpuUsage = process.cpuUsage(lastCpuUsage);
       const totalUsage = (currentCpuUsage.user + currentCpuUsage.system) / 1e6; // Convert to seconds
       const percentage = (totalUsage / 10) * 100; // 10 second interval
-      
+
       this.cpuUsage.labels('user').set((currentCpuUsage.user / 1e6 / 10) * 100);
       this.cpuUsage.labels('system').set((currentCpuUsage.system / 1e6 / 10) * 100);
       this.cpuUsage.labels('total').set(percentage);
-      
+
       lastCpuUsage = process.cpuUsage();
     }, 10000);
+    this.cpuIntervalId.unref(); // Allow process to exit
   }
 
   // Get all metrics
@@ -462,6 +470,23 @@ export class PrometheusMetrics {
   // Clear all metrics
   clear(): void {
     register.clear();
+  }
+
+  // Stop metrics collection and cleanup timers
+  stop(): void {
+    if (this.lagIntervalId) {
+      clearInterval(this.lagIntervalId);
+      this.lagIntervalId = undefined;
+    }
+    if (this.memoryIntervalId) {
+      clearInterval(this.memoryIntervalId);
+      this.memoryIntervalId = undefined;
+    }
+    if (this.cpuIntervalId) {
+      clearInterval(this.cpuIntervalId);
+      this.cpuIntervalId = undefined;
+    }
+    logger.info('Prometheus metrics collection stopped');
   }
 
   // Helper methods for common metric operations

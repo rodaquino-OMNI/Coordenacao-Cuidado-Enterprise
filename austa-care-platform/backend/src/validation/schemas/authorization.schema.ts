@@ -221,14 +221,7 @@ export const updateAuthorizationStatusSchema = z.object({
 
     denialReason: z.string()
       .max(500)
-      .optional()
-      .refine((val, ctx) => {
-        const status = ctx.parent?.status;
-        if (status === 'DENIED' && !val) {
-          return false;
-        }
-        return true;
-      }, { message: 'Motivo da negativa é obrigatório quando status é DENIED' }),
+      .optional(),
 
     validUntil: z.string()
       .datetime()
@@ -241,6 +234,15 @@ export const updateAuthorizationStatusSchema = z.object({
     authorizationNumber: z.string()
       .max(50)
       .optional(),
+  }).superRefine((data, ctx) => {
+    // Validate denialReason is required when status is DENIED
+    if (data.status === 'DENIED' && !data.denialReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Motivo da negativa é obrigatório quando status é DENIED',
+        path: ['denialReason']
+      });
+    }
   }),
 });
 

@@ -20,8 +20,11 @@ export { MonitoringService } from './monitoring/monitoring.service';
 // Types
 export * from './types/medical-document.types';
 
-// Errors
-export * from './errors/textract.errors';
+// Errors - explicit exports to avoid ValidationError conflict
+export {
+  TextractError,
+  // ValidationError is already exported from medical-document.types
+} from './errors/textract.errors';
 
 // Configuration
 export * from './config/textract.config';

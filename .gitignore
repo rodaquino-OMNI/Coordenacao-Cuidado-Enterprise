@@ -469,6 +469,16 @@ mutation-report/
 **/node_modules/.prisma/
 **/@prisma/client/
 
+# Prisma seed compiled files (TypeScript compilation artifacts)
+# Note: Order matters - more specific patterns must come after general ones
+**/prisma/seed/**/*.js
+**/prisma/seed/**/*.js.map
+**/prisma/seed/**/*.d.ts.map
+**/prisma/seed/**/*.d.ts
+# Allow source TypeScript files but exclude declaration files
+!**/prisma/seed/**/*.ts
+**/prisma/seed/**/*.d.ts
+
 # Build artifacts from subprojects
 austa-care-platform/backend/dist/
 austa-care-platform/frontend/dist/

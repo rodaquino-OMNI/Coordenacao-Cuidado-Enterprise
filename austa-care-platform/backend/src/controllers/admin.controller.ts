@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserStatus } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
+import { getFullName, getUserHealthScore, isUserActive } from '@/utils/user.helpers';
+import { getUserAchievements, getUserGamificationStats } from '@/utils/gamification.helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -24,26 +26,37 @@ router.get('/dashboard', async (req: Request, res: Response) => {
       activeConversations,
       totalDocuments,
       totalAchievements,
-      recentUsers,
+      recentUsersRaw,
       systemHealth
     ] = await Promise.all([
       prisma.user.count(),
       prisma.conversation.count({ where: { status: 'ACTIVE' } }),
       prisma.document.count(),
-      prisma.achievement.count(),
+      prisma.pointTransaction.count(),
       prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
           id: true,
-          name: true,
+          firstName: true,
+          lastName: true,
           email: true,
           createdAt: true,
-          healthScore: true,
         }
       }),
       getSystemHealth()
     ]);
+
+    // Format recent users with full name and health score
+    const recentUsers = await Promise.all(
+      recentUsersRaw.map(async (user) => ({
+        id: user.id,
+        name: getFullName(user),
+        email: user.email,
+        createdAt: user.createdAt,
+        healthScore: await getUserHealthScore(user.id),
+      }))
+    );
 
     const dashboard = {
       statistics: {
@@ -105,10 +118,10 @@ router.get('/analytics/users', async (req: Request, res: Response) => {
           }
         }
       }),
-      prisma.user.aggregate({
-        where,
+      // Calculate average health score from HealthPoints table
+      prisma.healthPoints.aggregate({
         _avg: {
-          healthScore: true
+          currentPoints: true
         }
       })
     ]);
@@ -119,7 +132,7 @@ router.get('/analytics/users', async (req: Request, res: Response) => {
         totalUsers,
         newUsers,
         activeUsers,
-        averageHealthScore: Math.round(averageHealthScore._avg.healthScore || 0),
+        averageHealthScore: Math.round(averageHealthScore._avg.currentPoints || 0),
         growthRate: totalUsers > 0 ? ((newUsers / totalUsers) * 100).toFixed(2) : '0',
       }
     });
@@ -221,13 +234,8 @@ router.get('/analytics/documents', async (req: Request, res: Response) => {
           id: true
         }
       }),
-      prisma.document.groupBy({
-        by: ['status'],
-        where,
-        _count: {
-          id: true
-        }
-      }),
+      // Document status grouping - removed as status field doesn't exist
+      Promise.resolve([]),
       prisma.document.aggregate({
         where,
         _sum: {
@@ -244,10 +252,7 @@ router.get('/analytics/documents', async (req: Request, res: Response) => {
           acc[item.type] = item._count.id;
           return acc;
         }, {} as Record<string, number>),
-        byStatus: byStatus.reduce((acc, item) => {
-          acc[item.status] = item._count.id;
-          return acc;
-        }, {} as Record<string, number>),
+        byStatus: {}, // Status field not available in Document model
         totalStorageUsed: formatBytes(totalStorageUsed._sum.fileSize || 0)
       }
     });
@@ -267,33 +272,51 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
       totalMissions,
       activeMissions,
       totalAchievements,
-      topUsers,
+      topUsersRaw,
       missionCompletionRate
     ] = await Promise.all([
       prisma.mission.count(),
       prisma.mission.count({ where: { isActive: true } }),
-      prisma.achievement.count(),
-      prisma.user.findMany({
-        orderBy: { healthScore: 'desc' },
+      prisma.pointTransaction.count(),
+      prisma.healthPoints.findMany({
+        orderBy: { lifetimePoints: 'desc' },
         take: 10,
         select: {
           id: true,
-          name: true,
-          healthScore: true,
-          _count: {
-            select: {
-              achievements: true
-            }
-          }
+          userId: true,
+          currentPoints: true,
+          lifetimePoints: true,
+          level: true
         }
       }),
-      prisma.achievement.groupBy({
-        by: ['category'],
+      prisma.pointTransaction.groupBy({
+        by: ['userId'],
         _count: {
           id: true
         }
       })
     ]);
+
+    // Format top users with full name and achievement count
+    const topUsers = await Promise.all(
+      topUsersRaw.map(async (hp) => {
+        const [achievements, user] = await Promise.all([
+          prisma.pointTransaction.count({ where: { userId: hp.userId } }),
+          prisma.user.findUnique({
+            where: { id: hp.userId },
+            select: { id: true, firstName: true, lastName: true }
+          })
+        ]);
+        return {
+          id: hp.userId,
+          name: user ? getFullName(user) : 'Unknown User',
+          healthScore: hp.currentPoints,
+          _count: {
+            achievements
+          }
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
@@ -331,7 +354,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const query = querySchema.parse(req.query);
     const skip = (query.page - 1) * query.limit;
 
-    const [users, total] = await Promise.all([
+    const [usersRaw, total] = await Promise.all([
       prisma.user.findMany({
         skip,
         take: query.limit,
@@ -341,13 +364,25 @@ router.get('/users', async (req: Request, res: Response) => {
             select: {
               conversations: true,
               documents: true,
-              achievements: true
             }
           }
         }
       }),
       prisma.user.count()
     ]);
+
+    // Add achievements count from PointTransaction
+    const users = await Promise.all(
+      usersRaw.map(async (user) => ({
+        ...user,
+        _count: {
+          ...user._count,
+          achievements: await prisma.pointTransaction.count({
+            where: { userId: user.id }
+          })
+        }
+      }))
+    );
 
     res.status(200).json({
       success: true,
@@ -384,21 +419,29 @@ router.patch('/users/:id/suspend', async (req: Request, res: Response) => {
 
     const updatedUser = await prisma.user.update({
       where: { id },
-      data: { isActive: !suspend },
+      data: { status: suspend ? UserStatus.SUSPENDED : UserStatus.ACTIVE },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         email: true,
-        isActive: true
+        status: true
       }
     });
+
+    const formattedUser = {
+      id: updatedUser.id,
+      name: getFullName(updatedUser),
+      email: updatedUser.email,
+      isActive: isUserActive(updatedUser)
+    };
 
     logger.info(`User ${suspend ? 'suspended' : 'unsuspended'}`, { userId: id });
 
     res.status(200).json({
       success: true,
       message: `Usuário ${suspend ? 'suspenso' : 'reativado'} com sucesso`,
-      data: updatedUser
+      data: formattedUser
     });
   } catch (error) {
     logger.error('Error suspending/unsuspending user', { error });

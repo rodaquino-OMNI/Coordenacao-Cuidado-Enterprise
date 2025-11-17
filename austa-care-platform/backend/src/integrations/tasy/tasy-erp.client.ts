@@ -175,11 +175,10 @@ export class TasyERPClient {
       });
 
       await eventPublisher.publish({
-        eventType: 'tasy.auth.success',
+        eventType: 'integration.tasy.auth.success',
         source: 'tasy-erp-client',
         version: '1.0',
         data: {
-          timestamp: new Date().toISOString(),
           expires_in: response.data.expires_in,
         },
       });
@@ -187,12 +186,11 @@ export class TasyERPClient {
       logger.error('Tasy authentication failed:', error);
 
       await eventPublisher.publish({
-        eventType: 'tasy.auth.failed',
+        eventType: 'integration.tasy.auth.failed',
         source: 'tasy-erp-client',
         version: '1.0',
         data: {
           error: (error as Error).message,
-          timestamp: new Date().toISOString(),
         },
       });
 
@@ -373,13 +371,12 @@ export class TasyERPClient {
     );
 
     await eventPublisher.publish({
-      eventType: 'tasy.appointment.created',
+      eventType: 'integration.tasy.appointment.created',
       source: 'tasy-erp-client',
       version: '1.0',
       data: {
         appointmentId: response.data.nr_seq_agendamento,
         patientId: data.nr_seq_pessoa,
-        timestamp: new Date().toISOString(),
       },
     });
 
@@ -398,13 +395,12 @@ export class TasyERPClient {
     });
 
     await eventPublisher.publish({
-      eventType: 'tasy.appointment.cancelled',
+      eventType: 'integration.tasy.appointment.cancelled',
       source: 'tasy-erp-client',
       version: '1.0',
       data: {
         appointmentId,
         reason,
-        timestamp: new Date().toISOString(),
       },
     });
   }
@@ -416,12 +412,11 @@ export class TasyERPClient {
     await this.client.post(TasyEndpoints.APPOINTMENTS.CONFIRM(appointmentId));
 
     await eventPublisher.publish({
-      eventType: 'tasy.appointment.confirmed',
+      eventType: 'integration.tasy.appointment.confirmed',
       source: 'tasy-erp-client',
       version: '1.0',
       data: {
         appointmentId,
-        timestamp: new Date().toISOString(),
       },
     });
   }
@@ -496,14 +491,13 @@ export class TasyERPClient {
     );
 
     await eventPublisher.publish({
-      eventType: 'tasy.authorization.created',
+      eventType: 'integration.tasy.authorization.created',
       source: 'tasy-erp-client',
       version: '1.0',
       data: {
         authorizationId: response.data.nr_seq_autorizacao,
         patientId: data.nr_seq_pessoa,
         procedureCode: data.cd_procedimento,
-        timestamp: new Date().toISOString(),
       },
     });
 

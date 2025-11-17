@@ -129,7 +129,7 @@ export interface StepBranch {
 }
 
 export interface BranchCondition {
-  type: 'response_pattern' | 'risk_escalation' | 'engagement_drop' | 'confusion_detected' | 'expertise_level';
+  type: 'response_pattern' | 'risk_escalation' | 'engagement_drop' | 'confusion_detected' | 'expertise_level' | 'engagement_based';
   value: any;
   confidence: number;
 }
@@ -141,7 +141,7 @@ export interface AdaptiveElement {
 }
 
 export interface AdaptiveTrigger {
-  metric: 'response_quality' | 'completion_time' | 'confusion_indicators' | 'engagement_level' | 'error_rate';
+  metric: 'response_quality' | 'completion_time' | 'confusion_indicators' | 'engagement_level' | 'error_rate' | 'escalation_needed';
   threshold: number;
   direction: 'above' | 'below';
 }

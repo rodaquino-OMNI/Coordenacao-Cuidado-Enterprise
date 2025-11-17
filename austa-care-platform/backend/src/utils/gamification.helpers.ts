@@ -1,4 +1,4 @@
-import { PrismaClient, MissionDifficulty } from '@prisma/client';
+import { PrismaClient, MissionDifficulty, PointTransactionType, MissionType, MissionCategory } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -28,50 +28,51 @@ export async function getUserAchievements(userId: string, limit: number = 100) {
 /**
  * Award an achievement to a user
  * @param userId - User ID
- * @param missionId - Mission ID to award
  * @param points - Points to award
+ * @param reason - Reason for the award
+ * @param transactionType - Type of transaction (EARNED, BONUS, ACHIEVEMENT, etc.)
  * @returns Created point transaction
  */
 export async function awardAchievement(
   userId: string,
-  missionId: string,
-  points: number
+  points: number,
+  reason: string,
+  transactionType: PointTransactionType = PointTransactionType.EARNED
 ) {
-  // Check if mission already completed
-  const existing = await prisma.pointTransaction.findFirst({
-    where: { userId, missionId }
-  });
-
-  if (existing) {
-    throw new Error('Mission already completed by user');
-  }
-
   // Create transaction and update health points in a transaction
   return prisma.$transaction(async (tx) => {
-    // Create point transaction
-    const transaction = await tx.pointTransaction.create({
-      data: {
-        userId,
-        missionId,
-        points,
-        earnedAt: new Date()
-      },
-      include: { mission: true }
-    });
-
-    // Update or create health points
-    await tx.healthPoints.upsert({
+    // Get or create health points
+    const healthPoints = await tx.healthPoints.upsert({
       where: { userId },
       create: {
         userId,
         currentPoints: points,
-        totalEarned: points,
+        lifetimePoints: points,
         level: calculateUserLevel(points)
       },
       update: {
         currentPoints: { increment: points },
-        totalEarned: { increment: points },
-        level: calculateUserLevel(points) // Will need to recalculate based on new total
+        lifetimePoints: { increment: points }
+      }
+    });
+
+    // Calculate new level based on updated lifetime points
+    const newLevel = calculateUserLevel(healthPoints.lifetimePoints + points);
+    if (newLevel !== healthPoints.level) {
+      await tx.healthPoints.update({
+        where: { userId },
+        data: { level: newLevel }
+      });
+    }
+
+    // Create point transaction
+    const transaction = await tx.pointTransaction.create({
+      data: {
+        userId,
+        healthPointsId: healthPoints.id,
+        points,
+        type: transactionType,
+        reason
       }
     });
 
@@ -80,21 +81,21 @@ export async function awardAchievement(
 }
 
 /**
- * Get user's missions with optional status filter
+ * Get user's missions with optional active status filter
  * @param userId - User ID to query
- * @param status - Optional mission status filter
+ * @param isActive - Optional filter for active missions only
  * @param limit - Maximum number of missions to return
- * @returns Array of missions
+ * @returns Array of missions with completion status
  */
 export async function getUserMissions(
   userId: string,
-  status?: MissionStatus,
+  isActive?: boolean,
   limit: number = 100
 ) {
   const where: any = {};
 
-  if (status) {
-    where.status = status;
+  if (isActive !== undefined) {
+    where.isActive = isActive;
   }
 
   const missions = await prisma.mission.findMany({
@@ -103,14 +104,20 @@ export async function getUserMissions(
     orderBy: { createdAt: 'desc' }
   });
 
-  // Check which missions user has completed
-  const completedMissions = await prisma.pointTransaction.findMany({
-    where: { userId },
+  // Track completion via point transactions with missionId
+  const userTransactions = await prisma.pointTransaction.findMany({
+    where: {
+      userId,
+      missionId: { not: null }
+    },
     select: { missionId: true }
   });
 
+  // Extract mission IDs from transactions
   const completedMissionIds = new Set(
-    completedMissions.map(t => t.missionId).filter(Boolean)
+    userTransactions
+      .map(t => t.missionId)
+      .filter((id): id is string => id !== null)
   );
 
   return missions.map(mission => ({
@@ -153,14 +160,14 @@ export async function getUserGamificationStats(userId: string) {
       where: { userId }
     }),
     prisma.mission.count({
-      where: { status: MissionStatus.ACTIVE }
+      where: { isActive: true }
     })
   ]);
 
   if (!healthPoints) {
     return {
       currentPoints: 0,
-      totalEarned: 0,
+      lifetimePoints: 0,
       level: 1,
       achievementsCount: 0,
       activeMissionsCount: activeMissions,
@@ -172,12 +179,12 @@ export async function getUserGamificationStats(userId: string) {
   const pointsToNextLevel = getPointsForNextLevel(healthPoints.level);
   const currentLevelPoints = (healthPoints.level - 1) * 100;
   const progress = Math.round(
-    ((healthPoints.totalEarned - currentLevelPoints) / 100) * 100
+    ((healthPoints.lifetimePoints - currentLevelPoints) / 100) * 100
   );
 
   return {
     currentPoints: healthPoints.currentPoints,
-    totalEarned: healthPoints.totalEarned,
+    lifetimePoints: healthPoints.lifetimePoints,
     level: healthPoints.level,
     achievementsCount: achievements,
     activeMissionsCount: activeMissions,
@@ -196,18 +203,21 @@ export async function getAvailableMissions(
   userId: string,
   difficulty?: MissionDifficulty
 ) {
-  // Get completed mission IDs
-  const completedMissions = await prisma.pointTransaction.findMany({
-    where: { userId },
+  // Get completed mission IDs from transactions
+  const userTransactions = await prisma.pointTransaction.findMany({
+    where: {
+      userId,
+      missionId: { not: null }
+    },
     select: { missionId: true }
   });
 
-  const completedMissionIds = completedMissions
+  const completedMissionIds = userTransactions
     .map(t => t.missionId)
-    .filter(Boolean) as string[];
+    .filter((id): id is string => id !== null);
 
   const where: any = {
-    status: MissionStatus.ACTIVE,
+    isActive: true,
     id: { notIn: completedMissionIds }
   };
 
@@ -219,7 +229,7 @@ export async function getAvailableMissions(
     where,
     orderBy: [
       { difficulty: 'asc' },
-      { requiredPoints: 'asc' }
+      { points: 'asc' }
     ]
   });
 }
@@ -239,11 +249,64 @@ export async function completeMission(userId: string, missionId: string) {
     throw new Error('Mission not found');
   }
 
-  if (mission.status !== MissionStatus.ACTIVE) {
+  if (!mission.isActive) {
     throw new Error('Mission is not active');
   }
 
-  return awardAchievement(userId, missionId, mission.requiredPoints);
+  // Check if already completed
+  const existingTransaction = await prisma.pointTransaction.findFirst({
+    where: {
+      userId,
+      missionId: missionId
+    }
+  });
+
+  const alreadyCompleted = existingTransaction !== null;
+
+  if (alreadyCompleted) {
+    throw new Error('Mission already completed by user');
+  }
+
+  // Award points with mission metadata
+  return prisma.$transaction(async (tx) => {
+    // Get or create health points
+    const healthPoints = await tx.healthPoints.upsert({
+      where: { userId },
+      create: {
+        userId,
+        currentPoints: mission.points,
+        lifetimePoints: mission.points,
+        level: calculateUserLevel(mission.points)
+      },
+      update: {
+        currentPoints: { increment: mission.points },
+        lifetimePoints: { increment: mission.points }
+      }
+    });
+
+    // Calculate new level based on updated lifetime points
+    const newLevel = calculateUserLevel(healthPoints.lifetimePoints + mission.points);
+    if (newLevel !== healthPoints.level) {
+      await tx.healthPoints.update({
+        where: { userId },
+        data: { level: newLevel }
+      });
+    }
+
+    // Create point transaction with missionId
+    const transaction = await tx.pointTransaction.create({
+      data: {
+        userId,
+        healthPointsId: healthPoints.id,
+        missionId: missionId,
+        points: mission.points,
+        type: PointTransactionType.ACHIEVEMENT,
+        reason: `Completed mission: ${mission.title}`
+      }
+    });
+
+    return transaction;
+  });
 }
 
 /**
@@ -254,7 +317,7 @@ export async function completeMission(userId: string, missionId: string) {
 export async function getLeaderboard(limit: number = 10) {
   const topUsers = await prisma.healthPoints.findMany({
     take: limit,
-    orderBy: { totalEarned: 'desc' },
+    orderBy: { lifetimePoints: 'desc' },
     include: {
       user: {
         select: {
@@ -272,7 +335,7 @@ export async function getLeaderboard(limit: number = 10) {
     userId: hp.userId,
     userName: `${hp.user.firstName} ${hp.user.lastName}`,
     level: hp.level,
-    totalPoints: hp.totalEarned,
+    lifetimePoints: hp.lifetimePoints,
     currentPoints: hp.currentPoints
   }));
 }
@@ -293,7 +356,7 @@ export async function getUserRank(userId: string): Promise<number | null> {
 
   const higherRanked = await prisma.healthPoints.count({
     where: {
-      totalEarned: { gt: userPoints.totalEarned }
+      lifetimePoints: { gt: userPoints.lifetimePoints }
     }
   });
 
@@ -308,36 +371,40 @@ export async function getUserRank(userId: string): Promise<number | null> {
 export async function createMission(data: {
   title: string;
   description: string;
-  requiredPoints: number;
+  points: number;
   difficulty: MissionDifficulty;
-  category?: string;
-  status?: MissionStatus;
+  type: string;
+  category: string;
+  requirements: any;
+  isActive?: boolean;
 }) {
   return prisma.mission.create({
     data: {
       title: data.title,
       description: data.description,
-      requiredPoints: data.requiredPoints,
+      points: data.points,
       difficulty: data.difficulty,
-      category: data.category,
-      status: data.status || MissionStatus.ACTIVE
+      type: data.type as any,
+      category: data.category as any,
+      requirements: data.requirements,
+      isActive: data.isActive !== undefined ? data.isActive : true
     }
   });
 }
 
 /**
- * Update mission status
+ * Update mission active status
  * @param missionId - Mission ID to update
- * @param status - New status
+ * @param isActive - New active status
  * @returns Updated mission
  */
 export async function updateMissionStatus(
   missionId: string,
-  status: MissionStatus
+  isActive: boolean
 ) {
   return prisma.mission.update({
     where: { id: missionId },
-    data: { status }
+    data: { isActive }
   });
 }
 
@@ -347,11 +414,26 @@ export async function updateMissionStatus(
  * @returns Completion rate percentage
  */
 export async function getMissionCompletionRate(userId: string): Promise<number> {
-  const [completed, total] = await Promise.all([
-    prisma.pointTransaction.count({ where: { userId } }),
-    prisma.mission.count({ where: { status: MissionStatus.ACTIVE } })
+  const [userTransactions, totalActiveMissions] = await Promise.all([
+    prisma.pointTransaction.findMany({
+      where: {
+        userId,
+        missionId: { not: null }
+      },
+      select: { missionId: true }
+    }),
+    prisma.mission.count({ where: { isActive: true } })
   ]);
 
-  if (total === 0) return 0;
-  return Math.round((completed / total) * 100);
+  // Count unique missions from transactions
+  const completedMissionIds = new Set(
+    userTransactions
+      .map(t => t.missionId)
+      .filter((id): id is string => id !== null)
+  );
+
+  const completedCount = completedMissionIds.size;
+
+  if (totalActiveMissions === 0) return 0;
+  return Math.round((completedCount / totalActiveMissions) * 100);
 }

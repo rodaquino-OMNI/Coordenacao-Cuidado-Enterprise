@@ -124,7 +124,7 @@ export async function getVitalSignsInRange(
 export async function getBloodPressureReadings(userId: string, limit: number = 50) {
   return getVitalSigns(
     userId,
-    [HealthDataType.BLOOD_PRESSURE_SYSTOLIC, HealthDataType.BLOOD_PRESSURE_DIASTOLIC],
+    [HealthDataType.BLOOD_PRESSURE],
     limit
   );
 }
@@ -187,7 +187,10 @@ export async function getAverageVitalSign(
     return null;
   }
 
-  const sum = records.reduce((acc, record) => acc + record.value, 0);
+  const sum = records.reduce((acc, record) => {
+    const value = typeof record.value === 'number' ? record.value : parseFloat(String(record.value));
+    return acc + (isNaN(value) ? 0 : value);
+  }, 0);
   return sum / records.length;
 }
 
@@ -219,7 +222,10 @@ export async function getVitalSignStats(
     return null;
   }
 
-  const values = records.map(r => r.value);
+  const values = records.map(r => {
+    const value = typeof r.value === 'number' ? r.value : parseFloat(String(r.value));
+    return isNaN(value) ? 0 : value;
+  });
   const sum = values.reduce((acc, val) => acc + val, 0);
 
   return {
