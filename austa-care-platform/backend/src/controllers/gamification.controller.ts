@@ -251,7 +251,7 @@ router.post('/achievements', async (req: Request, res: Response) => {
     const existingAchievement = await prisma.achievement.findFirst({
       where: {
         userId: validated.userId,
-        name: validated.achievementName || 'Achievement',
+        missionId: validated.missionId,
         isCompleted: true
       }
     });
@@ -338,7 +338,7 @@ router.get('/users/:userId/achievements', async (req: Request, res: Response) =>
       orderBy: { completedAt: 'desc' }
     });
 
-    const totalPoints = achievements.reduce((sum, achievement) => sum + achievement.pointsAwarded, 0);
+    const totalPoints = achievements.reduce((sum: number, achievement: { pointsAwarded: number }) => sum + achievement.pointsAwarded, 0);
 
     res.status(200).json({
       success: true,
@@ -377,7 +377,7 @@ router.get('/leaderboard', async (req: Request, res: Response) => {
       }
     });
 
-    const leaderboard = users.map((user, index) => ({
+    const leaderboard = users.map((user: { id: string; name: string | null; healthScore: number }, index: number) => ({
       rank: index + 1,
       userId: user.id,
       name: user.name,

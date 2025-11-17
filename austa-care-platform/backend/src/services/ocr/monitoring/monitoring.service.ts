@@ -427,7 +427,7 @@ export class MonitoringService {
       m.qualityScore
     ]);
 
-    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    return [headers.join(','), ...rows.map((row: (string | number)[]) => row.join(','))].join('\n');
   }
 
   /**
@@ -441,7 +441,7 @@ export class MonitoringService {
       message: string;
     }>;
   }> {
-    const checks = [];
+    const checks: Array<{ name: string; status: 'pass' | 'fail' | 'warn'; message: string }> = [];
 
     // Check recent error rate
     const recentMetrics = await this.getRealTimeMetrics();

@@ -3,7 +3,6 @@ import { logger } from '../../utils/logger';
 import { mongoDBClient } from '../mongodb/mongodb.client';
 import { redisCluster } from '../redis/redis.cluster';
 import { eventPublisher } from '../kafka/events/event.publisher';
-import { OpenAI } from '@langchain/openai';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 
@@ -118,7 +117,7 @@ export class MLPipelineService {
           logger.info(`Loaded TensorFlow model: ${modelConfig.name}`);
         } else if (modelConfig.type === 'openai') {
           const model = new ChatOpenAI({
-            modelName: modelConfig.config.modelName || 'gpt-4-turbo',
+            model: modelConfig.config.modelName || modelConfig.config.model || 'gpt-4-turbo',
             temperature: modelConfig.config.temperature || 0.7,
             maxTokens: modelConfig.config.maxTokens || 2048,
           });

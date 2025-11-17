@@ -169,7 +169,7 @@ router.get('/analytics/conversations', async (req: Request, res: Response) => {
 
     const avgMessages = averageMessagesPerConversation.length > 0
       ? Math.round(
-          averageMessagesPerConversation.reduce((sum, item) => sum + item._count.id, 0) /
+          averageMessagesPerConversation.reduce((sum: number, item: { _count: { id: number } }) => sum + item._count.id, 0) /
           averageMessagesPerConversation.length
         )
       : 0;
@@ -179,7 +179,7 @@ router.get('/analytics/conversations', async (req: Request, res: Response) => {
       data: {
         totalConversations,
         activeConversations,
-        byChannel: byChannel.reduce((acc, item) => {
+        byChannel: byChannel.reduce((acc: Record<string, number>, item: { channel: string; _count: { id: number } }) => {
           acc[item.channel] = item._count.id;
           return acc;
         }, {} as Record<string, number>),
@@ -240,11 +240,11 @@ router.get('/analytics/documents', async (req: Request, res: Response) => {
       success: true,
       data: {
         totalDocuments,
-        byType: byType.reduce((acc, item) => {
+        byType: byType.reduce((acc: Record<string, number>, item: { type: string; _count: { id: number } }) => {
           acc[item.type] = item._count.id;
           return acc;
         }, {} as Record<string, number>),
-        byStatus: byStatus.reduce((acc, item) => {
+        byStatus: byStatus.reduce((acc: Record<string, number>, item: { status: string; _count: { id: number } }) => {
           acc[item.status] = item._count.id;
           return acc;
         }, {} as Record<string, number>),
@@ -301,14 +301,14 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
         totalMissions,
         activeMissions,
         totalAchievements,
-        topUsers: topUsers.map((user, index) => ({
+        topUsers: topUsers.map((user: { _count: { achievements: number } }, index: number) => ({
           rank: index + 1,
           ...user,
           achievementsCount: user._count.achievements
         })),
         averageCompletionsPerCategory: missionCompletionRate.length > 0
           ? Math.round(
-              missionCompletionRate.reduce((sum, item) => sum + (item._count?.id || 0), 0) /
+              missionCompletionRate.reduce((sum: number, item: { _count?: { id: number } }) => sum + (item._count?.id || 0), 0) /
               missionCompletionRate.length
             )
           : 0

@@ -265,13 +265,7 @@ export const sendSystemNotificationSchema = z.object({
     recipients: z.enum(['ALL', 'ADMINS', 'PATIENTS', 'PROFESSIONALS', 'SPECIFIC_USERS']),
 
     userIds: z.array(z.string().uuid())
-      .optional()
-      .refine((val, ctx) => {
-        if (ctx.parent?.recipients === 'SPECIFIC_USERS' && (!val || val.length === 0)) {
-          return false;
-        }
-        return true;
-      }, { message: 'IDs de usuários são obrigatórios quando recipients é SPECIFIC_USERS' }),
+      .optional(),
 
     title: z.string()
       .min(1, { message: 'Título é obrigatório' })

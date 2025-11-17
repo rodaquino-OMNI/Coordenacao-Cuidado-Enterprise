@@ -1,8 +1,33 @@
+// CRITICAL: Load .env.test BEFORE any other imports to ensure environment variables are available
 import { config } from 'dotenv';
-import { logger } from '@/utils/logger';
+import * as path from 'path';
 
-// Load test environment variables
-config({ path: '.env.test' });
+// Load test environment variables with absolute path
+const result = config({ path: path.resolve(__dirname, '../.env.test') });
+
+if (result.error) {
+  console.error('❌ Failed to load .env.test:', result.error);
+  throw new Error('Required .env.test file not found');
+}
+
+// Verify critical environment variables are loaded
+const requiredVars = [
+  'ZAPI_INSTANCE_ID',
+  'ZAPI_TOKEN',
+  'ZAPI_WEBHOOK_SECRET',
+  'ZAPI_WEBHOOK_VERIFY_TOKEN',
+  'JWT_REFRESH_SECRET',
+  'TASY_API_SECRET'
+];
+
+const missingVars = requiredVars.filter(v => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingVars);
+  throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
+}
+
+// NOW import logger which imports config
+import { logger } from '@/utils/logger';
 
 // Mock external services during tests
 jest.mock('axios');

@@ -32,6 +32,15 @@ export class RedisSessionService {
     return RedisSessionService.instance;
   }
 
+  // Helper to ensure client is available
+  private getRedisClient() {
+    const client = redisCluster.getClient();
+    if (!client) {
+      throw new Error('Redis client not available');
+    }
+    return client;
+  }
+
   /**
    * Create a new session
    */
@@ -54,8 +63,9 @@ export class RedisSessionService {
 
       // Add to user's session list
       const userSessionsKey = `user:sessions:${data.userId}`;
-      await redisCluster.getClient().zadd(userSessionsKey, Date.now(), sessionId);
-      await redisCluster.getClient().expire(userSessionsKey, ttl * 2);
+      const client = this.getRedisClient();
+      await client.zadd(userSessionsKey, Date.now(), sessionId);
+      await client.expire(userSessionsKey, ttl * 2);
 
       // Enforce max sessions per user
       if (options.maxSessions) {
@@ -90,7 +100,8 @@ export class RedisSessionService {
       // Update last activity timestamp
       if (updateActivity) {
         data.lastActivity = Date.now();
-        const ttl = await redisCluster.getClient().ttl(`session:${sessionId}`);
+        const client = this.getRedisClient();
+        const ttl = await client.ttl(`session:${sessionId}`);
         if (ttl > 0) {
           await redisCluster.setSession(sessionId, data, ttl);
         }
@@ -126,7 +137,8 @@ export class RedisSessionService {
         lastActivity: Date.now(),
       };
 
-      const ttl = await redisCluster.getClient().ttl(`session:${sessionId}`);
+      const client = this.getRedisClient();
+      const ttl = await client.ttl(`session:${sessionId}`);
       await redisCluster.setSession(sessionId, updated, ttl > 0 ? ttl : this.defaultTTL);
 
       const duration = (Date.now() - start) / 1000;
@@ -152,7 +164,8 @@ export class RedisSessionService {
       if (session) {
         // Remove from user's session list
         const userSessionsKey = `user:sessions:${session.userId}`;
-        await redisCluster.getClient().zrem(userSessionsKey, sessionId);
+        const client = this.getRedisClient();
+        await client.zrem(userSessionsKey, sessionId);
       }
 
       await redisCluster.deleteSession(sessionId);
@@ -175,7 +188,8 @@ export class RedisSessionService {
   async extendSession(sessionId: string, additionalSeconds = 1800): Promise<boolean> {
     const start = Date.now();
     try {
-      const currentTTL = await redisCluster.getClient().ttl(`session:${sessionId}`);
+      const client = this.getRedisClient();
+      const currentTTL = await client.ttl(`session:${sessionId}`);
 
       if (currentTTL < 0) {
         metrics.redisOperations.inc({ operation: 'extendSession', status: 'notfound' });
@@ -203,8 +217,9 @@ export class RedisSessionService {
   async getUserSessions(userId: string): Promise<SessionData[]> {
     const start = Date.now();
     try {
+      const client = this.getRedisClient();
       const userSessionsKey = `user:sessions:${userId}`;
-      const sessionIds = await redisCluster.getClient().zrange(userSessionsKey, 0, -1);
+      const sessionIds = await client.zrange(userSessionsKey, 0, -1);
 
       const sessions: SessionData[] = [];
 
@@ -244,7 +259,8 @@ export class RedisSessionService {
 
       // Clear user sessions list
       const userSessionsKey = `user:sessions:${userId}`;
-      await redisCluster.getClient().del(userSessionsKey);
+      const client = this.getRedisClient();
+      await client.del(userSessionsKey);
 
       const duration = (Date.now() - start) / 1000;
       metrics.redisOperations.inc({ operation: 'deleteUserSessions', status: 'success' });
@@ -264,13 +280,14 @@ export class RedisSessionService {
    */
   private async enforceMaxSessions(userId: string, maxSessions: number): Promise<void> {
     try {
+      const client = this.getRedisClient();
       const userSessionsKey = `user:sessions:${userId}`;
-      const count = await redisCluster.getClient().zcard(userSessionsKey);
+      const count = await client.zcard(userSessionsKey);
 
       if (count > maxSessions) {
         // Remove oldest sessions
         const toRemove = count - maxSessions;
-        const oldest = await redisCluster.getClient().zrange(userSessionsKey, 0, toRemove - 1);
+        const oldest = await client.zrange(userSessionsKey, 0, toRemove - 1);
 
         for (const sessionId of oldest) {
           await this.deleteSession(sessionId);
@@ -288,8 +305,9 @@ export class RedisSessionService {
    */
   private async findSessionId(userId: string, deviceId?: string): Promise<string | null> {
     try {
+      const client = this.getRedisClient();
       const userSessionsKey = `user:sessions:${userId}`;
-      const sessionIds = await redisCluster.getClient().zrange(userSessionsKey, 0, -1);
+      const sessionIds = await client.zrange(userSessionsKey, 0, -1);
 
       for (const sessionId of sessionIds) {
         const data = await this.getSession(sessionId, false);
@@ -310,8 +328,9 @@ export class RedisSessionService {
    */
   async getSessionCount(userId: string): Promise<number> {
     try {
+      const client = this.getRedisClient();
       const userSessionsKey = `user:sessions:${userId}`;
-      return await redisCluster.getClient().zcard(userSessionsKey);
+      return await client.zcard(userSessionsKey);
     } catch (error) {
       logger.error('Failed to get session count:', error);
       return 0;
@@ -325,7 +344,7 @@ export class RedisSessionService {
     const start = Date.now();
     try {
       const pattern = 'user:sessions:*';
-      const client = redisCluster.getClient();
+      const client = this.getRedisClient();
       let cleaned = 0;
 
       const keys = await client.keys(pattern);
