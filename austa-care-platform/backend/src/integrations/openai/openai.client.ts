@@ -13,6 +13,7 @@ import {
   ChatMessage,
   StreamChunk,
   FunctionDefinition,
+  toChatCompletionParams,
 } from './types';
 import { medicalFunctions } from './functions';
 
@@ -61,7 +62,7 @@ export class OpenAIClient {
     try {
       const response = await this.client.chat.completions.create({
         model: this.defaultModel,
-        messages: options.messages,
+        messages: toChatCompletionParams(options.messages),
         functions: options.functions,
         function_call: options.function_call,
         temperature: options.temperature ?? this.defaultTemperature,
@@ -82,7 +83,7 @@ export class OpenAIClient {
 
       // Publish event
       await eventPublisher.publish({
-        eventType: 'openai.completion.created',
+        eventType: 'ai.openai.completion.created',
         source: 'openai-client',
         version: '1.0',
         data: {
@@ -105,7 +106,7 @@ export class OpenAIClient {
       });
 
       await eventPublisher.publish({
-        eventType: 'openai.completion.failed',
+        eventType: 'ai.openai.completion.failed',
         source: 'openai-client',
         version: '1.0',
         data: {
@@ -130,7 +131,7 @@ export class OpenAIClient {
     try {
       const stream = await this.client.chat.completions.create({
         model: this.defaultModel,
-        messages: options.messages,
+        messages: toChatCompletionParams(options.messages),
         functions: options.functions,
         function_call: options.function_call,
         temperature: options.temperature ?? this.defaultTemperature,
@@ -150,7 +151,7 @@ export class OpenAIClient {
       });
 
       await eventPublisher.publish({
-        eventType: 'openai.streaming.completed',
+        eventType: 'ai.openai.streaming.completed',
         source: 'openai-client',
         version: '1.0',
         data: {

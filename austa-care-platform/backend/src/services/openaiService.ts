@@ -8,6 +8,7 @@ export class OpenAIService {
   private client: OpenAI;
   private redis: RedisService;
   private tokenUsage: Map<string, TokenUsage> = new Map();
+  private tokenTrackingInterval: NodeJS.Timeout | null = null;
 
   // Persona configurations
   private personas: Record<PersonaType, PersonaConfig> = {
@@ -107,12 +108,25 @@ LIMITAÇÕES:
   }
 
   /**
-   * Initialize token usage tracking
+   * Initialize token usage tracking with periodic persistence
+   * Sets up a 5-minute interval to save token usage data
+   * Interval reference is stored for proper cleanup
    */
   private initializeTokenTracking(): void {
-    setInterval(() => {
+    // Only initialize once
+    if (this.tokenTrackingInterval) {
+      return;
+    }
+
+    // Save token usage every 5 minutes
+    this.tokenTrackingInterval = setInterval(() => {
       this.saveTokenUsage();
-    }, 300000); // Save every 5 minutes
+    }, 300000);
+
+    // Ensure interval doesn't prevent process exit
+    if (this.tokenTrackingInterval.unref) {
+      this.tokenTrackingInterval.unref();
+    }
   }
 
   /**
@@ -614,5 +628,49 @@ LIMITAÇÕES:
   updatePersonaConfig(persona: PersonaType, updates: Partial<PersonaConfig>): void {
     this.personas[persona] = { ...this.personas[persona], ...updates };
     logger.info(`Persona ${persona} configuration updated`);
+  }
+
+  /**
+   * Cleanup and destroy service instance
+   * Clears intervals and releases resources to prevent memory leaks
+   * MUST be called when service instance is no longer needed
+   *
+   * @example
+   * // In Jest tests
+   * let openaiService: OpenAIService;
+   *
+   * beforeEach(() => {
+   *   openaiService = new OpenAIService();
+   * });
+   *
+   * afterEach(() => {
+   *   openaiService.destroy();
+   * });
+   *
+   * @example
+   * // In application shutdown
+   * process.on('SIGTERM', async () => {
+   *   await openaiService.destroy();
+   * });
+   */
+  async destroy(): Promise<void> {
+    try {
+      // Clear token tracking interval
+      if (this.tokenTrackingInterval) {
+        clearInterval(this.tokenTrackingInterval);
+        this.tokenTrackingInterval = null;
+      }
+
+      // Save final token usage before shutdown
+      await this.saveTokenUsage();
+
+      // Clear in-memory token usage
+      this.tokenUsage.clear();
+
+      logger.info('OpenAI service cleaned up successfully');
+    } catch (error) {
+      logger.error('Error during OpenAI service cleanup', error);
+      throw error;
+    }
   }
 }

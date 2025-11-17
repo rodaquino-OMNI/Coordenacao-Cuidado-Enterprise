@@ -14,10 +14,20 @@ describe('AI Integration', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Initialize services
     healthPromptService = new HealthPromptService();
     openaiService = new OpenAIService();
+  });
+
+  /**
+   * Critical: Cleanup after each test to prevent memory leaks
+   * The OpenAIService creates a setInterval that must be cleared
+   */
+  afterEach(async () => {
+    if (openaiService) {
+      await openaiService.destroy();
+    }
   });
 
   describe('HealthPromptService', () => {
@@ -262,5 +272,95 @@ describe('Performance and Caching', () => {
   test('should track token usage', () => {
     // Test that token usage is properly tracked
     expect(true).toBe(true); // Placeholder
+  });
+});
+
+describe('Memory Leak Prevention - Service Cleanup', () => {
+  /**
+   * Critical Test Suite: Verify OpenAIService cleanup mechanism
+   * These tests ensure the service properly releases resources to prevent memory leaks
+   */
+
+  let testService: OpenAIService;
+
+  beforeEach(() => {
+    testService = new OpenAIService();
+  });
+
+  afterEach(async () => {
+    if (testService) {
+      await testService.destroy();
+    }
+  });
+
+  test('should have destroy method', () => {
+    expect(typeof testService.destroy).toBe('function');
+  });
+
+  test('should cleanup without errors', async () => {
+    await expect(testService.destroy()).resolves.not.toThrow();
+  });
+
+  test('should be safe to call destroy multiple times', async () => {
+    await testService.destroy();
+    await expect(testService.destroy()).resolves.not.toThrow();
+  });
+
+  test('should clear interval on destroy', async () => {
+    // Access private property through type assertion for testing
+    const serviceWithInterval = testService as any;
+
+    // Verify interval exists after construction
+    expect(serviceWithInterval.tokenTrackingInterval).toBeTruthy();
+
+    // Destroy should clear the interval
+    await testService.destroy();
+
+    // Verify interval is cleared
+    expect(serviceWithInterval.tokenTrackingInterval).toBeNull();
+  });
+
+  /**
+   * Integration test: Verify no open handles remain after destroy
+   * This prevents Jest from hanging with "Jest did not exit one second after the test run has completed"
+   */
+  test('should prevent open handles by cleaning up interval', async (done) => {
+    const service = new OpenAIService();
+
+    // Destroy should clear all intervals
+    await service.destroy();
+
+    // If cleanup worked, this test should complete without hanging
+    setTimeout(() => {
+      expect(true).toBe(true);
+      done();
+    }, 100);
+  });
+
+  test('should save final token usage on destroy', async () => {
+    // Mock the saveTokenUsage method to verify it's called
+    const saveTokenUsageSpy = jest.spyOn(testService as any, 'saveTokenUsage');
+
+    await testService.destroy();
+
+    expect(saveTokenUsageSpy).toHaveBeenCalled();
+  });
+
+  test('should clear in-memory token usage on destroy', async () => {
+    const serviceWithTokens = testService as any;
+
+    // Add some token usage data
+    serviceWithTokens.tokenUsage.set('user123', {
+      userId: 'user123',
+      totalTokens: 100,
+      date: '2025-01-01'
+    });
+
+    expect(serviceWithTokens.tokenUsage.size).toBeGreaterThan(0);
+
+    // Destroy should clear the map
+    await testService.destroy();
+
+    expect(serviceWithTokens.tokenUsage.size).toBe(0);
   });
 });

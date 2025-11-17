@@ -3,6 +3,8 @@
  * Support for chat completions with function calling
  */
 
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
 export interface OpenAIConfig {
   apiKey: string;
   organizationId?: string;
@@ -42,6 +44,51 @@ export interface ChatMessage {
     name: string;
     arguments: string;
   };
+}
+
+/**
+ * Convert custom ChatMessage to OpenAI SDK ChatCompletionMessageParam
+ * This adapter ensures type compatibility with OpenAI SDK v4.20+
+ */
+export function toChatCompletionParams(messages: ChatMessage[]): ChatCompletionMessageParam[] {
+  return messages.map((msg): ChatCompletionMessageParam => {
+    switch (msg.role) {
+      case 'system':
+        return {
+          role: 'system',
+          content: msg.content || '',
+        };
+      case 'user':
+        return {
+          role: 'user',
+          content: msg.content || '',
+        };
+      case 'assistant':
+        if (msg.function_call) {
+          return {
+            role: 'assistant',
+            content: msg.content,
+            function_call: msg.function_call,
+          };
+        }
+        return {
+          role: 'assistant',
+          content: msg.content || '',
+        };
+      case 'function':
+        return {
+          role: 'function',
+          name: msg.name || '',
+          content: msg.content || '',
+        };
+      default:
+        // Fallback to user message if unknown role
+        return {
+          role: 'user',
+          content: msg.content || '',
+        };
+    }
+  });
 }
 
 export interface FunctionCall {

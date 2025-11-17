@@ -1,4 +1,5 @@
 import { redisCluster } from '../redis.cluster';
+import { getRedisClientOrThrow } from '../utils/client-guard';
 import { logger } from '../../../utils/logger';
 import { metrics } from '../../monitoring/prometheus.metrics';
 
@@ -92,7 +93,7 @@ export class RedisRateLimiterService {
     key: string,
     config: RateLimitConfig
   ): Promise<RateLimitResult> {
-    const client = redisCluster.getClient();
+    const client = getRedisClientOrThrow();
     const rateLimitKey = `ratelimit:fixed:${key}`;
     const now = Date.now();
     const window = config.window * 1000;
@@ -128,7 +129,7 @@ export class RedisRateLimiterService {
     key: string,
     config: RateLimitConfig
   ): Promise<RateLimitResult> {
-    const client = redisCluster.getClient();
+    const client = getRedisClientOrThrow();
     const rateLimitKey = `ratelimit:sliding:${key}`;
     const now = Date.now();
     const window = config.window * 1000;
@@ -175,7 +176,7 @@ export class RedisRateLimiterService {
     key: string,
     config: RateLimitConfig
   ): Promise<RateLimitResult> {
-    const client = redisCluster.getClient();
+    const client = getRedisClientOrThrow();
     const bucketKey = `ratelimit:token:${key}`;
     const now = Date.now();
 
@@ -224,7 +225,7 @@ export class RedisRateLimiterService {
     key: string,
     config: RateLimitConfig
   ): Promise<RateLimitResult> {
-    const client = redisCluster.getClient();
+    const client = getRedisClientOrThrow();
     const bucketKey = `ratelimit:leaky:${key}`;
     const now = Date.now();
 
@@ -271,7 +272,7 @@ export class RedisRateLimiterService {
    */
   async reset(key: string, strategy: RateLimitStrategy = RateLimitStrategy.SLIDING_WINDOW): Promise<void> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const prefix = this.getKeyPrefix(strategy);
       const rateLimitKey = `${prefix}:${key}`;
 
@@ -297,7 +298,7 @@ export class RedisRateLimiterService {
     strategy: RateLimitStrategy = RateLimitStrategy.SLIDING_WINDOW
   ): Promise<RateLimitResult> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const prefix = this.getKeyPrefix(strategy);
       const rateLimitKey = `${prefix}:${key}`;
       const now = Date.now();
@@ -345,7 +346,7 @@ export class RedisRateLimiterService {
    */
   async block(key: string, durationSeconds: number): Promise<void> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const blockKey = `ratelimit:block:${key}`;
 
       await client.setex(blockKey, durationSeconds, '1');
@@ -364,7 +365,7 @@ export class RedisRateLimiterService {
    */
   async isBlocked(key: string): Promise<boolean> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const blockKey = `ratelimit:block:${key}`;
 
       const result = await client.exists(blockKey);
@@ -380,7 +381,7 @@ export class RedisRateLimiterService {
    */
   async unblock(key: string): Promise<void> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const blockKey = `ratelimit:block:${key}`;
 
       await client.del(blockKey);
@@ -415,7 +416,7 @@ export class RedisRateLimiterService {
    */
   async cleanup(): Promise<number> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const patterns = [
         'ratelimit:fixed:*',
         'ratelimit:sliding:*',

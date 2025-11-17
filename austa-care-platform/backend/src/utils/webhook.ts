@@ -269,7 +269,62 @@ export class WebhookRateLimiter {
 // Create global rate limiter instance
 export const webhookRateLimiter = new WebhookRateLimiter();
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  webhookRateLimiter.cleanup();
-}, 5 * 60 * 1000);
+/**
+ * Cleanup interval reference for proper resource management
+ * Stored at module level to enable cleanup on shutdown
+ */
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Initialize periodic cleanup of rate limiter
+ * Sets up a 5-minute interval to remove old entries
+ */
+function initializeCleanup(): void {
+  if (cleanupInterval) {
+    return; // Already initialized
+  }
+
+  // Cleanup old entries every 5 minutes
+  cleanupInterval = setInterval(() => {
+    webhookRateLimiter.cleanup();
+  }, 5 * 60 * 1000);
+
+  // Ensure interval doesn't prevent process exit
+  if (cleanupInterval.unref) {
+    cleanupInterval.unref();
+  }
+}
+
+/**
+ * Cleanup function to clear interval and prevent memory leaks
+ * MUST be called on application shutdown or in test teardown
+ *
+ * @example
+ * // In Jest tests
+ * afterAll(() => {
+ *   cleanupWebhookInterval();
+ * });
+ *
+ * @example
+ * // In application shutdown
+ * process.on('SIGTERM', () => {
+ *   cleanupWebhookInterval();
+ * });
+ */
+export function cleanupWebhookInterval(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+    logger.debug('Webhook cleanup interval cleared');
+  }
+}
+
+// Initialize cleanup on module load
+initializeCleanup();
+
+// Hook into process shutdown events for graceful cleanup
+process.on('SIGTERM', cleanupWebhookInterval);
+process.on('SIGINT', cleanupWebhookInterval);
+
+// Export for testing and manual cleanup
+export { initializeCleanup };

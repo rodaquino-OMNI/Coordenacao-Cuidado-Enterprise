@@ -1,4 +1,5 @@
 import { redisCluster } from '../redis.cluster';
+import { getRedisClientOrThrow } from '../utils/client-guard';
 import { logger } from '../../../utils/logger';
 import { metrics } from '../../monitoring/prometheus.metrics';
 
@@ -66,13 +67,14 @@ export class RedisConversationContextService {
 
       context.updatedAt = Date.now();
 
+      const client = getRedisClientOrThrow();
       const key = `conversation:context:${conversationId}`;
-      await redisCluster.getClient().setex(key, ttl, JSON.stringify(context));
+      await client.setex(key, ttl, JSON.stringify(context));
 
       // Index by user
       const userKey = `user:conversations:${context.userId}`;
-      await redisCluster.getClient().zadd(userKey, Date.now(), conversationId);
-      await redisCluster.getClient().expire(userKey, ttl * 2);
+      await client.zadd(userKey, Date.now(), conversationId);
+      await client.expire(userKey, ttl * 2);
 
       const duration = (Date.now() - start) / 1000;
       metrics.redisOperations.inc({ operation: 'setConversationContext', status: 'success' });
@@ -92,8 +94,9 @@ export class RedisConversationContextService {
   async getContext(conversationId: string): Promise<ConversationContext | null> {
     const start = Date.now();
     try {
+      const client = getRedisClientOrThrow();
       const key = `conversation:context:${conversationId}`;
-      const data = await redisCluster.getClient().get(key);
+      const data = await client.get(key);
 
       if (!data) {
         metrics.redisOperations.inc({ operation: 'getConversationContext', status: 'miss' });
@@ -219,8 +222,9 @@ export class RedisConversationContextService {
   async getUserConversations(userId: string, limit = 10): Promise<ConversationContext[]> {
     const start = Date.now();
     try {
+      const client = getRedisClientOrThrow();
       const userKey = `user:conversations:${userId}`;
-      const conversationIds = await redisCluster.getClient().zrevrange(userKey, 0, limit - 1);
+      const conversationIds = await client.zrevrange(userKey, 0, limit - 1);
 
       const conversations: ConversationContext[] = [];
 
@@ -249,16 +253,17 @@ export class RedisConversationContextService {
   async deleteContext(conversationId: string): Promise<void> {
     const start = Date.now();
     try {
+      const client = getRedisClientOrThrow();
       const context = await this.getContext(conversationId);
 
       if (context) {
         // Remove from user index
         const userKey = `user:conversations:${context.userId}`;
-        await redisCluster.getClient().zrem(userKey, conversationId);
+        await client.zrem(userKey, conversationId);
       }
 
       const key = `conversation:context:${conversationId}`;
-      await redisCluster.getClient().del(key);
+      await client.del(key);
 
       const duration = (Date.now() - start) / 1000;
       metrics.redisOperations.inc({ operation: 'deleteConversationContext', status: 'success' });
@@ -277,15 +282,16 @@ export class RedisConversationContextService {
    */
   async extendTTL(conversationId: string, additionalSeconds = 3600): Promise<boolean> {
     try {
+      const client = getRedisClientOrThrow();
       const key = `conversation:context:${conversationId}`;
-      const currentTTL = await redisCluster.getClient().ttl(key);
+      const currentTTL = await client.ttl(key);
 
       if (currentTTL < 0) {
         return false;
       }
 
       const newTTL = currentTTL + additionalSeconds;
-      const result = await redisCluster.getClient().expire(key, newTTL);
+      const result = await client.expire(key, newTTL);
 
       logger.debug(`Extended TTL for conversation: ${conversationId}`);
       return result === 1;
@@ -300,8 +306,9 @@ export class RedisConversationContextService {
    */
   async getSummary(conversationId: string): Promise<string | null> {
     try {
+      const client = getRedisClientOrThrow();
       const summaryKey = `conversation:summary:${conversationId}`;
-      const summary = await redisCluster.getClient().get(summaryKey);
+      const summary = await client.get(summaryKey);
 
       return summary;
     } catch (error) {
@@ -315,8 +322,9 @@ export class RedisConversationContextService {
    */
   async setSummary(conversationId: string, summary: string, ttl = 86400): Promise<void> {
     try {
+      const client = getRedisClientOrThrow();
       const summaryKey = `conversation:summary:${conversationId}`;
-      await redisCluster.getClient().setex(summaryKey, ttl, summary);
+      await client.setex(summaryKey, ttl, summary);
 
       logger.debug(`Summary set for conversation: ${conversationId}`);
     } catch (error) {
@@ -364,7 +372,7 @@ export class RedisConversationContextService {
   async cleanup(): Promise<number> {
     const start = Date.now();
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       let cleaned = 0;
 
       // Cleanup user conversation indexes

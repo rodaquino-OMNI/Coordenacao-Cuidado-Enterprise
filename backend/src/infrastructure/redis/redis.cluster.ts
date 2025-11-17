@@ -402,6 +402,15 @@ export class RedisCluster {
   }
 
   /**
+   * Get Redis cluster client instance
+   * Returns null if not connected
+   * Use client-guard utilities for safe access patterns
+   */
+  getClient(): Cluster | null {
+    return this.cluster;
+  }
+
+  /**
    * Check if cluster is connected
    */
   isClusterConnected(): boolean {

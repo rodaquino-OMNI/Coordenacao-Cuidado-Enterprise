@@ -4,6 +4,14 @@
  * TypeScript interfaces and types for Redis cluster operations
  */
 
+import { Cluster } from 'ioredis';
+
+/**
+ * Redis client type (ioredis Cluster instance)
+ * Used for type-safe client access across the application
+ */
+export type RedisClient = Cluster;
+
 /**
  * Redis cluster node configuration
  */

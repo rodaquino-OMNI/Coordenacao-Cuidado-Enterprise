@@ -1,4 +1,5 @@
 import { redisCluster } from '../redis.cluster';
+import { getRedisClientOrThrow, withRedisClient } from '../utils/client-guard';
 import { logger } from '../../../utils/logger';
 import { metrics } from '../../monitoring/prometheus.metrics';
 
@@ -153,7 +154,7 @@ export class RedisCacheService {
   async deletePattern(pattern: string): Promise<number> {
     const start = Date.now();
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const keys = await client.keys(`cache:${pattern}`);
 
       if (keys.length === 0) {
@@ -181,7 +182,7 @@ export class RedisCacheService {
   async invalidateByTags(tags: string[]): Promise<number> {
     const start = Date.now();
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       let deletedCount = 0;
 
       for (const tag of tags) {
@@ -223,7 +224,7 @@ export class RedisCacheService {
    */
   async exists(key: string): Promise<boolean> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const result = await client.exists(`cache:${key}`);
       return result === 1;
     } catch (error) {
@@ -237,7 +238,7 @@ export class RedisCacheService {
    */
   async getTTL(key: string): Promise<number> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       return await client.ttl(`cache:${key}`);
     } catch (error) {
       logger.error(`Failed to get TTL for key ${key}:`, error);
@@ -250,7 +251,7 @@ export class RedisCacheService {
    */
   async extendTTL(key: string, additionalSeconds: number): Promise<boolean> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const currentTTL = await this.getTTL(key);
 
       if (currentTTL < 0) {
@@ -273,7 +274,7 @@ export class RedisCacheService {
    */
   async getStats(): Promise<CacheStats> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const keys = await client.keys('cache:*');
 
       // Filter out tag keys
@@ -314,7 +315,7 @@ export class RedisCacheService {
   async clear(): Promise<number> {
     const start = Date.now();
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const keys = await client.keys('cache:*');
 
       if (keys.length === 0) {
@@ -341,7 +342,7 @@ export class RedisCacheService {
    */
   private async storeTags(key: string, tags: string[], ttl: number): Promise<void> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
 
       for (const tag of tags) {
         const tagKey = `cache:tag:${tag}`;
@@ -358,7 +359,7 @@ export class RedisCacheService {
    */
   private async removeFromTags(key: string): Promise<void> {
     try {
-      const client = redisCluster.getClient();
+      const client = getRedisClientOrThrow();
       const tagKeys = await client.keys('cache:tag:*');
 
       for (const tagKey of tagKeys) {

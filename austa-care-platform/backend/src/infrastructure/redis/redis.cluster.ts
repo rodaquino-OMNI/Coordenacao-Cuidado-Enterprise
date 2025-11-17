@@ -350,50 +350,53 @@ export class RedisClusterClient {
 
   // Rate limiting methods
   async checkRateLimit(key: string, limit: number, window: number): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+    this.ensureConnected();
     const rateLimitKey = `rate:${key}`;
     const now = Date.now();
     const windowStart = now - window * 1000;
 
-    const client = this.getClient();
-    
+    const client = this.cluster!;
+
     // Use sliding window rate limiting
     const pipeline = client.pipeline();
     pipeline.zremrangebyscore(rateLimitKey, '-inf', windowStart);
     pipeline.zadd(rateLimitKey, now, `${now}-${Math.random()}`);
     pipeline.zcard(rateLimitKey);
     pipeline.expire(rateLimitKey, window);
-    
+
     const results = await pipeline.exec();
-    
+
     if (!results) {
       throw new Error('Rate limit check failed');
     }
-    
+
     const count = results[2][1] as number;
     const allowed = count <= limit;
     const remaining = Math.max(0, limit - count);
     const resetAt = now + window * 1000;
-    
+
     return { allowed, remaining, resetAt };
   }
 
   // Distributed lock methods
   async acquireLock(resource: string, ttl: number = 10000): Promise<string | null> {
+    this.ensureConnected();
     const lockKey = `lock:${resource}`;
     const lockId = `${Date.now()}-${Math.random()}`;
-    
-    const result = await this.getClient().set(lockKey, lockId, 'PX', ttl, 'NX');
-    
+
+    const result = await this.cluster!.set(lockKey, lockId, 'PX', ttl, 'NX');
+
     if (result === 'OK') {
       return lockId;
     }
-    
+
     return null;
   }
 
   async releaseLock(resource: string, lockId: string): Promise<boolean> {
+    this.ensureConnected();
     const lockKey = `lock:${resource}`;
-    
+
     const script = `
       if redis.call("get", KEYS[1]) == ARGV[1] then
         return redis.call("del", KEYS[1])
@@ -401,32 +404,35 @@ export class RedisClusterClient {
         return 0
       end
     `;
-    
-    const result = await this.getClient().eval(script, 1, lockKey, lockId) as number;
+
+    const result = await this.cluster!.eval(script, 1, lockKey, lockId) as number;
     return result === 1;
   }
 
   // Real-time metrics
   async incrementCounter(key: string, value: number = 1): Promise<number> {
+    this.ensureConnected();
     const metricsKey = `metrics:${key}`;
-    return await this.getClient().incrby(metricsKey, value);
+    return await this.cluster!.incrby(metricsKey, value);
   }
 
   async getCounter(key: string): Promise<number> {
+    this.ensureConnected();
     const metricsKey = `metrics:${key}`;
-    const value = await this.getClient().get(metricsKey);
+    const value = await this.cluster!.get(metricsKey);
     return value ? parseInt(value, 10) : 0;
   }
 
   async recordMetric(key: string, value: number, timestamp?: number): Promise<void> {
+    this.ensureConnected();
     const metricsKey = `metrics:timeseries:${key}`;
     const ts = timestamp || Date.now();
-    
-    await this.getClient().zadd(metricsKey, ts, `${ts}:${value}`);
-    
+
+    await this.cluster!.zadd(metricsKey, ts, `${ts}:${value}`);
+
     // Keep only last 24 hours of data
     const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    await this.getClient().zremrangebyscore(metricsKey, '-inf', dayAgo);
+    await this.cluster!.zremrangebyscore(metricsKey, '-inf', dayAgo);
   }
 
   // Pub/Sub methods

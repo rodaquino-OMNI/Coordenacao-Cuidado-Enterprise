@@ -251,6 +251,38 @@ export const FhirResourceDeletedEventSchema = BaseEventSchema.extend({
   }),
 });
 
+// OpenAI Integration events
+export const OpenAICompletionCreatedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('ai.openai.completion.created'),
+  data: z.object({
+    id: z.string(),
+    model: z.string(),
+    usage: z.object({
+      prompt_tokens: z.number(),
+      completion_tokens: z.number(),
+      total_tokens: z.number(),
+    }).optional(),
+    duration_ms: z.number(),
+    finish_reason: z.string(),
+    has_function_call: z.boolean(),
+  }),
+});
+
+export const OpenAICompletionFailedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('ai.openai.completion.failed'),
+  data: z.object({
+    error: z.string(),
+    duration_ms: z.number(),
+  }),
+});
+
+export const OpenAIStreamingCompletedEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('ai.openai.streaming.completed'),
+  data: z.object({
+    duration_ms: z.number(),
+  }),
+});
+
 // ML events
 export const MlPredictionCompletedEventSchema = BaseEventSchema.extend({
   eventType: z.literal('ml.prediction.completed'),
@@ -361,6 +393,9 @@ export type ConversationUserLeftEvent = z.infer<typeof ConversationUserLeftEvent
 export type ConversationMessageReadEvent = z.infer<typeof ConversationMessageReadEventSchema>;
 export type NotificationAcknowledgedEvent = z.infer<typeof NotificationAcknowledgedEventSchema>;
 export type NotificationReadEvent = z.infer<typeof NotificationReadEventSchema>;
+export type OpenAICompletionCreatedEvent = z.infer<typeof OpenAICompletionCreatedEventSchema>;
+export type OpenAICompletionFailedEvent = z.infer<typeof OpenAICompletionFailedEventSchema>;
+export type OpenAIStreamingCompletedEvent = z.infer<typeof OpenAIStreamingCompletedEventSchema>;
 
 // Union type for all events
 export type DomainEvent =
@@ -386,4 +421,7 @@ export type DomainEvent =
   | ConversationUserLeftEvent
   | ConversationMessageReadEvent
   | NotificationAcknowledgedEvent
-  | NotificationReadEvent;
+  | NotificationReadEvent
+  | OpenAICompletionCreatedEvent
+  | OpenAICompletionFailedEvent
+  | OpenAIStreamingCompletedEvent;

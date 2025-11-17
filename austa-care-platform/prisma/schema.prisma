@@ -35,11 +35,19 @@ model Organization {
   deletedAt DateTime?
 
   // Relations
-  users            User[]
-  providers        Provider[]
-  authorizations   Authorization[]
-  auditLogs        AuditLog[]
-  tasyIntegrations TasyIntegration[]
+  users                  User[]
+  providers              Provider[]
+  conversations          Conversation[]
+  healthData             HealthData[]
+  missions               Mission[]
+  onboardingProgress     OnboardingProgress[]
+  healthPoints           HealthPoints[]
+  vitalSigns             VitalSign[]
+  questionnaireResponses QuestionnaireResponse[]
+  achievements           Achievement[]
+  authorizations         Authorization[]
+  auditLogs              AuditLog[]
+  tasyIntegrations       TasyIntegration[]
 
   @@index([type, isActive])
   @@index([taxId])
@@ -194,9 +202,10 @@ model Conversation {
   deletedAt     DateTime?
 
   // Relations
-  user      User       @relation(fields: [userId], references: [id])
-  messages  Message[]
-  auditLogs AuditLog[] @relation(name: "ConversationAudit")
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  messages     Message[]
+  auditLogs    AuditLog[]   @relation(name: "ConversationAudit")
 
   @@index([userId, status])
   @@index([organizationId, status])
@@ -309,6 +318,7 @@ model HealthData {
 
   // Relations
   user           User            @relation(fields: [userId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
   authorizations Authorization[]
   auditLogs      AuditLog[]      @relation(name: "HealthDataAudit")
 
@@ -358,6 +368,7 @@ model Mission {
   deletedAt DateTime?
 
   // Relations
+  organization       Organization         @relation(fields: [organizationId], references: [id])
   onboardingProgress OnboardingProgress[]
 
   @@index([organizationId, isActive])
@@ -396,8 +407,9 @@ model OnboardingProgress {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user    User    @relation(fields: [userId], references: [id])
-  mission Mission @relation(fields: [missionId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  mission      Mission      @relation(fields: [missionId], references: [id])
 
   @@unique([userId, missionId])
   @@index([userId, status])
@@ -445,6 +457,7 @@ model HealthPoints {
 
   // Relations
   user         User               @relation(fields: [userId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id])
   transactions PointTransaction[]
 
   @@unique([userId])
@@ -756,7 +769,8 @@ model VitalSign {
   deletedAt DateTime?
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([userId, type, measuredAt])
   @@index([organizationId, measuredAt])
@@ -792,7 +806,8 @@ model QuestionnaireResponse {
   deletedAt DateTime?
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([userId, questionnaireId])
   @@index([organizationId, completedAt])
@@ -830,7 +845,8 @@ model Achievement {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([userId, achievementType, name])
   @@index([userId, isCompleted])

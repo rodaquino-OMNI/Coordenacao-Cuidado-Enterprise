@@ -195,9 +195,11 @@ export const provideHealthEducationFunction: FunctionDefinition = {
           age_group: {
             type: 'string',
             enum: ['child', 'adolescent', 'adult', 'elderly'],
+            description: 'Faixa etária do paciente: child (criança), adolescent (adolescente), adult (adulto), elderly (idoso)',
           },
           has_chronic_condition: {
             type: 'boolean',
+            description: 'Indica se o paciente possui alguma condição crônica de saúde',
           },
         },
       },

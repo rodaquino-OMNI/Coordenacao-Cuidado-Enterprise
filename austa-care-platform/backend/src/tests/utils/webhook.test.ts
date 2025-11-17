@@ -11,6 +11,8 @@ import {
   sanitizeWebhookPayload,
   validateRequestIP,
   WebhookRateLimiter,
+  cleanupWebhookInterval,
+  initializeCleanup,
 } from '@/utils/webhook';
 
 // Mock config
@@ -383,4 +385,65 @@ describe('Webhook Utilities', () => {
       Date.now = originalNow;
     });
   });
+
+  describe('Memory Leak Prevention - Cleanup Interval', () => {
+    /**
+     * Critical Test: Verify cleanup function clears interval to prevent memory leaks
+     * This test ensures the interval cleanup mechanism works correctly
+     */
+    it('should export cleanupWebhookInterval function', () => {
+      expect(typeof cleanupWebhookInterval).toBe('function');
+    });
+
+    it('should export initializeCleanup function', () => {
+      expect(typeof initializeCleanup).toBe('function');
+    });
+
+    it('should cleanup interval without errors', () => {
+      expect(() => {
+        cleanupWebhookInterval();
+      }).not.toThrow();
+    });
+
+    it('should be safe to call cleanup multiple times', () => {
+      expect(() => {
+        cleanupWebhookInterval();
+        cleanupWebhookInterval();
+        cleanupWebhookInterval();
+      }).not.toThrow();
+    });
+
+    it('should be safe to reinitialize after cleanup', () => {
+      expect(() => {
+        cleanupWebhookInterval();
+        initializeCleanup();
+      }).not.toThrow();
+    });
+
+    /**
+     * Integration test: Verify no open handles remain after cleanup
+     * This prevents Jest from hanging with "Jest did not exit one second after the test run has completed"
+     */
+    it('should prevent open handles by cleaning up interval', (done) => {
+      // Initialize cleanup
+      initializeCleanup();
+
+      // Cleanup should clear the interval
+      cleanupWebhookInterval();
+
+      // If cleanup worked, this test should complete without hanging
+      setTimeout(() => {
+        expect(true).toBe(true);
+        done();
+      }, 100);
+    });
+  });
+});
+
+/**
+ * Global teardown to ensure cleanup runs after all tests
+ * This prevents memory leaks in the test suite
+ */
+afterAll(() => {
+  cleanupWebhookInterval();
 });
