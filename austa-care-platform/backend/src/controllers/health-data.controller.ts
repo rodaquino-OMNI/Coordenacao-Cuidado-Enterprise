@@ -2,6 +2,12 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
+import {
+  getVitalSigns,
+  recordVitalSign,
+  getLatestVitals,
+  getVitalSignsInRange
+} from '../utils/health-data.helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -9,11 +15,8 @@ const prisma = new PrismaClient();
 // Zod validation schemas
 const createVitalSignSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
-  type: z.enum(['blood_pressure_systolic', 'blood_pressure_diastolic', 'heart_rate', 'temperature', 'weight', 'respiratory_rate', 'oxygen_saturation', 'glucose'])
-    .transform(val => {
-      const mapped = val === 'glucose' ? 'blood_glucose' : val;
-      return mapped.toUpperCase() as 'BLOOD_PRESSURE_SYSTOLIC' | 'BLOOD_PRESSURE_DIASTOLIC' | 'HEART_RATE' | 'TEMPERATURE' | 'WEIGHT' | 'RESPIRATORY_RATE' | 'OXYGEN_SATURATION' | 'BLOOD_GLUCOSE';
-    }),
+  type: z.enum(['blood_pressure', 'heart_rate', 'temperature', 'weight', 'height', 'blood_glucose', 'oxygen_saturation', 'other'])
+    .transform(val => val.toUpperCase() as 'BLOOD_PRESSURE' | 'HEART_RATE' | 'TEMPERATURE' | 'WEIGHT' | 'HEIGHT' | 'BLOOD_GLUCOSE' | 'OXYGEN_SATURATION' | 'OTHER'),
   value: z.number().positive('Valor deve ser positivo'),
   unit: z.string().min(1, 'Unidade é obrigatória'),
   measuredAt: z.string().datetime().optional(),
@@ -46,23 +49,12 @@ router.post('/vital-signs', async (req: Request, res: Response) => {
   try {
     const validated = createVitalSignSchema.parse(req.body);
 
-    const vitalSign = await prisma.vitalSign.create({
-      data: {
-        userId: validated.userId,
-        type: validated.type,
-        value: validated.value,
-        unit: validated.unit,
-        measuredAt: validated.measuredAt ? new Date(validated.measuredAt) : new Date(),
-        notes: validated.notes,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-          }
-        }
-      }
+    const vitalSign = await recordVitalSign(validated.userId, {
+      type: validated.type,
+      value: validated.value,
+      unit: validated.unit,
+      recordedAt: validated.measuredAt ? new Date(validated.measuredAt) : new Date(),
+      notes: validated.notes,
     });
 
     logger.info('Vital sign created', { vitalSignId: vitalSign.id, userId: validated.userId });
@@ -92,38 +84,40 @@ router.post('/vital-signs', async (req: Request, res: Response) => {
 router.get('/vital-signs', async (req: Request, res: Response) => {
   try {
     const query = querySchema.parse(req.query);
-    const skip = (query.page - 1) * query.limit;
 
-    const where: any = {};
-    if (query.userId) where.userId = query.userId;
-    if (query.type) where.type = query.type;
-    if (query.startDate || query.endDate) {
-      where.measuredAt = {};
-      if (query.startDate) where.measuredAt.gte = new Date(query.startDate);
-      if (query.endDate) where.measuredAt.lte = new Date(query.endDate);
+    if (!query.userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID do usuário é obrigatório'
+      });
     }
 
-    const [vitalSigns, total] = await Promise.all([
-      prisma.vitalSign.findMany({
-        where,
-        skip,
-        take: query.limit,
-        orderBy: { [query.orderBy]: query.order },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-            }
-          }
-        }
-      }),
-      prisma.vitalSign.count({ where })
-    ]);
+    let vitalSigns;
+    if (query.startDate || query.endDate) {
+      // Use range query helper
+      vitalSigns = await getVitalSignsInRange(
+        query.userId,
+        query.startDate ? new Date(query.startDate) : new Date(0),
+        query.endDate ? new Date(query.endDate) : new Date()
+      );
+    } else {
+      // Use general query helper
+      vitalSigns = await getVitalSigns(query.userId);
+
+      // Filter by type if specified
+      if (query.type) {
+        vitalSigns = vitalSigns.filter(v => v.type === query.type);
+      }
+    }
+
+    // Apply pagination
+    const skip = (query.page - 1) * query.limit;
+    const paginatedSigns = vitalSigns.slice(skip, skip + query.limit);
+    const total = vitalSigns.length;
 
     res.status(200).json({
       success: true,
-      data: vitalSigns,
+      data: paginatedSigns,
       pagination: {
         total,
         page: query.page,
@@ -145,13 +139,15 @@ router.get('/vital-signs/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const vitalSign = await prisma.vitalSign.findUnique({
+    // Use HealthData model directly for single record lookup
+    const vitalSign = await prisma.healthData.findUnique({
       where: { id },
       include: {
         user: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
           }
         }
@@ -184,7 +180,7 @@ router.put('/vital-signs/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { value, unit, notes, measuredAt } = req.body;
 
-    const existingVitalSign = await prisma.vitalSign.findUnique({ where: { id } });
+    const existingVitalSign = await prisma.healthData.findUnique({ where: { id } });
     if (!existingVitalSign) {
       return res.status(404).json({
         success: false,
@@ -192,19 +188,20 @@ router.put('/vital-signs/:id', async (req: Request, res: Response) => {
       });
     }
 
-    const vitalSign = await prisma.vitalSign.update({
+    const vitalSign = await prisma.healthData.update({
       where: { id },
       data: {
         ...(value !== undefined && { value }),
         ...(unit && { unit }),
-        ...(notes !== undefined && { notes }),
-        ...(measuredAt && { measuredAt: new Date(measuredAt) }),
+        ...(notes !== undefined && { metadata: { notes } }),
+        ...(measuredAt && { recordedAt: new Date(measuredAt) }),
       },
       include: {
         user: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
           }
         }
       }
@@ -231,7 +228,7 @@ router.delete('/vital-signs/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const vitalSign = await prisma.vitalSign.findUnique({ where: { id } });
+    const vitalSign = await prisma.healthData.findUnique({ where: { id } });
     if (!vitalSign) {
       return res.status(404).json({
         success: false,
@@ -239,7 +236,7 @@ router.delete('/vital-signs/:id', async (req: Request, res: Response) => {
       });
     }
 
-    await prisma.vitalSign.delete({ where: { id } });
+    await prisma.healthData.delete({ where: { id } });
 
     logger.info('Vital sign deleted', { vitalSignId: id });
 
@@ -257,7 +254,10 @@ router.delete('/vital-signs/:id', async (req: Request, res: Response) => {
 });
 
 // ========== QUESTIONNAIRE RESPONSES ENDPOINTS ==========
+// NOTE: QuestionnaireResponse model not yet migrated to new schema
+// These endpoints are commented out until the model is added
 
+/*
 // Create questionnaire response
 router.post('/questionnaires', async (req: Request, res: Response) => {
   try {
@@ -428,6 +428,8 @@ router.delete('/questionnaires/:id', async (req: Request, res: Response) => {
   }
 });
 
+*/
+
 // Get user health summary
 router.get('/users/:userId/summary', async (req: Request, res: Response) => {
   try {
@@ -441,25 +443,11 @@ router.get('/users/:userId/summary', async (req: Request, res: Response) => {
       });
     }
 
-    const [vitalSigns, questionnaires] = await Promise.all([
-      prisma.vitalSign.findMany({
-        where: { userId },
-        orderBy: { measuredAt: 'desc' },
-        take: 10,
-      }),
-      prisma.questionnaireResponse.findMany({
-        where: { userId },
-        orderBy: { completedAt: 'desc' },
-        take: 5,
-      })
-    ]);
+    const vitalSigns = await getLatestVitals(userId);
 
     const summary = {
       userId,
-      healthScore: user.healthScore,
-      onboardingComplete: user.onboardingComplete,
       recentVitalSigns: vitalSigns,
-      recentQuestionnaires: questionnaires,
       lastUpdated: new Date(),
     };
 

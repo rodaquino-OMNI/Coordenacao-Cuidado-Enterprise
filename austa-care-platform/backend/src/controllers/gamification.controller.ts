@@ -2,6 +2,14 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
+import {
+  getUserAchievements,
+  awardAchievement,
+  completeMission,
+  getUserMissions,
+  getUserGamificationStats,
+  calculateUserLevel
+} from '../utils/gamification.helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -46,12 +54,13 @@ router.post('/missions', async (req: Request, res: Response) => {
       data: {
         title: validated.name,
         description: validated.description,
+        type: 'DAILY' as any, // TODO: Map to MissionType enum
         category: validated.type as any, // TODO: Map to MissionCategory enum
-        pointsReward: validated.points,
-        requiredActions: validated.requiredActions,
+        difficulty: 'EASY' as any, // TODO: Calculate based on requirements
+        points: validated.points,
+        requirements: validated.requiredActions,
         endDate: validated.expiresAt ? new Date(validated.expiresAt) : null,
         isActive: true,
-        organizationId: 'default-org-id', // TODO: Get from context
       }
     });
 
@@ -247,71 +256,33 @@ router.post('/achievements', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if user already has this achievement
-    const existingAchievement = await prisma.achievement.findFirst({
-      where: {
+    // Complete mission using helper - it will check for existing achievements
+    try {
+      const transaction = await completeMission(validated.userId, validated.missionId);
+
+      logger.info('Achievement created', {
+        transactionId: transaction.id,
         userId: validated.userId,
-        missionId: validated.missionId,
-        isCompleted: true
-      }
-    });
-
-    if (existingAchievement) {
-      return res.status(409).json({
-        success: false,
-        message: 'Usuário já completou esta missão'
+        pointsEarned: transaction.points
       });
-    }
 
-    // Create achievement and update user health score
-    const [achievement, user] = await Promise.all([
-      prisma.achievement.create({
+      res.status(201).json({
+        success: true,
+        message: 'Conquista registrada com sucesso',
         data: {
-          userId: validated.userId,
-          organizationId: 'default-org-id', // TODO: Get from context
-          achievementType: 'HEALTH_DATA_ENTERED', // TODO: Map from validated data
-          name: 'Mission Achievement',
-          description: 'Completed mission successfully',
-          category: 'HEALTH_EDUCATION', // TODO: Map from validated data
-          pointsAwarded: validated.pointsEarned,
-          isCompleted: true,
-          completedAt: validated.completedAt ? new Date(validated.completedAt) : new Date(),
-          metadata: validated.metadata || {},
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              healthScore: true,
-            }
-          }
+          achievement: transaction,
+          newHealthScore: transaction.points // Helper already updated health points
         }
-      }),
-      prisma.user.update({
-        where: { id: validated.userId },
-        data: {
-          healthScore: {
-            increment: validated.pointsEarned
-          }
-        }
-      })
-    ]);
-
-    logger.info('Achievement created', {
-      achievementId: achievement.id,
-      userId: validated.userId,
-      pointsEarned: validated.pointsEarned
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Conquista registrada com sucesso',
-      data: {
-        achievement,
-        newHealthScore: (user.healthScore || 0) + validated.pointsEarned
+      });
+    } catch (error: any) {
+      if (error.message === 'Mission already completed by user') {
+        return res.status(409).json({
+          success: false,
+          message: 'Usuário já completou esta missão'
+        });
       }
-    });
+      throw error;
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -333,12 +304,8 @@ router.get('/users/:userId/achievements', async (req: Request, res: Response) =>
   try {
     const { userId } = req.params;
 
-    const achievements = await prisma.achievement.findMany({
-      where: { userId },
-      orderBy: { completedAt: 'desc' }
-    });
-
-    const totalPoints = achievements.reduce((sum: number, achievement: { pointsAwarded: number }) => sum + achievement.pointsAwarded, 0);
+    const achievements = await getUserAchievements(userId);
+    const totalPoints = achievements.reduce((sum, achievement) => sum + achievement.points, 0);
 
     res.status(200).json({
       success: true,
@@ -362,27 +329,24 @@ router.get('/leaderboard', async (req: Request, res: Response) => {
   try {
     const { limit = '10', period = 'all_time' } = req.query;
 
+    // Use direct Prisma for leaderboard as it requires cross-user aggregation
     const users = await prisma.user.findMany({
-      orderBy: { healthScore: 'desc' },
+      orderBy: { createdAt: 'desc' }, // TODO: Order by calculated points from HealthPoints
       take: parseInt(limit as string, 10),
       select: {
         id: true,
-        name: true,
-        healthScore: true,
-        _count: {
-          select: {
-            achievements: true
-          }
-        }
+        firstName: true,
+        lastName: true,
       }
     });
 
-    const leaderboard = users.map((user: { id: string; name: string | null; healthScore: number }, index: number) => ({
+    // TODO: Get actual points from HealthPoints model
+    const leaderboard = users.map((user, index) => ({
       rank: index + 1,
       userId: user.id,
-      name: user.name,
-      points: user.healthScore,
-      achievementsCount: user._count.achievements
+      name: `${user.firstName} ${user.lastName}`,
+      points: 0, // TODO: Calculate from HealthPoints
+      achievementsCount: 0 // TODO: Count from PointTransactions
     }));
 
     res.status(200).json({
@@ -408,9 +372,8 @@ router.get('/users/:userId/progress', async (req: Request, res: Response) => {
       where: { id: userId },
       select: {
         id: true,
-        name: true,
-        healthScore: true,
-        onboardingComplete: true,
+        firstName: true,
+        lastName: true,
       }
     });
 
@@ -421,23 +384,20 @@ router.get('/users/:userId/progress', async (req: Request, res: Response) => {
       });
     }
 
-    const [completedMissions, totalActiveMissions] = await Promise.all([
-      prisma.achievement.count({
-        where: { userId }
-      }),
-      prisma.mission.count({
-        where: { isActive: true }
-      })
-    ]);
+    // Use helper to get comprehensive stats
+    const stats = await getUserGamificationStats(userId);
+    const totalActiveMissions = await prisma.mission.count({
+      where: { isActive: true }
+    });
 
     const progress = {
       userId,
-      name: user.name,
-      healthScore: user.healthScore,
-      onboardingComplete: user.onboardingComplete,
-      completedMissions,
+      name: `${user.firstName} ${user.lastName}`,
+      completedMissions: stats.achievementsCount, // Using achievementsCount as proxy for completed missions
       totalActiveMissions,
-      completionRate: totalActiveMissions > 0 ? (completedMissions / totalActiveMissions) * 100 : 0
+      completionRate: totalActiveMissions > 0 ? (stats.achievementsCount / totalActiveMissions) * 100 : 0,
+      totalPoints: stats.currentPoints,
+      level: stats.level
     };
 
     res.status(200).json({

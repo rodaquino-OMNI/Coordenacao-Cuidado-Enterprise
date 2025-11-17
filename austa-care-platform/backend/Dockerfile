@@ -30,7 +30,8 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 
 # Install all dependencies (including dev)
-RUN npm ci
+# Using npm install due to lock file sync issues
+RUN npm install
 
 # Copy source code
 COPY src ./src
@@ -39,7 +40,36 @@ COPY prisma ./prisma
 # Build TypeScript
 RUN npm run build
 
-# Stage 3: Production
+# Stage 3: Development
+FROM node:18-alpine AS development
+WORKDIR /app
+
+# Install development dependencies
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig*.json ./
+
+# Install all dependencies (including dev)
+# Using npm install due to lock file sync issues
+RUN npm install
+
+# Copy source code
+COPY src ./src
+COPY prisma ./prisma
+COPY tests ./tests
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Expose port
+EXPOSE 3000
+
+# Start in development mode with hot reload
+CMD ["npm", "run", "dev"]
+
+# Stage 4: Production
 FROM node:18-alpine AS production
 WORKDIR /app
 

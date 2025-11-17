@@ -3,7 +3,7 @@
  */
 
 import { Redis, Cluster } from 'ioredis';
-import { redisClient } from '../redis.cluster';
+import { redisCluster } from '../redis.cluster';
 import { logger } from '../../../utils/logger';
 
 export type RedisClient = Redis | Cluster;
@@ -22,11 +22,11 @@ export class RedisClientGuardError extends Error {
 }
 
 export function getRedisClientOrThrow(): RedisClient {
-  const client = redisClient.getClient();
+  const client = redisCluster.getClient();
   if (!client) {
     const error = new RedisClientGuardError(
       'Redis client unavailable. Ensure Redis cluster is initialized and connected.',
-      { isAvailable: redisClient.isRedisAvailable(), timestamp: Date.now() }
+      { isAvailable: redisCluster.isRedisAvailable(), timestamp: Date.now() }
     );
     logger.error('Redis client access failed', { error: error.message, code: error.code });
     throw error;
@@ -35,14 +35,14 @@ export function getRedisClientOrThrow(): RedisClient {
 }
 
 export function getRedisClientSafe(): RedisClient | null {
-  return redisClient.getClient();
+  return redisCluster.getClient();
 }
 
 export async function withRedisClient<T>(
   operation: (client: RedisClient) => Promise<T>,
   fallback?: () => Promise<T>
 ): Promise<T> {
-  const client = redisClient.getClient();
+  const client = redisCluster.getClient();
   if (!client) {
     if (fallback) {
       logger.warn('Redis client unavailable, using fallback strategy');
@@ -90,8 +90,8 @@ export interface RedisHealthStatus {
 }
 
 export async function checkRedisHealth(): Promise<RedisHealthStatus> {
-  const client = redisClient.getClient();
-  const isAvailable = redisClient.isRedisAvailable();
+  const client = redisCluster.getClient();
+  const isAvailable = redisCluster.isRedisAvailable();
   if (!client) {
     return { isHealthy: false, hasClient: false, isAvailable, timestamp: Date.now(), error: 'Redis client not initialized' };
   }

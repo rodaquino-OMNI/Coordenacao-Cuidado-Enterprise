@@ -1,6 +1,25 @@
 # Multi-stage build for production-ready React frontend
 
-# Stage 1: Build
+# Stage 1: Development
+FROM node:18-alpine AS development
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Copy source code
+COPY . .
+
+# Expose development port
+EXPOSE 3000
+
+# Start development server
+CMD ["npm", "start"]
+
+# Stage 2: Build
 FROM node:18-alpine AS build
 WORKDIR /app
 
@@ -16,7 +35,7 @@ COPY . .
 # Build application
 RUN npm run build
 
-# Stage 2: Production with Nginx
+# Stage 3: Production with Nginx
 FROM nginx:alpine AS production
 
 # Install curl for health checks

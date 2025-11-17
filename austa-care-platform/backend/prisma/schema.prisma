@@ -1,0 +1,612 @@
+// AUSTA Care Platform - Prisma Schema
+// Brazilian Healthcare System with HIPAA/LGPD Compliance
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+model Organization {
+  id                   String              @id @default(uuid())
+  name                 String
+  type                 OrganizationType
+  taxId                String              @unique // CNPJ
+  address              Json
+  phone                String
+  email                String
+  isActive             Boolean             @default(true)
+  hipaaCompliant       Boolean             @default(true)
+  dataRetentionYears   Int                 @default(7)
+  settings             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  users                User[]
+  providers            Provider[]
+  tasyIntegrations     TasyIntegration[]
+
+  @@index([taxId])
+  @@index([type])
+  @@map("organizations")
+}
+
+enum OrganizationType {
+  HOSPITAL
+  CLINIC
+  LABORATORY
+  PHARMACY
+  TELEMEDICINE
+}
+
+model User {
+  id                   String              @id @default(uuid())
+  firstName            String
+  lastName             String
+  email                String              @unique
+  phone                String              @unique
+  cpf                  String?             @unique
+  password             String?
+  dateOfBirth          DateTime?
+  gender               Gender?
+  avatar               String?
+  role                 UserRole            @default(PATIENT)
+  status               UserStatus          @default(ACTIVE)
+  organizationId       String
+  tenantId             String?
+  permissions          String[]
+  metadata             Json?
+  preferences          Json?
+  emailVerified        Boolean             @default(false)
+  phoneVerified        Boolean             @default(false)
+  lastLoginAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  healthData           HealthData[]
+  documents            Document[]
+  authorizations       Authorization[]
+  conversations        Conversation[]
+  messages             Message[]
+  healthPoints         HealthPoints[]
+  pointTransactions    PointTransaction[]
+  onboardingProgress   OnboardingProgress[]
+  auditLogs            AuditLog[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([cpf])
+  @@index([organizationId])
+  @@index([role, status])
+  @@map("users")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+  PATIENT
+  PRACTITIONER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+model Provider {
+  id                   String              @id @default(uuid())
+  firstName            String
+  lastName             String
+  email                String              @unique
+  phone                String
+  license              String?             @unique // CRM, COREN, etc.
+  specialty            String[]
+  organizationId       String
+  role                 ProviderRole
+  isActive             Boolean             @default(true)
+  bio                  String?
+  avatar               String?
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authorizations       Authorization[]
+  conversations        Conversation[]
+  messages             Message[]
+
+  @@index([email])
+  @@index([license])
+  @@index([organizationId])
+  @@index([role])
+  @@map("providers")
+}
+
+enum ProviderRole {
+  DOCTOR
+  NURSE
+  PHARMACIST
+  THERAPIST
+  TECHNICIAN
+  ADMINISTRATOR
+}
+
+// ============================================
+// HEALTH DATA MODELS
+// ============================================
+
+model HealthData {
+  id                   String              @id @default(uuid())
+  userId               String
+  type                 HealthDataType
+  value                Json
+  unit                 String?
+  source               String?
+  recordedAt           DateTime            @default(now())
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([recordedAt])
+  @@map("health_data")
+}
+
+enum HealthDataType {
+  BLOOD_PRESSURE
+  HEART_RATE
+  WEIGHT
+  HEIGHT
+  BLOOD_GLUCOSE
+  TEMPERATURE
+  OXYGEN_SATURATION
+  MEDICATION
+  SYMPTOM
+  DIAGNOSIS
+  ALLERGY
+  VACCINATION
+  LAB_RESULT
+  IMAGING
+  OTHER
+}
+
+model Document {
+  id                   String              @id @default(uuid())
+  userId               String
+  type                 DocumentType
+  fileName             String
+  fileUrl              String
+  fileSize             Int
+  mimeType             String
+  description          String?
+  metadata             Json?
+  extractedText        String?
+  ocrProcessed         Boolean             @default(false)
+  isEncrypted          Boolean             @default(true)
+  isVerified           Boolean             @default(false)
+  verifiedAt           DateTime?
+  verifiedBy           String?
+  expiresAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+enum DocumentType {
+  MEDICAL_REPORT
+  PRESCRIPTION
+  LAB_RESULT
+  IMAGING
+  AUTHORIZATION
+  INSURANCE_CARD
+  ID_DOCUMENT
+  CONSENT_FORM
+  OTHER
+}
+
+// ============================================
+// AUTHORIZATION MODELS
+// ============================================
+
+model Authorization {
+  id                   String              @id @default(uuid())
+  userId               String
+  providerId           String
+  organizationId       String?
+  type                 AuthorizationType
+  procedureName        String
+  procedureCode        String?
+  status               AuthorizationStatus @default(PENDING)
+  priority             AuthorizationPriority @default(ROUTINE)
+  requestedAt          DateTime            @default(now())
+  approvedAt           DateTime?
+  deniedAt             DateTime?
+  expiresAt            DateTime?
+  reason               String?
+  notes                String?
+  documents            String[]
+  metadata             Json?
+  aiScore              Float?
+  aiRecommendation     String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             Provider            @relation(fields: [providerId], references: [id])
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([status])
+  @@index([type])
+  @@map("authorizations")
+}
+
+enum AuthorizationType {
+  PROCEDURE
+  MEDICATION
+  HOSPITALIZATION
+  CONSULTATION
+  EXAM
+  SURGERY
+  THERAPY
+  EMERGENCY
+  OTHER
+}
+
+enum AuthorizationStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+  CANCELLED
+  IN_REVIEW
+}
+
+enum AuthorizationPriority {
+  ROUTINE
+  URGENT
+  EMERGENCY
+}
+
+// ============================================
+// COMMUNICATION MODELS
+// ============================================
+
+model Conversation {
+  id                   String              @id @default(uuid())
+  userId               String
+  providerId           String?
+  channel              CommunicationChannel
+  status               ConversationStatus  @default(ACTIVE)
+  metadata             Json?
+  lastMessageAt        DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             Provider?           @relation(fields: [providerId], references: [id])
+  messages             Message[]
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([channel])
+  @@index([status])
+  @@map("conversations")
+}
+
+enum CommunicationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  IN_APP
+  VOICE
+  VIDEO
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  CLOSED
+}
+
+model Message {
+  id                   String              @id @default(uuid())
+  conversationId       String
+  userId               String?
+  providerId           String?
+  content              String
+  contentType          MessageContentType  @default(TEXT)
+  direction            MessageDirection
+  status               MessageStatus       @default(SENT)
+  metadata             Json?
+  readAt               DateTime?
+  deliveredAt          DateTime?
+  sentAt               DateTime            @default(now())
+  createdAt            DateTime            @default(now())
+
+  // Relations
+  conversation         Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user                 User?               @relation(fields: [userId], references: [id])
+  provider             Provider?           @relation(fields: [providerId], references: [id])
+
+  @@index([conversationId])
+  @@index([userId])
+  @@index([providerId])
+  @@index([sentAt])
+  @@map("messages")
+}
+
+enum MessageContentType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ============================================
+// GAMIFICATION MODELS
+// ============================================
+
+model HealthPoints {
+  id                   String              @id @default(uuid())
+  userId               String              @unique
+  currentPoints        Int                 @default(0)
+  lifetimePoints       Int                 @default(0)
+  level                Int                 @default(1)
+  streak               Int                 @default(0)
+  longestStreak        Int                 @default(0)
+  lastActivityAt       DateTime?
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         PointTransaction[]
+
+  @@index([userId])
+  @@index([level])
+  @@map("health_points")
+}
+
+model PointTransaction {
+  id                   String              @id @default(uuid())
+  userId               String
+  healthPointsId       String
+  points               Int
+  type                 PointTransactionType
+  reason               String
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  healthPoints         HealthPoints        @relation(fields: [healthPointsId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([healthPointsId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("point_transactions")
+}
+
+enum PointTransactionType {
+  EARNED
+  SPENT
+  BONUS
+  PENALTY
+  STREAK
+  ACHIEVEMENT
+}
+
+model Mission {
+  id                   String              @id @default(uuid())
+  title                String
+  description          String
+  type                 MissionType
+  category             MissionCategory
+  difficulty           MissionDifficulty
+  points               Int
+  requirements         Json
+  reward               Json?
+  isActive             Boolean             @default(true)
+  startDate            DateTime?
+  endDate              DateTime?
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([type])
+  @@index([category])
+  @@index([difficulty])
+  @@index([isActive])
+  @@map("missions")
+}
+
+enum MissionType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ACHIEVEMENT
+  SPECIAL
+}
+
+enum MissionCategory {
+  HEALTH_TRACKING
+  MEDICATION_ADHERENCE
+  APPOINTMENT_ATTENDANCE
+  DOCUMENT_UPLOAD
+  HEALTH_EDUCATION
+  SOCIAL_ENGAGEMENT
+  PREVENTIVE_CARE
+}
+
+enum MissionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+model OnboardingProgress {
+  id                   String              @id @default(uuid())
+  userId               String              @unique
+  currentStep          String
+  completedSteps       String[]
+  metadata             Json?
+  isCompleted          Boolean             @default(false)
+  completedAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("onboarding_progress")
+}
+
+// ============================================
+// INTEGRATION MODELS
+// ============================================
+
+model TasyIntegration {
+  id                   String              @id @default(uuid())
+  organizationId       String
+  endpoint             String
+  credentials          Json                // Encrypted
+  isActive             Boolean             @default(true)
+  lastSyncAt           DateTime?
+  syncFrequency        Int                 @default(3600) // seconds
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // Relations
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncLogs             TasySyncLog[]
+
+  @@index([organizationId])
+  @@map("tasy_integrations")
+}
+
+model TasySyncLog {
+  id                   String              @id @default(uuid())
+  integrationId        String
+  syncType             String
+  status               SyncStatus
+  recordsProcessed     Int                 @default(0)
+  recordsSuccess       Int                 @default(0)
+  recordsFailed        Int                 @default(0)
+  error                String?
+  metadata             Json?
+  startedAt            DateTime            @default(now())
+  completedAt          DateTime?
+
+  // Relations
+  integration          TasyIntegration     @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("tasy_sync_logs")
+}
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+// ============================================
+// AUDIT & SECURITY MODELS
+// ============================================
+
+model AuditLog {
+  id                   String              @id @default(uuid())
+  userId               String?
+  action               AuditAction
+  resource             String
+  resourceId           String?
+  changes              Json?
+  ipAddress            String?
+  userAgent            String?
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+
+  // Relations
+  user                 User?               @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  IMPORT
+  APPROVE
+  DENY
+  ARCHIVE
+}
