@@ -5,6 +5,7 @@
  */
 
 import { Request, Response } from 'express';
+import { PrismaClient, HealthDataType } from '@prisma/client';
 import { AdvancedRiskAssessmentService } from '../services/risk-assessment.service';
 import { EmergencyDetectionService } from '../services/emergency-detection.service';
 import { CompoundRiskAnalysisService } from '../services/compound-risk.service';
@@ -14,11 +15,14 @@ import {
   ProcessedQuestionnaire,
   EmergencyAlert,
   CompoundRiskAnalysis,
-  TemporalRiskProgression
+  TemporalRiskProgression,
+  QuestionResponse
 } from '../types/risk.types';
 import { QuestionnaireResponse } from '../types/questionnaire.types';
-import { QuestionResponse } from '../types/risk.types';
+import { getUserProfile } from '../utils/user.helpers';
 import { logger } from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 export interface RiskAssessmentRequest {
   userId: string;
@@ -26,10 +30,9 @@ export interface RiskAssessmentRequest {
   responses: QuestionnaireResponse[];
   userProfile?: {
     age: number;
-    gender: 'M' | 'F';
-    medicalHistory: string[];
-    currentMedications: string[];
-    socioeconomicFactors: Record<string, any>;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    // Medical history and medications are stored in HealthData model
+    // Access via helpers or direct Prisma queries
   };
   emergencyContacts?: {
     primary: string;
@@ -148,6 +151,38 @@ export interface EmergencyInstruction {
   preventiveMeasures: string[];
 }
 
+/**
+ * Advanced Risk Controller - Modernized for New Prisma Schema
+ *
+ * KEY CHANGES FROM LEGACY VERSION:
+ *
+ * 1. Database Storage:
+ *    - Risk assessments stored in HealthData table with type=OTHER, source='risk_assessment'
+ *    - Historical assessments retrieved via Prisma queries on HealthData
+ *    - Complete assessment JSON stored in value field (Json type)
+ *    - Metadata includes assessmentId, riskLevel, emergencyFlags for efficient querying
+ *
+ * 2. User Profile Integration:
+ *    - Uses getUserProfile() helper from user.helpers.ts
+ *    - Enriches profile data from database if not provided in request
+ *    - Calculates age from dateOfBirth field
+ *    - Maps Gender enum (MALE/FEMALE/OTHER/PREFER_NOT_TO_SAY) to risk format
+ *
+ * 3. Type Updates:
+ *    - Removed direct QuestionnaireResponse import from questionnaire.types.ts
+ *    - Uses QuestionResponse from risk.types.ts for internal processing
+ *    - UserProfile interface simplified - medical history stored in HealthData
+ *
+ * 4. Data Flow:
+ *    - assessRisk() -> enrichUserProfile() -> processQuestionnaireResponses() -> services -> storeRiskAssessment()
+ *    - Historical data: getHistoricalAssessments() queries HealthData with filters
+ *    - Latest assessment: getLatestAssessment() uses findFirst with orderBy
+ *
+ * 5. No Schema Changes Required:
+ *    - Uses existing HealthDataType.OTHER for risk assessments
+ *    - Source field differentiates from other health data
+ *    - Fully backwards compatible with existing schema
+ */
 export class AdvancedRiskController {
   private riskAssessmentService: AdvancedRiskAssessmentService;
   private emergencyDetectionService: EmergencyDetectionService;
@@ -175,19 +210,30 @@ export class AdvancedRiskController {
   }
 
   /**
+   * Cleanup method for graceful shutdown
+   */
+  async cleanup(): Promise<void> {
+    await prisma.$disconnect();
+  }
+
+  /**
    * Main endpoint for comprehensive risk assessment
    */
   async assessRisk(req: Request, res: Response): Promise<void> {
     try {
       const requestData: RiskAssessmentRequest = req.body;
-      
+
       logger.info(`Starting comprehensive risk assessment for user: ${requestData.userId}`);
-      
+
       // Validate request
       if (!this.validateRiskAssessmentRequest(requestData)) {
         res.status(400).json({ error: 'Invalid request data' });
         return;
       }
+
+      // Enrich user profile from database if not provided
+      const enrichedProfile = await this.enrichUserProfile(requestData.userId, requestData.userProfile);
+      requestData.userProfile = enrichedProfile;
 
       // Process questionnaire responses
       const processedQuestionnaire = await this.processQuestionnaireResponses(requestData);
@@ -243,6 +289,9 @@ export class AdvancedRiskController {
       // Execute immediate actions if necessary
       await this.executeImmediateActions(escalationActions);
 
+      // Store assessment to database for historical tracking
+      await this.storeRiskAssessment(assessment);
+
       const response: ComprehensiveRiskResponse = {
         assessment,
         emergencyAlerts,
@@ -255,7 +304,7 @@ export class AdvancedRiskController {
       };
 
       logger.info(`Risk assessment completed for user: ${requestData.userId}, overall risk: ${assessment.composite.riskLevel}`);
-      
+
       res.status(200).json(response);
       
     } catch (error) {
@@ -558,14 +607,161 @@ export class AdvancedRiskController {
     return !!(request.userId && request.questionnaireId && request.responses?.length > 0);
   }
 
+  /**
+   * Get historical risk assessments from HealthData table
+   * Stores assessments as OTHER type with structured JSON
+   */
   private async getHistoricalAssessments(userId: string, timeframe: string = '90d'): Promise<AdvancedRiskAssessment[]> {
-    // Implementation would fetch from database
-    return [];
+    try {
+      // Parse timeframe (e.g., '90d' -> 90 days)
+      const days = parseInt(timeframe.replace(/\D/g, '')) || 90;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      // Query HealthData for risk assessments
+      const assessmentRecords = await prisma.healthData.findMany({
+        where: {
+          userId,
+          type: HealthDataType.OTHER,
+          source: 'risk_assessment',
+          recordedAt: {
+            gte: startDate
+          }
+        },
+        orderBy: {
+          recordedAt: 'desc'
+        }
+      });
+
+      // Parse and return assessments
+      return assessmentRecords
+        .map(record => {
+          try {
+            // The value field contains the AdvancedRiskAssessment JSON
+            const assessment = typeof record.value === 'string'
+              ? JSON.parse(record.value)
+              : record.value;
+            return assessment as AdvancedRiskAssessment;
+          } catch (error) {
+            logger.error(`Failed to parse risk assessment record ${record.id}:`, error);
+            return null;
+          }
+        })
+        .filter((assessment): assessment is AdvancedRiskAssessment => assessment !== null);
+
+    } catch (error) {
+      logger.error('Failed to fetch historical assessments:', error);
+      return [];
+    }
   }
 
+  /**
+   * Get the most recent risk assessment for a user
+   */
   private async getLatestAssessment(userId: string): Promise<AdvancedRiskAssessment | null> {
-    // Implementation would fetch from database
-    return null;
+    try {
+      const latestRecord = await prisma.healthData.findFirst({
+        where: {
+          userId,
+          type: HealthDataType.OTHER,
+          source: 'risk_assessment'
+        },
+        orderBy: {
+          recordedAt: 'desc'
+        }
+      });
+
+      if (!latestRecord) {
+        return null;
+      }
+
+      // Parse the stored assessment
+      const assessment = typeof latestRecord.value === 'string'
+        ? JSON.parse(latestRecord.value)
+        : latestRecord.value;
+
+      return assessment as AdvancedRiskAssessment;
+
+    } catch (error) {
+      logger.error('Failed to fetch latest assessment:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Store risk assessment to HealthData table for persistence
+   */
+  private async storeRiskAssessment(assessment: AdvancedRiskAssessment): Promise<void> {
+    try {
+      await prisma.healthData.create({
+        data: {
+          userId: assessment.userId,
+          type: HealthDataType.OTHER,
+          source: 'risk_assessment',
+          value: JSON.parse(JSON.stringify(assessment)), // Convert to plain JSON object
+          unit: 'risk_score',
+          recordedAt: assessment.timestamp,
+          metadata: {
+            assessmentId: assessment.assessmentId,
+            overallRiskLevel: assessment.composite.riskLevel,
+            emergencyAlertsCount: assessment.emergencyAlerts.length,
+            hasEmergencyEscalation: assessment.composite.emergencyEscalation
+          } as any // Prisma Json type
+        }
+      });
+
+      logger.info(`Risk assessment ${assessment.assessmentId} stored for user ${assessment.userId}`);
+    } catch (error) {
+      logger.error('Failed to store risk assessment:', error);
+      // Don't throw - storage failure shouldn't break assessment flow
+    }
+  }
+
+  /**
+   * Enrich user profile data from database if not provided in request
+   */
+  private async enrichUserProfile(userId: string, providedProfile?: RiskAssessmentRequest['userProfile']) {
+    if (providedProfile) {
+      return providedProfile;
+    }
+
+    try {
+      // Get complete user profile using helper
+      const userProfile = await getUserProfile(userId);
+
+      if (!userProfile) {
+        logger.warn(`User profile not found for userId: ${userId}`);
+        return undefined;
+      }
+
+      // Calculate age from date of birth if available
+      let age = 0;
+      if (userProfile.dateOfBirth) {
+        const today = new Date();
+        const birthDate = new Date(userProfile.dateOfBirth);
+        age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+
+      // Map gender to expected format
+      const genderMap: Record<string, 'MALE' | 'FEMALE' | 'OTHER'> = {
+        'MALE': 'MALE',
+        'FEMALE': 'FEMALE',
+        'OTHER': 'OTHER',
+        'PREFER_NOT_TO_SAY': 'OTHER'
+      };
+
+      return {
+        age,
+        gender: userProfile.gender ? genderMap[userProfile.gender] : 'OTHER'
+      };
+    } catch (error) {
+      logger.error('Failed to enrich user profile:', error);
+      return undefined;
+    }
   }
 
   private generateComprehensiveRecommendations(

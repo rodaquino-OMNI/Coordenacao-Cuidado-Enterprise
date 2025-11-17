@@ -483,3 +483,60 @@ mutation-report/
 austa-care-platform/backend/dist/
 austa-care-platform/frontend/dist/
 austa-care-platform/*/build/
+
+# ==========================================
+# Swarm Coordination Additional Patterns
+# ==========================================
+# Environment creator tracking files
+.swarm/env-creator-*.txt
+**/env-creator-*.txt
+
+# Swarm session JWT tokens (sensitive)
+.swarm/*-jwt.txt
+.swarm/*-token.txt
+.swarm/credentials.json
+
+# Memory database WAL and SHM files (already covered but explicit for swarm)
+.swarm/*.db-shm
+.swarm/*.db-wal
+
+# ==========================================
+# Vite Specific (Frontend Build Tool)
+# ==========================================
+# Vite build outputs
+.vite/
+vite.config.*.timestamp-*
+.vite-temp/
+
+# ==========================================
+# TypeScript Additional Patterns
+# ==========================================
+# TypeScript incremental compilation
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ==========================================
+# Monorepo / Workspace Patterns
+# ==========================================
+# Turborepo cache
+.turbo/
+turbo.json.cache
+
+# Nx cache (if using Nx)
+.nx/cache/
+.nx/workspace-data/
+
+# Rush (if using Rush)
+common/temp/
+common/deploy/
+
+# ==========================================
+# Additional Runtime Caches
+# ==========================================
+# Next.js cache (if frontend uses Next.js)
+.next/
+next-env.d.ts
+
+# Nuxt.js cache
+.nuxt/
+.output/

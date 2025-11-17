@@ -67,7 +67,7 @@ export const sendMessageSchema = z.object({
       .max(5000, { message: 'Mensagem deve ter no máximo 5000 caracteres' }),
 
     attachments: z.array(z.object({
-      type: z.enum(['IMAGE', 'DOCUMENT', 'AUDIO', 'VIDEO']),
+      type: z.enum(['TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT', 'LOCATION']),
       url: z.string().url({ message: 'URL do anexo inválida' }),
       filename: z.string(),
       size: z.number().positive({ message: 'Tamanho deve ser positivo' }),
