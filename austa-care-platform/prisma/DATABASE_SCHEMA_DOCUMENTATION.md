@@ -2,15 +2,15 @@
 
 ## 🏥 Overview
 
-This document describes the comprehensive database schema for the Austa Care Platform, a HIPAA-compliant healthcare platform with WhatsApp integration, gamification, and AI-powered health assistance.
+This document describes the comprehensive database schema for the Austa Care Platform, a LGPD-compliant healthcare platform with WhatsApp integration, gamification, and AI-powered health assistance for Brazilian health plans.
 
 ## 🏗️ Architecture Principles
 
-### HIPAA Compliance
+### LGPD & ANVISA/ANS Compliance (Brazilian Regulations)
 - **Encryption at Rest**: Sensitive health data is encrypted at the application level
 - **Audit Trail**: Complete audit logging for all data access and modifications
 - **Access Controls**: Role-based access with multi-level permissions
-- **Data Retention**: Configurable retention policies (default 7 years)
+- **Data Retention**: Configurable retention policies (default 7 years per LGPD)
 - **Soft Deletes**: Records are marked as deleted rather than physically removed
 
 ### Performance Optimization
@@ -34,14 +34,14 @@ This document describes the comprehensive database schema for the Austa Care Pla
 
 **Key Features**:
 - CNPJ-based unique identification for Brazilian healthcare facilities
-- HIPAA compliance tracking
+- LGPD compliance tracking
 - Configurable data retention policies
 - Structured address storage (JSONB)
 - Organization-specific settings and configurations
 
 **Important Fields**:
 - `taxId`: Brazilian CNPJ (unique)
-- `hipaaCompliant`: Compliance status flag
+- `lgpdCompliant`: Compliance status flag
 - `dataRetentionYears`: Configurable retention period
 - `settings`: Organization-specific configurations (WhatsApp Business ID, features, etc.)
 
@@ -211,7 +211,7 @@ This document describes the comprehensive database schema for the Austa Care Pla
 - OCR text extraction with confidence scoring
 - AI-powered health data extraction
 - Encryption for sensitive documents
-- HIPAA-compliant retention policies
+- LGPD-compliant retention policies
 
 **OCR & AI**:
 - `ocrText`: Extracted text content
@@ -249,15 +249,14 @@ This document describes the comprehensive database schema for the Austa Care Pla
 **Purpose**: Complete system activity tracking
 
 **Key Features**:
-- HIPAA and LGPD compliance logging
+- LGPD (Brazilian privacy law) compliance logging
 - Risk level assessment
 - Sensitive data access tracking
 - IP address and user agent logging
 - Cross-entity relationship tracking
 
 **Compliance**:
-- `hipaaRelevant`: HIPAA-related activities
-- `lgpdRelevant`: Brazilian privacy law compliance
+- `lgpdRelevant`: LGPD/ANVISA/ANS compliance-relevant activities
 - `sensitiveData`: Sensitive data access flag
 - `requiresReview`: Manual review requirement
 
@@ -285,8 +284,8 @@ CREATE INDEX "health_data_userId_type_isActive_idx" ON "health_data"("userId", "
 -- Audit log queries
 CREATE INDEX "audit_logs_organizationId_occurredAt_idx" ON "audit_logs"("organizationId", "occurredAt");
 
--- HIPAA compliance queries
-CREATE INDEX "audit_logs_hipaaRelevant_lgpdRelevant_idx" ON "audit_logs"("hipaaRelevant", "lgpdRelevant");
+-- LGPD/ANVISA/ANS compliance queries
+CREATE INDEX "audit_logs_lgpdRelevant_idx" ON "audit_logs"("lgpdRelevant");
 ```
 
 #### Gamification Performance
@@ -365,7 +364,7 @@ CREATE INDEX "point_transactions_userId_createdAt_idx" ON "point_transactions"("
 - System utilization metrics
 
 ### Compliance Reporting
-- HIPAA audit reports
+- LGPD audit reports
 - Data access logs
 - Retention compliance
 - Security incident tracking
@@ -471,4 +470,4 @@ CREATE INDEX "point_transactions_userId_createdAt_idx" ON "point_transactions"("
 
 ---
 
-This schema provides a robust foundation for the Austa Care Platform, ensuring HIPAA compliance, optimal performance, and seamless integration with WhatsApp Business API and Tasy ERP systems.
+This schema provides a robust foundation for the Austa Care Platform, ensuring LGPD/ANS/ANVISA compliance, optimal performance, and seamless integration with WhatsApp Business API and Tasy ERP systems.

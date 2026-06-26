@@ -9,7 +9,7 @@
  * - Gamification missions
  * - Authorization templates
  *
- * Context: Brazilian healthcare system with HIPAA/LGPD compliance
+ * Context: Brazilian healthcare system with LGPD/ANS/ANVISA compliance
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -67,7 +67,7 @@ async function main() {
         phone: '+55 11 5576-4000',
         email: 'contato@hospitalsaopaulo.com.br',
         isActive: true,
-        hipaaCompliant: true,
+        lgpdCompliant: true,
         dataRetentionYears: 7,
         settings: {
           timezone: 'America/Sao_Paulo',
@@ -96,7 +96,7 @@ async function main() {
         phone: '+55 11 3283-5000',
         email: 'contato@saudeevida.com.br',
         isActive: true,
-        hipaaCompliant: true,
+        lgpdCompliant: true,
         dataRetentionYears: 7,
         settings: {
           timezone: 'America/Sao_Paulo',
@@ -125,7 +125,7 @@ async function main() {
         phone: '+55 11 3768-9000',
         email: 'contato@diagnosticototal.com.br',
         isActive: true,
-        hipaaCompliant: true,
+        lgpdCompliant: true,
         dataRetentionYears: 10,
       },
     }),
@@ -907,7 +907,6 @@ async function main() {
           entity: 'User',
           riskLevel: 'LOW',
           sensitiveData: true,
-          hipaaRelevant: true,
           lgpdRelevant: true,
         },
       },
@@ -927,7 +926,6 @@ async function main() {
           entity: 'Authorization',
           riskLevel: 'MEDIUM',
           sensitiveData: true,
-          hipaaRelevant: true,
           lgpdRelevant: true,
         },
       },
@@ -946,7 +944,6 @@ async function main() {
           entity: 'HealthData',
           riskLevel: 'LOW',
           sensitiveData: true,
-          hipaaRelevant: true,
           lgpdRelevant: true,
         },
       },

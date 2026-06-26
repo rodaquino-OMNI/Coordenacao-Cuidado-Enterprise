@@ -22,7 +22,7 @@ async function main() {
       },
       phone: '+55 11 3456-7890',
       email: 'contato@hospitalsaopaulo.com.br',
-      hipaaCompliant: true,
+      lgpdCompliant: true,
       settings: {
         whatsappBusinessId: 'wa-business-001',
         defaultLanguage: 'pt-BR',
@@ -52,7 +52,7 @@ async function main() {
       },
       phone: '+55 11 9876-5432',
       email: 'contato@vidasaudavel.com.br',
-      hipaaCompliant: true,
+      lgpdCompliant: true,
       settings: {
         whatsappBusinessId: 'wa-business-002',
         defaultLanguage: 'pt-BR',
@@ -630,7 +630,6 @@ async function main() {
           phone: users[0].phone
         },
         riskLevel: 'LOW',
-        hipaaRelevant: true,
         lgpdRelevant: true,
         ipAddress: '192.168.1.100',
         userAgent: 'Mozilla/5.0 (WhatsApp Business API)'
@@ -650,7 +649,7 @@ async function main() {
         },
         riskLevel: 'MEDIUM',
         sensitiveData: true,
-        hipaaRelevant: true,
+        lgpdRelevant: true,
         requiresReview: false
       }
     })

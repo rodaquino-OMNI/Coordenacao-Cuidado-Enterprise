@@ -1,7 +1,7 @@
 {
   "name": "austa-care-platform",
   "version": "1.0.0",
-  "description": "HIPAA-compliant healthcare platform with WhatsApp integration and gamification",
+  "description": "LGPD-compliant healthcare coordination platform for Brazilian health plans with WhatsApp integration and gamification",
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -60,7 +60,10 @@
   "keywords": [
     "healthcare",
     "whatsapp",
-    "hipaa",
+    "lgpd",
+    "ans",
+    "anvisa",
+    "saude-suplementar",
     "telemedicine",
     "gamification",
     "ai",

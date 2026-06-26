@@ -239,10 +239,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check HIPAA Compliance
+      - name: Check LGPD/ANS/ANVISA Compliance
         run: |
-          # Run custom HIPAA compliance checks
-          ./scripts/security/hipaa-compliance-check.sh
+          # Run custom LGPD compliance checks
+          ./scripts/security/lgpd-compliance-check.sh
 
       - name: Check SOC2 Compliance
         run: |

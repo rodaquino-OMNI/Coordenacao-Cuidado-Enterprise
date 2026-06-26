@@ -163,7 +163,7 @@ export class MedicalSafetyError extends TextractError {
 }
 
 export class ComplianceError extends TextractError {
-  constructor(message: string, complianceType: 'HIPAA' | 'LGPD' | 'FDA', details: any = {}) {
+  constructor(message: string, complianceType: 'LGPD' | 'ANS' | 'ANVISA', details: any = {}) {
     super(
       message,
       'COMPLIANCE_ERROR',
@@ -294,7 +294,7 @@ export class TextractErrorFactory {
   }
 
   static createComplianceError(
-    complianceType: 'HIPAA' | 'LGPD' | 'FDA',
+    complianceType: 'LGPD' | 'ANS' | 'ANVISA',
     violation: string,
     details: any = {}
   ): ComplianceError {

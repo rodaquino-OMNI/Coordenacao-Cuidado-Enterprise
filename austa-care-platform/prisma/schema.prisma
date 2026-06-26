@@ -1,5 +1,5 @@
 // Austa Care Platform - Comprehensive Prisma Database Schema
-// HIPAA-compliant, multi-tenant healthcare platform with WhatsApp integration
+// LGPD-compliant, multi-tenant healthcare platform with WhatsApp integration for Brazilian health plans
 
 generator client {
   provider = "prisma-client-js"
@@ -25,8 +25,8 @@ model Organization {
   isActive Boolean          @default(true)
   settings Json? // Organization-specific configurations
 
-  // HIPAA & Compliance
-  hipaaCompliant     Boolean @default(false)
+  // LGPD & ANVISA/ANS Compliance
+  lgpdCompliant      Boolean @default(false)
   dataRetentionYears Int     @default(7)
 
   // Timestamps & Audit
@@ -621,7 +621,7 @@ model Document {
   // Document Lifecycle
   isActive       Boolean   @default(true)
   archivedAt     DateTime?
-  retentionUntil DateTime? // HIPAA retention requirements
+  retentionUntil DateTime? // LGPD/ANS data retention requirements
 
   // Timestamps & Audit
   uploadedAt DateTime  @default(now())
@@ -889,9 +889,8 @@ model AuditLog {
   sensitiveData  Boolean   @default(false)
   requiresReview Boolean   @default(false)
 
-  // Compliance
-  hipaaRelevant Boolean @default(false)
-  lgpdRelevant  Boolean @default(false) // Brazilian privacy law
+  // Compliance (Brazilian regulations)
+  lgpdRelevant  Boolean @default(false) // Brazilian privacy law (LGPD)
 
   // Metadata
   metadata Json?
@@ -914,7 +913,7 @@ model AuditLog {
   @@index([userId, action])
   @@index([entity, entityId])
   @@index([riskLevel, sensitiveData])
-  @@index([hipaaRelevant, lgpdRelevant])
+  @@index([riskLevel, lgpdRelevant])
   @@map("audit_logs")
 }
 

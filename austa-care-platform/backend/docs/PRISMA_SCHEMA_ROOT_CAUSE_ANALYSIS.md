@@ -197,7 +197,7 @@ prisma.vitalSign.count()
 - Normalized User model with split fields
 - Generic models: Mission (replaces Achievement), HealthData (replaces VitalSign)
 - Separate relation tables: HealthPoints, OnboardingProgress
-- HIPAA/LGPD compliance focus
+- LGPD/ANS/ANVISA compliance focus
 - Multi-organization tenancy
 ```
 
@@ -228,7 +228,7 @@ prisma.vitalSign.count()
 1. Migration `20251117135809_init` ran successfully
 2. Database structure is modern and compliant
 3. Schema follows enterprise best practices
-4. Includes HIPAA/LGPD compliance features
+4. Includes LGPD/ANS/ANVISA compliance features
 5. Properly normalized data model
 
 **The controllers are outdated and need modernization**
@@ -253,7 +253,7 @@ Controllers expect 18+ missing fields/models:
 ### 🎯 OPTION A: MODERNIZE CONTROLLERS (RECOMMENDED)
 
 **Rationale:**
-- Current schema is enterprise-grade, HIPAA-compliant design
+- Current schema is enterprise-grade, LGPD-compliant design
 - Better data normalization
 - Follows industry best practices
 - Future-proof architecture
@@ -324,7 +324,7 @@ prisma.questionnaireResponse → prisma.healthData.create({ type: 'OTHER' })
 **Implementation:**
 1. Create new migration to add removed models
 2. Add removed fields to User model
-3. Lose HIPAA compliance features
+3. Lose LGPD compliance features
 4. Revert to monolithic design
 
 **Estimated Effort:** 2-4 hours
@@ -398,7 +398,7 @@ export async function getUserHealthScore(userId: string): Promise<number> {
 - ✅ All tests passing
 - ✅ API endpoints functional
 - ✅ Data integrity maintained
-- ✅ HIPAA/LGPD compliance preserved
+- ✅ LGPD/ANS/ANVISA compliance preserved
 
 ### Validation Commands:
 ```bash
@@ -436,7 +436,7 @@ curl http://localhost:3000/health
 
 | Criteria | Option A (Modernize) | Option B (Revert) |
 |----------|---------------------|-------------------|
-| **Compliance** | ✅ HIPAA/LGPD Ready | ❌ Non-compliant |
+| **Compliance** | ✅ LGPD/ANS/ANVISA Ready | ❌ Non-compliant |
 | **Scalability** | ✅ Excellent | ❌ Poor |
 | **Effort** | 8-12 hours | 2-4 hours |
 | **Risk** | Medium | High |
@@ -524,7 +524,7 @@ Total Errors: 160+
 
 **TIMELINE:** 1-2 days development effort
 
-**OUTCOME:** Modern, scalable, HIPAA-compliant healthcare platform
+**OUTCOME:** Modern, scalable, LGPD-compliant healthcare platform for Brazilian health plans
 
 ---
 

@@ -1,6 +1,6 @@
 -- Austa Care Platform - Initial Database Migration
 -- This migration creates the complete schema with all required tables, indexes, and constraints
--- HIPAA-compliant, multi-tenant healthcare platform with WhatsApp integration
+-- LGPD-compliant, multi-tenant healthcare platform with WhatsApp integration for Brazilian health plans
 
 -- Enable necessary PostgreSQL extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

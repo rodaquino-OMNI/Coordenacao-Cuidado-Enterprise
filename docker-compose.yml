@@ -6,9 +6,9 @@ services:
     image: postgres:15-alpine
     container_name: austa-postgres
     environment:
-      POSTGRES_USER: austa_user
-      POSTGRES_PASSWORD: austa_password
-      POSTGRES_DB: austa_care
+      POSTGRES_USER: ${POSTGRES_USER:-austa_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: ${POSTGRES_DB:-austa_care}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=pt_BR.UTF-8 --lc-ctype=pt_BR.UTF-8"
     ports:
       - "5432:5432"
@@ -49,10 +49,12 @@ services:
     ports:
       - "3000:3000"
       - "9229:9229"  # Debug port
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://austa_user:austa_password@postgres:5432/austa_care?schema=public
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -106,8 +108,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: austa-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@austa.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@austa.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-change_me_in_production}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "8080:80"

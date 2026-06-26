@@ -1,0 +1,62 @@
+# Staging Environment Variables
+# Copy this file to terraform.tfvars and update with actual values
+
+# General Configuration
+project_name = "austa-care"
+environment  = "staging"
+aws_region   = "sa-east-1"
+
+# Networking Configuration
+vpc_cidr = "10.1.0.0/16"
+availability_zones = ["sa-east-1a", "sa-east-1b"]
+
+public_subnet_cidrs = [
+  "10.1.1.0/24",  # sa-east-1a
+  "10.1.2.0/24",  # sa-east-1b
+]
+
+private_subnet_cidrs = [
+  "10.1.11.0/24", # sa-east-1a
+  "10.1.12.0/24", # sa-east-1b
+]
+
+database_subnet_cidrs = [
+  "10.1.21.0/24", # sa-east-1a
+  "10.1.22.0/24", # sa-east-1b
+]
+
+# EKS Configuration
+eks_cluster_version = "1.28"
+eks_node_groups = {
+  general = {
+    instance_types = ["m5.large"]
+    min_size       = 1
+    max_size       = 3
+    desired_size   = 1
+    disk_size      = 50
+  }
+}
+
+# Database Configuration
+rds_instance_class      = "db.t4g.medium"
+rds_allocated_storage   = 20
+rds_engine_version      = "15.6"
+rds_backup_retention    = 7
+rds_multi_az           = false
+rds_deletion_protection = false
+
+# Redis Configuration
+redis_node_type         = "cache.t4g.micro"
+redis_num_cache_nodes   = 1
+redis_engine_version    = "7.0"
+redis_automatic_failover = false
+
+# Tags
+tags = {
+  Project     = "AUSTA Care Platform"
+  Environment = "Staging"
+  ManagedBy   = "Terraform"
+  Owner       = "DevOps Team"
+  CostCenter  = "Engineering"
+  Compliance  = "LGPD"
+}

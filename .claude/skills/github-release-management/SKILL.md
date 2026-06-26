@@ -673,7 +673,7 @@ npx claude-flow github release-security \
 ```bash
 # Ensure regulatory compliance
 npx claude-flow github release-compliance \
-  --standards "SOC2,GDPR,HIPAA" \
+  --standards "SOC2,GDPR,LGPD" \
   --license-audit \
   --data-governance \
   --audit-trail \

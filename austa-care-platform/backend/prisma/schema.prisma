@@ -1,5 +1,5 @@
 // AUSTA Care Platform - Prisma Schema
-// Brazilian Healthcare System with HIPAA/LGPD Compliance
+// Brazilian Healthcare System with LGPD/ANS/ANVISA Compliance
 
 generator client {
   provider = "prisma-client-js"
@@ -24,7 +24,7 @@ model Organization {
   phone                String
   email                String
   isActive             Boolean             @default(true)
-  hipaaCompliant       Boolean             @default(true)
+  lgpdCompliant       Boolean             @default(true)
   dataRetentionYears   Int                 @default(7)
   settings             Json?
   createdAt            DateTime            @default(now())

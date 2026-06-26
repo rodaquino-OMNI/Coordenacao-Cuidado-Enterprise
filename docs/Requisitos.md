@@ -405,8 +405,8 @@ Notification
 
 **Compliance Framework:**
 - **LGPD:** Consentimento granular, direito ao esquecimento, portabilidade
-- **HIPAA:** BAA com Meta, audit trails, access controls
 - **ANS:** Relatórios automatizados, SLA compliance
+- **ANVISA:** Classificação de software como dispositivo médico (RDC 657/2022)
 - **ISO 27001:** Security management system
 
 ### 4.3 Observabilidade e Monitoramento

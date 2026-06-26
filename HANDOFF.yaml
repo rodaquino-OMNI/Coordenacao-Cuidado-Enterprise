@@ -1,0 +1,55 @@
+# HANDOFF.yaml — Bloqueios Críticos
+# Coordenação-Cuidado Enterprise / AUSTA Care Platform
+# Gerado por: Parreira (Orquestrador DevOps)
+# Data: 2026-06-26
+
+blocked:
+  - id: "BLK-001"
+    what: "Classificação ANVISA SaMD pendente"
+    reason: "Plataforma realiza scoring clínico e detecção de emergências — requer classificação como Software as Medical Device (RDC 657/2022) antes de processar dados reais de pacientes"
+    severity: "🔴 CRITICAL"
+    opened: "2026-06-26"
+    opened_by: "parreira"
+    owner_type: "Especialista regulatório ANVISA + Diretor Médico"
+
+  - id: "BLK-002"
+    what: "Confusão HIPAA/LGPD no código e documentação (EM RESOLUÇÃO)"
+    reason: "15+ referências a HIPAA em schema, docs, e package.json. HIPAA NÃO se aplica ao Brasil. Substituindo por LGPD/ANS/ANVISA."
+    severity: "🔴 CRITICAL"
+    opened: "2026-06-26"
+    opened_by: "parreira"
+    owner_type: "DPO/Encarregado LGPD + CTO"
+
+  - id: "BLK-003"
+    what: "Validação clínica dos algoritmos de scoring pendente"
+    reason: "Risk assessment (1564 linhas), emergency detection (579 linhas), e questionário de onboarding (958 linhas) implementam lógica clínica sem validação por equipe médica"
+    severity: "🔴 CRITICAL"
+    opened: "2026-06-26"
+    opened_by: "parreira"
+    owner_type: "Diretor Médico + Especialistas clínicos"
+
+  - id: "BLK-004"
+    what: "RIPD (Relatório de Impacto à Proteção de Dados) não iniciado"
+    reason: "LGPD Art. 38 exige RIPD para tratamento de dados sensíveis de saúde em larga escala. Obrigatório antes de processar dados reais."
+    severity: "🟠 HIGH"
+    opened: "2026-06-26"
+    opened_by: "parreira"
+    owner_type: "DPO/Encarregado LGPD"
+
+  - id: "BLK-005"
+    what: "6 invariantes de healthcare MVP não verificados"
+    reason: "Antes do primeiro paciente real: (1) audit trail imutável, (2) idempotência de mensagens, (3) versionamento de algoritmos, (4) criptografia em repouso, (5) health check + dead man's switch, (6) retry com backoff. Apenas #1 parcialmente implementado."
+    severity: "🟠 HIGH"
+    opened: "2026-06-26"
+    opened_by: "parreira"
+    owner_type: "Tech Lead + DevOps"
+
+  - id: "BLK-006"
+    what: "Região AWS incorreta — us-east-1 (EUA) em vez de sa-east-1 (Brasil)"
+    reason: "Terraform tfvars.example configura aws_region = us-east-1. Dados de pacientes brasileiros seriam processados nos EUA, violando LGPD Art. 33 (transferência internacional sem safeguards)"
+    severity: "🔴 CRITICAL"
+    opened: "2026-06-26"
+    opened_by: "compliance-agent"
+    owner_type: "DevOps + DPO"
+
+completed: []

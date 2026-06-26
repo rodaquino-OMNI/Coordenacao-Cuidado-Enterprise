@@ -4,7 +4,7 @@
 [![Phase](https://img.shields.io/badge/Phase-Week%2010%20of%2012-blue)](https://github.com/austa-health/austa-care-platform)
 [![Platform](https://img.shields.io/badge/Platform-WhatsApp%20Business%20API-green)](https://business.whatsapp.com/)
 [![AI](https://img.shields.io/badge/AI-GPT--4%20Powered-blue)](https://openai.com/gpt-4)
-[![Compliance](https://img.shields.io/badge/Compliance-LGPD%20%7C%20HIPAA-red)](https://www.gov.br/cidadania/pt-br/acesso-a-informacao/lgpd)
+[![Compliance](https://img.shields.io/badge/Compliance-LGPD%20%7C%20ANS%20%7C%20ANVISA-green)](https://www.gov.br/anpd/pt-br)
 [![Cloud](https://img.shields.io/badge/Cloud-AWS%20%7C%20GCP-orange)](https://aws.amazon.com/)
 
 ## 🚀 Transforming Healthcare Through AI-Powered Care Coordination
@@ -416,8 +416,8 @@ This is a proprietary project. Team members should:
 
 ## 🔒 Security & Compliance
 
-- **LGPD Compliant**: Full Brazilian data protection
-- **HIPAA Ready**: US healthcare standards
+- **LGPD Compliant**: Full Brazilian data protection (Lei 13.709/2018)
+- **ANS/ANVISA Aligned**: Brazilian healthcare regulatory framework
 - **ISO 27001**: In progress
 - **SOC 2**: Planned for Q2 2025
 - **End-to-end Encryption**: All data channels

@@ -2,7 +2,7 @@
 
 ## 🏥 Overview
 
-This directory contains the complete database schema and configuration for the Austa Care Platform, a HIPAA-compliant healthcare platform with WhatsApp integration.
+This directory contains the complete database schema and configuration for the Austa Care Platform, a LGPD-compliant healthcare platform with WhatsApp integration for Brazilian health plans.
 
 ## 📁 Directory Structure
 
@@ -76,13 +76,14 @@ npm run db:studio
 - **AuditLogs**: Complete compliance tracking
 
 ### Key Features
-- 🔐 **HIPAA Compliance**: End-to-end encryption, audit trails
+- 🔐 **LGPD Compliance**: End-to-end encryption, audit trails
 - 🏥 **Multi-Tenant**: Organization-based data isolation
 - 💬 **WhatsApp Integration**: Business API support
 - 🤖 **AI Processing**: Health data extraction and intent detection
 - 🎮 **Gamification**: Points, badges, and missions
 - 🔗 **ERP Integration**: Tasy system synchronization
 - 📄 **Document OCR**: Automated health data extraction
+- 📋 **ANS/ANVISA Ready**: Brazilian healthcare regulatory compliance
 
 ## 🛠️ Development Commands
 
@@ -134,8 +135,8 @@ npm run validate
 - Row-level security (PostgreSQL RLS)
 
 ### Compliance
-- HIPAA audit trails
-- LGPD (Brazilian privacy law) compliance
+- LGPD (Brazilian General Data Protection Law) audit trails
+- ANS/ANVISA regulatory compliance
 - 7-year data retention policies
 - Secure deletion procedures
 
@@ -260,7 +261,9 @@ npx tsx prisma/seed/development.ts
 
 - [Prisma Documentation](https://www.prisma.io/docs/)
 - [PostgreSQL Performance Tuning](https://wiki.postgresql.org/wiki/Performance_Optimization)
-- [HIPAA Compliance Guide](https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html)
+- [LGPD Compliance Guide](https://www.gov.br/anpd/pt-br)
+- [ANS Regulatory Framework](https://www.gov.br/ans)
+- [ANVISA Medical Device Regulation](https://www.gov.br/anvisa)
 - [WhatsApp Business API](https://developers.facebook.com/docs/whatsapp)
 
 ## 🤝 Contributing
@@ -269,7 +272,7 @@ npx tsx prisma/seed/development.ts
 2. Add appropriate indexes for new queries
 3. Update documentation for schema changes
 4. Include migration tests
-5. Verify HIPAA compliance for health data
+5. Verify LGPD/ANS compliance for health data
 
 ---
 

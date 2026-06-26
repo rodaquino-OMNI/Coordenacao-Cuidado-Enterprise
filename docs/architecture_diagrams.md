@@ -492,7 +492,7 @@ graph TB
 - Assess security posture via **Security Architecture**
 
 ### For Compliance Teams
-- Validate data flows for LGPD/HIPAA compliance
+- Validate data flows for LGPD/ANS/ANVISA compliance
 - Review security controls implementation
 - Audit integration patterns for regulatory requirements
 

@@ -131,7 +131,7 @@ The AUSTA platform schema includes:
 ### Integration Models
 - **TasyIntegration**: Tasy ERP integration configuration
 - **TasySyncLog**: Synchronization logs
-- **AuditLog**: HIPAA/LGPD compliance audit trail
+- **AuditLog**: LGPD/ANS/ANVISA compliance audit trail
 
 ## Seed Data Overview
 
@@ -232,7 +232,7 @@ Before deploying to production:
 
 3. **Configure backups:**
    - Daily automated backups
-   - Retention policy (7 years for HIPAA)
+   - Retention policy (7 years per LGPD)
    - Disaster recovery plan
 
 4. **Enable audit logging:**

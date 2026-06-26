@@ -271,7 +271,7 @@ Implemented production-ready WebSocket server and ML Pipeline infrastructure for
    - Burst protection (10 events/second)
 
 4. **Data Protection**
-   - HIPAA compliance ready
+   - LGPD/ANS/ANVISA compliance ready
    - Secure WebSocket connections
    - Encrypted data transmission
    - Audit logging

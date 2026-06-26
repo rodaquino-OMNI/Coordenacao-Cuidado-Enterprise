@@ -4,28 +4,28 @@
 # General Configuration
 project_name = "austa-care"
 environment  = "production"
-aws_region   = "us-east-1"
+aws_region   = "sa-east-1"
 
 # Networking Configuration
 vpc_cidr = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+availability_zones = ["sa-east-1a", "sa-east-1b", "sa-east-1c"]
 
 public_subnet_cidrs = [
-  "10.0.1.0/24",  # us-east-1a
-  "10.0.2.0/24",  # us-east-1b
-  "10.0.3.0/24"   # us-east-1c
+  "10.0.1.0/24",  # sa-east-1a
+  "10.0.2.0/24",  # sa-east-1b
+  "10.0.3.0/24"   # sa-east-1c
 ]
 
 private_subnet_cidrs = [
-  "10.0.11.0/24", # us-east-1a
-  "10.0.12.0/24", # us-east-1b
-  "10.0.13.0/24"  # us-east-1c
+  "10.0.11.0/24", # sa-east-1a
+  "10.0.12.0/24", # sa-east-1b
+  "10.0.13.0/24"  # sa-east-1c
 ]
 
 database_subnet_cidrs = [
-  "10.0.21.0/24", # us-east-1a
-  "10.0.22.0/24", # us-east-1b
-  "10.0.23.0/24"  # us-east-1c
+  "10.0.21.0/24", # sa-east-1a
+  "10.0.22.0/24", # sa-east-1b
+  "10.0.23.0/24"  # sa-east-1c
 ]
 
 # EKS Configuration
@@ -100,5 +100,5 @@ tags = {
   ManagedBy   = "Terraform"
   Owner       = "DevOps Team"
   CostCenter  = "Engineering"
-  Compliance  = "LGPD,HIPAA"
+  Compliance  = "LGPD,ANS,ANVISA"
 }
