@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CommunicationChannel, MessageContentType, prismaEnumToZod } from '../../../types/core/enums';
+import { prismaEnumToZod, MessageType } from '../../../types/core/enums';
 
 // Base event schema
 export const BaseEventSchema = z.object({
@@ -37,7 +37,7 @@ export const ConversationStartedEventSchema = BaseEventSchema.extend({
   data: z.object({
     conversationId: z.string(),
     userId: z.string(),
-    channel: z.enum(prismaEnumToZod(CommunicationChannel)),
+    channel: z.enum(['WHATSAPP', 'SMS', 'EMAIL', 'IN_APP', 'VOICE']),
     type: z.enum(['SUPPORT', 'ONBOARDING', 'HEALTH_CHECK', 'MEDICATION_REMINDER', 'APPOINTMENT', 'EMERGENCY', 'SURVEY']),
     context: z.object({
       previousConversationId: z.string().optional(),
@@ -54,7 +54,7 @@ export const MessageReceivedEventSchema = BaseEventSchema.extend({
     conversationId: z.string(),
     userId: z.string(),
     content: z.string(),
-    type: z.enum(prismaEnumToZod(MessageContentType)),
+    type: z.enum(prismaEnumToZod(MessageType)),
     whatsappMessageId: z.string().optional(),
     metadata: z.record(z.string(), z.any()).optional(),
   }),

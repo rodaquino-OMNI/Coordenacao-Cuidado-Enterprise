@@ -29,7 +29,7 @@ const upload = multer({
 const createDocumentSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
   type: z.enum([
-    'MEDICAL_REPORT',
+    'MEDICAL_RECORD',
     'PRESCRIPTION',
     'LAB_RESULT',
     'IMAGING',
@@ -70,18 +70,35 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
 
     const validated = createDocumentSchema.parse(req.body);
 
+    // Get user's organizationId
+    const userOrg = await prisma.user.findUnique({
+      where: { id: validated.userId },
+      select: { organizationId: true }
+    });
+
+    if (!userOrg) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+
     // In production, upload to S3 or cloud storage
     const fileUrl = `uploads/${Date.now()}-${req.file.originalname}`;
 
     const document = await prisma.document.create({
       data: {
         userId: validated.userId,
-        type: validated.type,
+        organizationId: userOrg.organizationId,
+        type: validated.type === 'MEDICAL_REPORT' ? 'MEDICAL_RECORD' : validated.type as any,
         description: validated.description,
-        fileName: req.file.originalname,
-        fileUrl,
+        filename: req.file.originalname,
+        originalName: req.file.originalname,
         mimeType: req.file.mimetype,
-        fileSize: req.file.size,
+        size: req.file.size,
+        storagePath: fileUrl,
+        fileUrl,
+        category: 'MEDICAL',
         metadata: validated.metadata || {},
       },
       include: {
@@ -404,6 +421,19 @@ router.post('/batch', upload.array('files', 10), async (req: Request, res: Respo
       });
     }
 
+    // Get user's organizationId
+    const userOrg = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true }
+    });
+
+    if (!userOrg) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+
     const uploadedDocuments = await Promise.all(
       req.files.map(async (file) => {
         const fileUrl = `uploads/${Date.now()}-${file.originalname}`;
@@ -411,12 +441,16 @@ router.post('/batch', upload.array('files', 10), async (req: Request, res: Respo
         return prisma.document.create({
           data: {
             userId,
-            type,
+            organizationId: userOrg.organizationId,
+            type: type === 'MEDICAL_REPORT' ? 'MEDICAL_RECORD' : type as any,
             description: description || '',
-            fileName: file.originalname,
+            filename: file.originalname,
+            originalName: file.originalname,
             fileUrl,
             mimeType: file.mimetype,
-            fileSize: file.size,
+            size: file.size,
+            storagePath: fileUrl,
+            category: 'MEDICAL',
             metadata: {},
           }
         });

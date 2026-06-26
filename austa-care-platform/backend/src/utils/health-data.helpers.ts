@@ -1,4 +1,4 @@
-import { PrismaClient, HealthDataType, Prisma } from '@prisma/client';
+import { PrismaClient, HealthDataType, DataSource, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -47,13 +47,15 @@ export async function recordVitalSign(
   return prisma.healthData.create({
     data: {
       userId,
+      organizationId: '',
+      category: 'GENERAL',
       type: data.type,
-      value: data.value, // Will be coerced to Json
-      unit: data.unit,
+      value: data.value,
+      vitalSigns: data.unit ? { unit: data.unit } : undefined,
       recordedAt: data.recordedAt || new Date(),
       metadata: data.notes ? { notes: data.notes } : undefined,
-      source: data.source || 'manual'
-    }
+      source: DataSource.USER_REPORTED
+    } as any
   });
 }
 
@@ -124,7 +126,7 @@ export async function getVitalSignsInRange(
 export async function getBloodPressureReadings(userId: string, limit: number = 50) {
   return getVitalSigns(
     userId,
-    [HealthDataType.BLOOD_PRESSURE],
+    [HealthDataType.VITAL_SIGN],
     limit
   );
 }
@@ -136,7 +138,7 @@ export async function getBloodPressureReadings(userId: string, limit: number = 5
  * @returns Array of blood glucose records
  */
 export async function getBloodGlucoseReadings(userId: string, limit: number = 50) {
-  return getVitalSigns(userId, [HealthDataType.BLOOD_GLUCOSE], limit);
+  return getVitalSigns(userId, [HealthDataType.VITAL_SIGN], limit);
 }
 
 /**
@@ -146,7 +148,7 @@ export async function getBloodGlucoseReadings(userId: string, limit: number = 50
  * @returns Array of heart rate records
  */
 export async function getHeartRateReadings(userId: string, limit: number = 50) {
-  return getVitalSigns(userId, [HealthDataType.HEART_RATE], limit);
+  return getVitalSigns(userId, [HealthDataType.VITAL_SIGN], limit);
 }
 
 /**
@@ -156,7 +158,7 @@ export async function getHeartRateReadings(userId: string, limit: number = 50) {
  * @returns Array of weight records
  */
 export async function getWeightReadings(userId: string, limit: number = 50) {
-  return getVitalSigns(userId, [HealthDataType.WEIGHT], limit);
+  return getVitalSigns(userId, [HealthDataType.VITAL_SIGN], limit);
 }
 
 /**

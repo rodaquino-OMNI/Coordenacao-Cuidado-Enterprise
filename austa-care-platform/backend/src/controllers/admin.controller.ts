@@ -193,7 +193,7 @@ router.get('/analytics/conversations', async (req: Request, res: Response) => {
         totalConversations,
         activeConversations,
         byChannel: byChannel.reduce((acc, item) => {
-          acc[item.channel] = item._count.id;
+          acc[item.channel ?? 'unknown'] = item._count.id;
           return acc;
         }, {} as Record<string, number>),
         averageMessagesPerConversation: avgMessages

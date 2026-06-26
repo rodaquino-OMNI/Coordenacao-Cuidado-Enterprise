@@ -414,6 +414,7 @@ router.put('/system/config',
       await prisma.auditLog.create({
         data: {
           userId: req.user!.id,
+          organizationId: (req as any).user?.organizationId || '',
           action: 'UPDATE',
           entity: 'system_config',
           entityId: key,

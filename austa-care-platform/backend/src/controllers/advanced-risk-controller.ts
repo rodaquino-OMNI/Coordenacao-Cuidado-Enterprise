@@ -696,10 +696,11 @@ export class AdvancedRiskController {
       await prisma.healthData.create({
         data: {
           userId: assessment.userId,
+          organizationId: '',
+          category: 'GENERAL',
           type: HealthDataType.OTHER,
           source: DataSource.RISK_ASSESSMENT,
           value: JSON.parse(JSON.stringify(assessment)), // Convert to plain JSON object
-          unit: 'risk_score',
           recordedAt: assessment.timestamp,
           metadata: {
             assessmentId: assessment.assessmentId,

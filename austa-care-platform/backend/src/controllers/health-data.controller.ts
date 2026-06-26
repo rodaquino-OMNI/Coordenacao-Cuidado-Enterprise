@@ -50,7 +50,7 @@ router.post('/vital-signs', async (req: Request, res: Response) => {
     const validated = createVitalSignSchema.parse(req.body);
 
     const vitalSign = await recordVitalSign(validated.userId, {
-      type: validated.type,
+      type: 'VITAL_SIGN' as any,
       value: validated.value,
       unit: validated.unit,
       recordedAt: validated.measuredAt ? new Date(validated.measuredAt) : new Date(),

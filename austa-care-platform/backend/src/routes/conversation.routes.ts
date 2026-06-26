@@ -11,10 +11,10 @@ import { z } from 'zod';
 import {
   PrismaClient,
   ConversationStatus,
-  CommunicationChannel,
   MessageDirection,
-  MessageContentType,
+  MessageType,
 } from '@prisma/client';
+import { MessageContentType, CommunicationChannel } from '../types/core/enums';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateRequest, validateQuery, validateParams } from '../middleware/validation';
 import { defaultRateLimiter, strictRateLimiter } from '../middleware/rateLimiter';
@@ -75,7 +75,7 @@ function mapStatus(status?: string): ConversationStatus | undefined {
   const mapping: Record<string, ConversationStatus> = {
     active: ConversationStatus.ACTIVE,
     archived: ConversationStatus.ARCHIVED,
-    closed: ConversationStatus.CLOSED,
+    closed: ConversationStatus.COMPLETED,
   };
   return status ? mapping[status] : undefined;
 }
@@ -104,9 +104,21 @@ router.post('/',
     try {
       const { userId, channelType, metadata } = req.body;
 
+      // Get user's organizationId
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
       const conversation = await prisma.conversation.create({
         data: {
           userId,
+          whatsappChatId: `conv_${userId}_${Date.now()}`,
+          organizationId: user.organizationId,
           channel: mapChannelType(channelType),
           status: ConversationStatus.ACTIVE,
           metadata: metadata || {},
@@ -520,7 +532,7 @@ router.get('/:conversationId/summary',
       // In production, this would invoke an AI service; here we derive
       // a data-driven summary from the stored messages and metadata.
       const messageCount = conversation._count.messages;
-      const textMessages = conversation.messages.filter(m => m.contentType === MessageContentType.TEXT);
+      const textMessages = conversation.messages.filter(m => m.type === MessageContentType.TEXT);
       const userMessages = textMessages.filter(m => m.direction === MessageDirection.INBOUND);
       const lastMessages = textMessages.slice(-3);
 
@@ -534,7 +546,7 @@ router.get('/:conversationId/summary',
         status: conversation.status,
         lastMessageAt: conversation.lastMessageAt,
         recentMessages: lastMessages.map(m => ({
-          content: m.content.length > 100 ? m.content.substring(0, 97) + '...' : m.content,
+          content: m.content ? (m.content.length > 100 ? m.content.substring(0, 97) + '...' : m.content) : '',
           direction: m.direction,
           timestamp: m.createdAt,
         })),
@@ -579,7 +591,7 @@ router.get('/stats/overview',
         prisma.conversation.count({ where: { status: ConversationStatus.ARCHIVED } }),
 
         // Closed conversations
-        prisma.conversation.count({ where: { status: ConversationStatus.CLOSED } }),
+        prisma.conversation.count({ where: { status: ConversationStatus.COMPLETED } }),
 
         // Total messages
         prisma.message.count(),

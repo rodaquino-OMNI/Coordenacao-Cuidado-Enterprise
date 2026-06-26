@@ -133,6 +133,8 @@ router.post('/webhook',
                     conversation = await prisma.conversation.create({
                       data: {
                         userId: user.id,
+                        whatsappChatId: `wa_${message.from}_${Date.now()}`,
+                        organizationId: user.organizationId,
                         channel: 'WHATSAPP',
                         status: 'ACTIVE',
                         lastMessageAt: new Date(),
@@ -281,6 +283,8 @@ router.post('/send',
           conversation = await prisma.conversation.create({
             data: {
               userId: user.id,
+              whatsappChatId: `wa_${to}_${Date.now()}`,
+              organizationId: user.organizationId,
               channel: 'WHATSAPP',
               status: 'ACTIVE',
               lastMessageAt: new Date(),
@@ -736,6 +740,8 @@ router.post('/send-template',
           conversation = await prisma.conversation.create({
             data: {
               userId: user.id,
+              whatsappChatId: `wa_${to}_${Date.now()}`,
+              organizationId: user.organizationId,
               channel: 'WHATSAPP',
               status: 'ACTIVE',
               lastMessageAt: new Date(),

@@ -637,6 +637,7 @@ export class AuditService extends EventEmitter {
         data: {
           id: entry.id,
           userId,
+          organizationId: entry.organizationId || '',
           action: auditAction,
           entity,
           entityId: entry.authorizationId || null,
@@ -788,6 +789,7 @@ export class AuditService extends EventEmitter {
             data: {
               id: entry.id,
               userId,
+              organizationId: entry.organizationId || resolveOrganizationId() || '',
               action: auditAction,
               entity,
               entityId: entry.authorizationId || null,

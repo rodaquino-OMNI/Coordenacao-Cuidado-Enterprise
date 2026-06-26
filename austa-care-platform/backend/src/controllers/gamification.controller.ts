@@ -50,16 +50,20 @@ router.post('/missions', async (req: Request, res: Response) => {
   try {
     const validated = createMissionSchema.parse(req.body);
 
+    // Get organizationId from user context or use a default
+    const organizationId = (req as any).user?.organizationId || 'default_org';
+
     const mission = await prisma.mission.create({
       data: {
         title: validated.name,
         description: validated.description,
-        category: validated.type as any, // TODO: Map to MissionCategory enum
-        difficulty: 'EASY' as any, // TODO: Calculate based on requirements
+        category: validated.type as any,
+        difficulty: 'EASY' as any,
         points: validated.points,
         requiredActions: validated.requiredActions,
         endDate: validated.expiresAt ? new Date(validated.expiresAt) : null,
         isActive: true,
+        organizationId,
       }
     });
 

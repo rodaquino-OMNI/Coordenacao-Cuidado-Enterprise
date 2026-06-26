@@ -300,7 +300,8 @@ async function main() {
     prisma.healthData.create({
       data: {
         userId: users[0].id,
-        type: 'DIAGNOSIS',
+        type: 'CONDITION',
+        category: 'CARDIOLOGY',
         value: {
           primary: 'Hipertensão Arterial',
           secondary: [],
@@ -308,6 +309,7 @@ async function main() {
           severity: 'MODERATE',
         },
         source: 'PROVIDER_ENTERED',
+        organizationId: organizations[0].id,
         metadata: {
           category: 'CARDIOLOGY',
           verifiedBy: providers[0].id,
@@ -321,6 +323,7 @@ async function main() {
       data: {
         userId: users[0].id,
         type: 'MEDICATION',
+        category: 'CARDIOLOGY',
         value: {
           name: 'Losartana Potássica',
           dosage: '50mg',
@@ -330,6 +333,7 @@ async function main() {
           active: true,
         },
         source: 'PROVIDER_ENTERED',
+        organizationId: organizations[0].id,
         metadata: {
           category: 'CARDIOLOGY',
           verifiedBy: providers[0].id,
@@ -342,7 +346,8 @@ async function main() {
     prisma.healthData.create({
       data: {
         userId: users[1].id,
-        type: 'DIAGNOSIS',
+        type: 'CONDITION',
+        category: 'DIABETES',
         value: {
           primary: 'Diabetes Mellitus Tipo 2',
           diagnosedDate: '2019-06-20',
@@ -350,6 +355,7 @@ async function main() {
           underControl: true,
         },
         source: 'PROVIDER_ENTERED',
+        organizationId: organizations[0].id,
         metadata: {
           category: 'DIABETES',
           verifiedBy: providers[1].id,
@@ -363,6 +369,7 @@ async function main() {
       data: {
         userId: users[2].id,
         type: 'ALLERGY',
+        category: 'GENERAL',
         value: {
           allergen: 'Penicilina',
           reaction: 'Urticária',
@@ -370,6 +377,7 @@ async function main() {
           diagnosedDate: '2010-01-10',
         },
         source: 'USER_REPORTED',
+        organizationId: organizations[1].id,
         metadata: {
           category: 'GENERAL',
           sensitivityLevel: 'HIGHLY_SENSITIVE',
@@ -387,21 +395,18 @@ async function main() {
       data: {
         title: 'Bem-vindo ao AUSTA!',
         description: 'Complete seu cadastro e conecte seu WhatsApp',
-        type: 'ACHIEVEMENT',
         category: 'ONBOARDING',
         difficulty: 'EASY',
         points: 100,
-        requirements: {
+        requiredActions: {
           steps: [
             'Preencher dados pessoais',
             'Conectar WhatsApp',
             'Aceitar termos de uso',
           ],
         },
-        reward: {
-          badge: 'NEWCOMER',
-          estimatedTime: 10,
-        },
+        badgeReward: 'NEWCOMER',
+        estimatedTime: 10,
         isActive: true,
         metadata: {
           organizationId: organizations[0].id,
@@ -413,17 +418,14 @@ async function main() {
       data: {
         title: 'Primeira Consulta Agendada',
         description: 'Agende sua primeira consulta médica',
-        type: 'ACHIEVEMENT',
-        category: 'APPOINTMENT_ATTENDANCE',
+        category: 'ENGAGEMENT',
         difficulty: 'EASY',
         points: 150,
-        requirements: {
+        requiredActions: {
           steps: ['Agendar consulta'],
         },
-        reward: {
-          badge: 'FIRST_APPOINTMENT',
-          estimatedTime: 5,
-        },
+        badgeReward: 'FIRST_APPOINTMENT',
+        estimatedTime: 5,
         isActive: true,
         metadata: {
           organizationId: organizations[0].id,
@@ -435,20 +437,17 @@ async function main() {
       data: {
         title: 'Compartilhe seus Medicamentos',
         description: 'Cadastre os medicamentos que você utiliza',
-        type: 'ACHIEVEMENT',
         category: 'MEDICATION_ADHERENCE',
         difficulty: 'EASY',
         points: 200,
-        requirements: {
+        requiredActions: {
           steps: [
             'Acessar área de medicamentos',
             'Cadastrar pelo menos 1 medicamento',
           ],
         },
-        reward: {
-          badge: 'MEDICATION_MASTER',
-          estimatedTime: 15,
-        },
+        badgeReward: 'MEDICATION_MASTER',
+        estimatedTime: 15,
         isActive: true,
         metadata: {
           organizationId: organizations[0].id,
@@ -460,20 +459,17 @@ async function main() {
       data: {
         title: 'Atividade Física Regular',
         description: 'Pratique 30 minutos de atividade física por dia durante 7 dias',
-        type: 'WEEKLY',
         category: 'LIFESTYLE',
         difficulty: 'MEDIUM',
         points: 500,
-        requirements: {
+        requiredActions: {
           steps: [
             'Registrar atividade física por 7 dias consecutivos',
             'Mínimo 30 minutos por dia',
           ],
         },
-        reward: {
-          badge: 'FITNESS_CHAMPION',
-          estimatedTime: 210,
-        },
+        badgeReward: 'FITNESS_CHAMPION',
+        estimatedTime: 210,
         isActive: true,
         metadata: {
           organizationId: organizations[0].id,
@@ -485,20 +481,17 @@ async function main() {
       data: {
         title: 'Exames em Dia',
         description: 'Mantenha seus exames preventivos em dia',
-        type: 'ACHIEVEMENT',
         category: 'PREVENTIVE_CARE',
         difficulty: 'MEDIUM',
         points: 300,
-        requirements: {
+        requiredActions: {
           steps: [
             'Fazer check-up anual',
             'Enviar resultados de exames',
           ],
         },
-        reward: {
-          badge: 'HEALTH_GUARDIAN',
-          estimatedTime: 60,
-        },
+        badgeReward: 'HEALTH_GUARDIAN',
+        estimatedTime: 60,
         isActive: true,
         metadata: {
           organizationId: organizations[0].id,
@@ -515,6 +508,8 @@ async function main() {
     prisma.onboardingProgress.create({
       data: {
         userId: users[0].id,
+        missionId: missions[0].id,
+        organizationId: organizations[0].id,
         currentStep: 3,
         totalSteps: 3,
         status: 'COMPLETED',
@@ -536,6 +531,8 @@ async function main() {
     prisma.onboardingProgress.create({
       data: {
         userId: users[1].id,
+        missionId: missions[0].id,
+        organizationId: organizations[0].id,
         currentStep: 3,
         totalSteps: 3,
         status: 'COMPLETED',
@@ -563,6 +560,7 @@ async function main() {
     prisma.healthPoints.create({
       data: {
         userId: users[0].id,
+        organizationId: organizations[0].id,
         availablePoints: 350,
         totalPoints: 350,
         currentLevel: 2,
@@ -595,6 +593,7 @@ async function main() {
     prisma.healthPoints.create({
       data: {
         userId: users[1].id,
+        organizationId: organizations[0].id,
         availablePoints: 100,
         totalPoints: 100,
         currentLevel: 1,
@@ -630,6 +629,8 @@ async function main() {
         healthPointsId: healthPoints[0].id,
         missionId: missions[0].id,
         type: 'EARNED',
+        amount: 100,
+        sourceType: 'MISSION',
         points: 100,
         reason: 'Missão completada: Bem-vindo ao AUSTA!',
         metadata: {
@@ -646,6 +647,8 @@ async function main() {
         healthPointsId: healthPoints[0].id,
         missionId: missions[1].id,
         type: 'EARNED',
+        amount: 150,
+        sourceType: 'MISSION',
         points: 150,
         reason: 'Missão completada: Primeira Consulta Agendada',
         metadata: {
@@ -659,6 +662,8 @@ async function main() {
         userId: users[0].id,
         healthPointsId: healthPoints[0].id,
         type: 'EARNED',
+        amount: 100,
+        sourceType: 'ENGAGEMENT',
         points: 100,
         reason: 'Engajamento diário',
         metadata: {
@@ -682,10 +687,10 @@ async function main() {
         providerId: providers[0].id,
         organizationId: organizations[0].id,
         status: 'APPROVED',
-        priority: 'ROUTINE',
+        priority: 'NORMAL',
         requestedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
         approvedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         reason: 'Avaliação da função cardíaca em paciente hipertenso',
         notes: 'Paciente com HA controlada, sem sintomas atuais',
         metadata: {
@@ -712,7 +717,7 @@ async function main() {
         status: 'PENDING',
         priority: 'URGENT',
         requestedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         reason: 'Controle glicêmico inadequado com medicação oral',
         notes: 'HbA1c 8.5%, indicado início de insulinoterapia',
         metadata: {
@@ -733,6 +738,8 @@ async function main() {
     prisma.conversation.create({
       data: {
         userId: users[0].id,
+        whatsappChatId: 'chat_joao_silva_001',
+        organizationId: organizations[0].id,
         channel: 'WHATSAPP',
         status: 'ACTIVE',
         lastMessageAt: new Date(),
@@ -753,6 +760,8 @@ async function main() {
     prisma.conversation.create({
       data: {
         userId: users[1].id,
+        whatsappChatId: 'chat_maria_santos_001',
+        organizationId: organizations[0].id,
         channel: 'WHATSAPP',
         status: 'ACTIVE',
         lastMessageAt: new Date(),
@@ -855,14 +864,12 @@ async function main() {
   const tasyIntegration = await prisma.tasyIntegration.create({
     data: {
       organizationId: organizations[0].id,
-      endpoint: 'https://tasy.hospitalsaopaulo.com.br/api/v1',
-      credentials: {
-        apiKey: 'encrypted_api_key_here',
-        apiVersion: 'v1',
-      },
+      tasyInstanceUrl: 'https://tasy.hospitalsaopaulo.com.br/api/v1',
+      apiKey: 'encrypted_api_key_here',
+      apiVersion: 'v1',
       isActive: true,
       lastSyncAt: new Date(Date.now() - 60 * 60 * 1000),
-      syncFrequency: 300,
+      syncInterval: 300,
       metadata: {
         syncEnabled: true,
         nextSyncAt: new Date(Date.now() + 4 * 60 * 1000).toISOString(),
@@ -896,6 +903,7 @@ async function main() {
     prisma.auditLog.create({
       data: {
         userId: users[0].id,
+        organizationId: organizations[0].id,
         action: 'CREATE',
         entity: 'User',
         entityId: users[0].id,
@@ -914,6 +922,7 @@ async function main() {
     prisma.auditLog.create({
       data: {
         userId: users[0].id,
+        organizationId: organizations[0].id,
         action: 'CREATE',
         entity: 'Authorization',
         entityId: authorizations[0].id,
@@ -933,6 +942,7 @@ async function main() {
     prisma.auditLog.create({
       data: {
         userId: users[0].id,
+        organizationId: organizations[0].id,
         action: 'READ',
         entity: 'HealthData',
         entityId: healthData[0].id,

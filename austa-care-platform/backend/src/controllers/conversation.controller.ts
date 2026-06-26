@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, CommunicationChannel, ConversationStatus } from '@prisma/client';
+import { PrismaClient, ConversationStatus } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
 import { getFullName, getUserHealthScore, hasCompletedOnboarding } from '@/utils/user.helpers';
@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 // Zod validation schemas
 const createConversationSchema = z.object({
   userId: z.string().min(1, 'ID do usuário é obrigatório'),
-  channel: z.enum(['WHATSAPP', 'SMS', 'EMAIL', 'IN_APP', 'VOICE'], { errorMap: () => ({ message: 'Canal inválido' }) }).transform(val => val as CommunicationChannel),
+  channel: z.enum(['WHATSAPP', 'SMS', 'EMAIL', 'IN_APP', 'VOICE']),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -23,7 +23,7 @@ const createMessageSchema = z.object({
 });
 
 const updateConversationSchema = z.object({
-  status: z.enum(['ACTIVE', 'ARCHIVED', 'CLOSED']).transform(val => val as ConversationStatus).optional(),
+  status: z.enum(['ACTIVE', 'ARCHIVED', 'COMPLETED']).transform(val => val as ConversationStatus).optional(),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -42,9 +42,21 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const validated = createConversationSchema.parse(req.body);
 
+    // Get user's organizationId
+    const user = await prisma.user.findUnique({
+      where: { id: validated.userId },
+      select: { organizationId: true }
+    });
+
+    if (!user) {
+      return res.status(404).json(errorResponse(ErrorCode.NOT_FOUND, 'Usuário não encontrado'));
+    }
+
     const conversation = await prisma.conversation.create({
       data: {
         userId: validated.userId,
+        whatsappChatId: `conv_${validated.userId}_${Date.now()}`,
+        organizationId: user.organizationId,
         channel: validated.channel,
         status: ConversationStatus.ACTIVE,
         metadata: validated.metadata || {},

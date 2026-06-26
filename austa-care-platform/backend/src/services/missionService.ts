@@ -2,7 +2,7 @@ import { Mission, MissionStep, PersonaType, UserProfile } from '../types/ai';
 import { logger } from '../utils/logger';
 import { RedisService } from './redisService';
 import { prisma } from '../config/database';
-import type { PointTransactionType, MissionStatus } from '@prisma/client';
+import type { TransactionType, ProgressStatus } from '@prisma/client';
 
 export interface MissionProgress {
   userId: string;
@@ -235,17 +235,30 @@ export class MissionService {
       }
       
       // Fallback: check Prisma OnboardingProgress
-      const onboarding = await prisma.onboardingProgress.findUnique({
+      const onboarding = await prisma.onboardingProgress.findFirst({
         where: { userId },
       });
       
       if (onboarding) {
+        // Map OnboardingProgress to MissionProgress
+        // currentStep is a step index; derive mission from step range (4 steps per mission)
+        const missionIndex = Math.floor((onboarding.currentStep - 1) / 4);
+        const missionOrder = [
+          'mission_1_conhecer',
+          'mission_2_estilo_vida',
+          'mission_3_bem_estar',
+          'mission_4_saude_atual',
+          'mission_5_documentos'
+        ];
+        const currentMissionId = missionOrder[Math.min(missionIndex, missionOrder.length - 1)];
+        const currentStepId = `step_${onboarding.currentStep}`;
+        const totalProgress: number = onboarding.status === 'COMPLETED' ? 100 : onboarding.progress;
+
         const progress: MissionProgress = {
           userId,
-          currentMissionId: onboarding.currentStep.split(':')[0] || 'mission_1_conhecer',
-          currentStepId: onboarding.currentStep,
-          totalProgress: onboarding.isCompleted ? 100 : 
-            Math.round((onboarding.completedSteps.length / 20) * 100), // 20 total steps across 5 missions
+          currentMissionId,
+          currentStepId,
+          totalProgress,
           healthPoints: 0, // will be computed from PointTransaction
           badges: [],
           completedMissions: [], // derived from completed steps
@@ -306,42 +319,52 @@ export class MissionService {
       await this.redis.setex(progressKey, 86400 * 30, JSON.stringify(progress));
       
       // Persist to Prisma OnboardingProgress
-      const currentMission = this.missions.get(progress.currentMissionId);
-      const completedStepsCount = progress.completedMissions.length * 
-        (currentMission?.steps?.length || 4);
-      
-      const result = await prisma.onboardingProgress.upsert({
-        where: { userId: progress.userId },
-        create: {
-          userId: progress.userId,
-          currentStep: progress.currentStepId,
-          completedSteps: progress.completedMissions.flatMap(
-            mid => this.missions.get(mid)?.steps?.map(s => s.id) || []
-          ),
-          isCompleted: progress.totalProgress >= 100,
-          completedAt: progress.totalProgress >= 100 ? new Date() : null,
-          metadata: {
-            healthPoints: progress.healthPoints,
-            badges: progress.badges,
-            riskScore: progress.riskScore,
-            riskFlags: progress.riskFlags,
-          },
-        },
-        update: {
-          currentStep: progress.currentStepId,
-          completedSteps: progress.completedMissions.flatMap(
-            mid => this.missions.get(mid)?.steps?.map(s => s.id) || []
-          ),
-          isCompleted: progress.totalProgress >= 100,
-          completedAt: progress.totalProgress >= 100 ? new Date() : null,
-          metadata: {
-            healthPoints: progress.healthPoints,
-            badges: progress.badges,
-            riskScore: progress.riskScore,
-            riskFlags: progress.riskFlags,
-          },
-        },
+      // Extract step number from currentStepId (e.g., "step_1_1_apresentacao" -> 1)
+      const stepMatch = progress.currentStepId.match(/step_(\d+)_/);
+      const stepNumber = stepMatch ? parseInt(stepMatch[1], 10) : 1;
+      const isCompleted = progress.totalProgress >= 100;
+
+      // Use findFirst since OnboardingProgress has @@unique([userId, missionId])
+      const existing = await prisma.onboardingProgress.findFirst({
+        where: { userId: progress.userId, missionId: progress.currentMissionId },
       });
+
+      if (existing) {
+        await prisma.onboardingProgress.update({
+          where: { id: existing.id },
+          data: {
+            currentStep: stepNumber,
+            progress: progress.totalProgress,
+            status: isCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+            completedAt: isCompleted ? new Date() : null,
+            metadata: {
+              healthPoints: progress.healthPoints,
+              badges: progress.badges,
+              riskScore: progress.riskScore,
+              riskFlags: progress.riskFlags,
+            } as any,
+          },
+        });
+      } else {
+        await prisma.onboardingProgress.create({
+          data: {
+            userId: progress.userId,
+            missionId: progress.currentMissionId,
+            organizationId: '', // Will be filled by trigger/default
+            currentStep: stepNumber,
+            totalSteps: 4,
+            progress: progress.totalProgress,
+            status: isCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+            completedAt: isCompleted ? new Date() : null,
+            metadata: {
+              healthPoints: progress.healthPoints,
+              badges: progress.badges,
+              riskScore: progress.riskScore,
+              riskFlags: progress.riskFlags,
+            } as any,
+          } as any,
+        });
+      }
       
       logger.debug('User progress saved to Prisma and Redis', {
         userId: progress.userId,
@@ -549,13 +572,14 @@ export class MissionService {
         where: { userId },
         create: {
           userId,
+          organizationId: '',
           availablePoints: points,
           lifetimePoints: points,
           currentLevel: Math.floor(points / 100) + 1,
           streak: 1,
           longestStreak: 1,
           lastActivityAt: new Date(),
-        },
+        } as any,
         update: {
           availablePoints: { increment: points },
           lifetimePoints: { increment: points },
@@ -570,11 +594,13 @@ export class MissionService {
           userId,
           healthPointsId: healthPoints.id,
           missionId,
+          amount: points,
           points,
-          type: 'EARNED', // PointTransactionType.EARNED
+          type: 'EARNED',
+          sourceType: 'MISSION',
           reason: badge ? `Mission completed: ${badge}` : 'Mission completed',
           metadata: badge ? { badge } : undefined,
-        },
+        } as any,
       });
 
       logger.info('HealthPoints awarded via Prisma', {

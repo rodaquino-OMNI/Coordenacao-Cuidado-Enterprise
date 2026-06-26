@@ -163,12 +163,13 @@ router.post('/register',
       });
 
       // Generate tokens
-      const tokens = generateTokens(user.id, user.email);
+      const tokens = generateTokens(user.id, user.email || '');
 
       // Log registration
       await prisma.auditLog.create({
         data: {
           userId: user.id,
+          organizationId: organization.id,
           action: 'CREATE',
           entity: 'user',
           entityId: user.id,
@@ -229,7 +230,7 @@ router.post('/login',
       }
 
       // Generate tokens
-      const tokens = generateTokens(user.id, user.email, rememberMe);
+      const tokens = generateTokens(user.id, user.email || '', rememberMe);
 
       // Update last login
       await prisma.user.update({
@@ -241,6 +242,7 @@ router.post('/login',
       await prisma.auditLog.create({
         data: {
           userId: user.id,
+          organizationId: user.organizationId,
           action: 'LOGIN',
           entity: 'authentication',
           entityId: user.id,
@@ -281,9 +283,12 @@ router.post('/logout',
       const userId = req.user!.id;
 
       // Log logout
+      // Fetch user to get organizationId for audit
+      const logoutUser = await prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
       await prisma.auditLog.create({
         data: {
           userId,
+          organizationId: logoutUser?.organizationId || '',
           action: 'LOGOUT',
           entity: 'authentication',
           entityId: userId,
@@ -340,7 +345,7 @@ router.post('/refresh',
       }
 
       // Generate new tokens (token rotation)
-      const tokens = generateTokens(user.id, user.email);
+      const tokens = generateTokens(user.id, user.email || '');
 
       res.json({ tokens });
     } catch (error) {
@@ -460,6 +465,7 @@ router.post('/reset-password',
       await prisma.auditLog.create({
         data: {
           userId: user.id,
+          organizationId: user.organizationId,
           action: 'UPDATE',
           entity: 'password_reset',
           entityId: user.id,
@@ -523,6 +529,7 @@ router.post('/change-password',
       await prisma.auditLog.create({
         data: {
           userId,
+          organizationId: user.organizationId,
           action: 'UPDATE',
           entity: 'password_change',
           entityId: userId,

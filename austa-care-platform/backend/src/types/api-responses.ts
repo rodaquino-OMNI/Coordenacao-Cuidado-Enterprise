@@ -1,4 +1,4 @@
-import { UserStatus, UserRole, HealthDataType, MissionDifficulty } from '@prisma/client';
+import { UserStatus, UserRole, HealthDataType, DifficultyLevel } from '@prisma/client';
 
 /**
  * Standard API response wrapper
@@ -85,7 +85,7 @@ export interface AchievementData {
     id: string;
     title: string;
     description: string;
-    difficulty: MissionDifficulty;
+    difficulty: DifficultyLevel;
     category: string | null;
   } | null;
 }
@@ -98,7 +98,7 @@ export interface MissionData {
   title: string;
   description: string;
   requiredPoints: number;
-  difficulty: MissionDifficulty;
+  difficulty: DifficultyLevel;
   category: string | null;
   isCompleted?: boolean;
   createdAt: Date;

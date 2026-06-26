@@ -365,7 +365,9 @@ model Mission {
   pointsReward Int     @default(0)
   points       Int     @default(0)
   badgeReward  String?
+  metadata     Json?    // Extensible mission metadata
   unlockReward String? // What this mission unlocks
+  metadata     Json?
 
   // Requirements
   prerequisites   String[] // Mission IDs that must be completed first
@@ -420,6 +422,7 @@ model OnboardingProgress {
   attemptsCount   Int      @default(0)
   timeSpent       Int      @default(0) // Minutes
   lastInteraction DateTime @default(now())
+  metadata        Json?
 
   // Timestamps & Audit
   createdAt DateTime @default(now())
@@ -472,6 +475,7 @@ model HealthPoints {
   lastActivityAt DateTime @default(now())
   streak         Int      @default(0) // Current active streak
   lastActiveDate DateTime @default(now())
+  metadata       Json?
 
   // Timestamps & Audit
   createdAt DateTime @default(now())
@@ -563,6 +567,7 @@ model Authorization {
 
   // Documentation
   justification String?
+  reason        String?
   clinicalNotes String?
   attachments   String[] // Document IDs
 
@@ -628,7 +633,9 @@ model Document {
 
   // OCR & Processing
   hasOcr        Boolean   @default(false)
+  ocrProcessed  Boolean   @default(false)
   ocrText       String? // Extracted text
+  extractedText String? // OCR extracted text
   ocrConfidence Float? // OCR confidence score
   processedAt   DateTime?
 
@@ -697,6 +704,7 @@ model TasyIntegration {
   // Status & Monitoring
   status      IntegrationStatus @default(ACTIVE)
   errorCount  Int               @default(0)
+  metadata    Json?
   lastError   String?
   lastErrorAt DateTime?
 
@@ -1298,4 +1306,30 @@ enum DocumentStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum CommunicationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  IN_APP
+  VOICE
+  WEB
+  MOBILE
+  TELEGRAM
+}
+
+enum MissionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+enum PointTransactionType {
+  EARNED
+  SPENT
+  BONUS
+  PENALTY
+  REDEEMED
 }

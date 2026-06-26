@@ -175,11 +175,11 @@ export async function suspendUser(userId: string) {
  * @returns True if onboarding is complete
  */
 export async function hasCompletedOnboarding(userId: string): Promise<boolean> {
-  const onboarding = await prisma.onboardingProgress.findUnique({
+  const onboarding = await prisma.onboardingProgress.findFirst({
     where: { userId },
-    select: { isCompleted: true }
+    select: { completedAt: true }
   });
-  return onboarding?.isCompleted ?? false;
+  return onboarding?.completedAt !== null;
 }
 
 /**

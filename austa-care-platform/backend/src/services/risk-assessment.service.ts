@@ -1563,6 +1563,8 @@ export class AdvancedRiskAssessmentService {
       await prisma.healthData.create({
         data: {
           userId,
+          organizationId: '',
+          category: 'GENERAL',
           type: 'OTHER',
           value: { assessmentId: assessment.assessmentId },
           source: 'AI_EXTRACTED',

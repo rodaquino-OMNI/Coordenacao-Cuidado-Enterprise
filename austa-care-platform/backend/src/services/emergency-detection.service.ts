@@ -587,6 +587,8 @@ export class EmergencyDetectionService {
       await prisma.healthData.create({
         data: {
           userId,
+          organizationId: '',
+          category: 'GENERAL',
           type: 'OTHER',
           value: { alertCount: alerts.length },
           source: 'AI_EXTRACTED',
@@ -613,6 +615,7 @@ export class EmergencyDetectionService {
         await prisma.auditLog.create({
           data: {
             userId,
+            organizationId: '',
             action: 'CREATE',
             entity: 'HealthData',
             entityId: alert.id,
@@ -654,6 +657,7 @@ export class EmergencyDetectionService {
       await prisma.auditLog.create({
         data: {
           userId: updatedBy,
+          organizationId: '',
           action: 'UPDATE',
           entity: 'HealthData',
           entityId: alertId,

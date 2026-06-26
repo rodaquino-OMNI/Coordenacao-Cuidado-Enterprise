@@ -1,4 +1,4 @@
-import { PrismaClient, MissionDifficulty, PointTransactionType, MissionType, MissionCategory } from '@prisma/client';
+import { PrismaClient, MissionCategory, DifficultyLevel, TransactionType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -37,7 +37,7 @@ export async function awardAchievement(
   userId: string,
   points: number,
   reason: string,
-  transactionType: PointTransactionType = PointTransactionType.EARNED
+  transactionType: TransactionType = TransactionType.EARNED
 ) {
   // Create transaction and update health points in a transaction
   return prisma.$transaction(async (tx) => {
@@ -46,6 +46,7 @@ export async function awardAchievement(
       where: { userId },
       create: {
         userId,
+        organizationId: 'default-org',
         availablePoints: points,
         lifetimePoints: points,
         currentLevel: calculateUserLevel(points)
@@ -71,7 +72,9 @@ export async function awardAchievement(
         userId,
         healthPointsId: healthPoints.id,
         points,
+        amount: points,
         type: transactionType,
+        sourceType: 'ENGAGEMENT',
         reason
       }
     });
@@ -201,7 +204,7 @@ export async function getUserGamificationStats(userId: string) {
  */
 export async function getAvailableMissions(
   userId: string,
-  difficulty?: MissionDifficulty
+  difficulty?: DifficultyLevel
 ) {
   // Get completed mission IDs from transactions
   const userTransactions = await prisma.pointTransaction.findMany({
@@ -274,6 +277,7 @@ export async function completeMission(userId: string, missionId: string) {
       where: { userId },
       create: {
         userId,
+        organizationId: 'default-org',
         availablePoints: mission.points,
         lifetimePoints: mission.points,
         currentLevel: calculateUserLevel(mission.points)
@@ -300,7 +304,9 @@ export async function completeMission(userId: string, missionId: string) {
         healthPointsId: healthPoints.id,
         missionId: missionId,
         points: mission.points,
-        type: PointTransactionType.ACHIEVEMENT,
+        amount: mission.points,
+        type: TransactionType.EARNED,
+        sourceType: 'MISSION',
         reason: `Completed mission: ${mission.title}`
       }
     });
@@ -372,10 +378,9 @@ export async function createMission(data: {
   title: string;
   description: string;
   points: number;
-  difficulty: MissionDifficulty;
-  type: string;
+  difficulty: DifficultyLevel;
   category: string;
-  requirements: any;
+  requiredActions: any;
   isActive?: boolean;
 }) {
   return prisma.mission.create({
@@ -384,11 +389,11 @@ export async function createMission(data: {
       description: data.description,
       points: data.points,
       difficulty: data.difficulty,
-      type: data.type as any,
-      category: data.category as any,
-      requirements: data.requirements,
-      isActive: data.isActive !== undefined ? data.isActive : true
-    }
+      category: data.category as MissionCategory,
+      requiredActions: data.requiredActions,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      organizationId: '',
+    } as any
   });
 }
 

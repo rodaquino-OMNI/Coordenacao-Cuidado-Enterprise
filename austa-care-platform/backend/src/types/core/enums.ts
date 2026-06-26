@@ -8,111 +8,43 @@
  */
 
 import {
-  CommunicationChannel,
-  MessageContentType,
   MessageDirection,
   MessageStatus,
   ConversationStatus,
   UserRole,
   UserStatus,
   HealthDataType,
-  MissionType,
   MissionCategory,
-  MissionDifficulty,
-  MissionStatus,
-  PointTransactionType
+  DifficultyLevel,
+  ProgressStatus,
+  TransactionType,
+  MessageType
 } from '@prisma/client';
 
-/**
- * Communication Channel Enum
- * Supported communication channels in the platform
- * @enum {string}
- */
-export { CommunicationChannel };
+// Re-exports for convenience
+export { MessageType, MessageDirection, MessageStatus };
+export { ConversationStatus, UserRole, UserStatus };
+export { HealthDataType, MissionCategory, DifficultyLevel, ProgressStatus, TransactionType };
 
 /**
- * Message Content Type Enum
- * Types of content that can be sent in messages
- * @enum {string}
+ * Mission Difficulty Enum (alias for DifficultyLevel)
  */
-export { MessageContentType };
+export { DifficultyLevel as MissionDifficulty };
 
 /**
- * Message Direction Enum
- * Direction of message flow (inbound/outbound)
- * @enum {string}
+ * Mission Status Enum (alias for ProgressStatus)
  */
-export { MessageDirection };
+export { ProgressStatus as MissionStatus };
 
 /**
- * Message Status Enum
- * Current status of a message in its lifecycle
- * @enum {string}
+ * Point Transaction Type Enum (alias for TransactionType)
  */
-export { MessageStatus };
+export { TransactionType as PointTransactionType };
 
 /**
- * Conversation Status Enum
- * Current status of a conversation
- * @enum {string}
+ * Message Content Type Enum (alias for MessageType)
  */
-export { ConversationStatus };
-
-/**
- * User Role Enum
- * Available user roles in the system
- * @enum {string}
- */
-export { UserRole };
-
-/**
- * User Status Enum
- * Current status of a user account
- * @enum {string}
- */
-export { UserStatus };
-
-/**
- * Health Data Type Enum
- * Types of health data that can be collected
- * @enum {string}
- */
-export { HealthDataType };
-
-/**
- * Mission Type Enum
- * Types of missions available in gamification
- * @enum {string}
- */
-export { MissionType };
-
-/**
- * Mission Category Enum
- * Categories for organizing missions
- * @enum {string}
- */
-export { MissionCategory };
-
-/**
- * Mission Difficulty Enum
- * Difficulty levels for missions
- * @enum {string}
- */
-export { MissionDifficulty };
-
-/**
- * Mission Status Enum
- * Current status of a mission
- * @enum {string}
- */
-export { MissionStatus };
-
-/**
- * Point Transaction Type Enum
- * Types of point transactions in gamification
- * @enum {string}
- */
-export { PointTransactionType };
+export { MessageType as MessageContentType };
 
 /**
  * Helper to convert Prisma enum to Zod enum format
@@ -126,10 +58,10 @@ export { PointTransactionType };
  *
  * @example
  * import { z } from 'zod';
- * import { MessageContentType, prismaEnumToZod } from './enums';
+ * import { MessageType, prismaEnumToZod } from './enums';
  *
  * const messageSchema = z.object({
- *   contentType: z.enum(prismaEnumToZod(MessageContentType))
+ *   contentType: z.enum(prismaEnumToZod(MessageType))
  * });
  */
 export const prismaEnumToZod = <T extends Record<string, string>>(
@@ -141,3 +73,17 @@ export const prismaEnumToZod = <T extends Record<string, string>>(
   }
   return [values[0], ...values.slice(1)] as [string, ...string[]];
 };
+
+// Aliases for backward compatibility with code that expects these names
+// (these are NOT in the Prisma schema — use the schema's native enums instead)
+export const CommunicationChannel = {
+  WHATSAPP: 'WHATSAPP',
+  SMS: 'SMS',
+  EMAIL: 'EMAIL',
+  IN_APP: 'IN_APP',
+  VOICE: 'VOICE',
+  WEB: 'WEB',
+  MOBILE: 'MOBILE',
+  TELEGRAM: 'TELEGRAM',
+} as const;
+export type CommunicationChannel = (typeof CommunicationChannel)[keyof typeof CommunicationChannel];

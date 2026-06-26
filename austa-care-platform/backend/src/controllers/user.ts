@@ -465,21 +465,20 @@ router.post('/:id/onboarding/progress', async (req: Request, res: Response) => {
     }
 
     // Update onboarding progress
-    const onboardingProgress = await prisma.onboardingProgress.findUnique({
+    const onboardingProgress = await prisma.onboardingProgress.findFirst({
       where: { userId: id }
     });
 
     if (onboardingProgress && stepCompleted) {
-      const completedSteps = [...(onboardingProgress.completedSteps || []), stepCompleted];
+      const currentStep = (onboardingProgress.currentStep || 0) + 1;
       const totalSteps = 5; // Hardcoded for now
-      const isComplete = completedSteps.length >= totalSteps;
+      const isComplete = currentStep >= totalSteps;
 
       await prisma.onboardingProgress.update({
-        where: { userId: id },
+        where: { id: onboardingProgress.id },
         data: {
-          completedSteps,
-          currentStep: Math.min(completedSteps.length + 1, totalSteps).toString(),
-          isCompleted: isComplete,
+          currentStep: Math.min(currentStep, totalSteps),
+          status: isComplete ? 'COMPLETED' : 'IN_PROGRESS',
           completedAt: isComplete ? new Date() : onboardingProgress.completedAt
         }
       });
