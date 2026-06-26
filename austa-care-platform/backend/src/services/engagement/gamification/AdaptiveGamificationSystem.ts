@@ -64,7 +64,7 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       if (healthPoints) {
         progress = {
           userId,
-          currentLevel: healthPoints.currentLevel,
+          level: healthPoints.currentLevel,
           points: healthPoints.availablePoints,
           badges: [],
           achievements: [],
@@ -89,6 +89,7 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
 
   async awardPoints(userId: string, points: number, reason: string): Promise<UserProgress> {
     const progress = await this.getUserProgress(userId);
+    if (!progress) throw new Error(`UserProgress not found for ${userId}`);
     progress.points += points;
     progress.lastActivity = new Date();
     
@@ -104,8 +105,9 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       where: { userId },
       create: {
         userId,
+        organizationId: '',
         availablePoints: points,
-        lifetimePoints: points,
+        totalPoints: points,
         currentLevel: newLevel,
         streak: 1,
         longestStreak: 1,
@@ -113,7 +115,7 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       },
       update: {
         availablePoints: { increment: points },
-        lifetimePoints: { increment: points },
+        totalPoints: { increment: points },
         currentLevel: newLevel,
         lastActivityAt: new Date(),
       },
@@ -124,8 +126,10 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       data: {
         userId,
         healthPointsId: (await prisma.healthPoints.findUnique({ where: { userId } }))!.id,
+        amount: points,
         points,
         type: 'EARNED',
+        sourceType: 'MISSION',
         reason,
       },
     });

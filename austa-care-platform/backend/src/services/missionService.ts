@@ -329,8 +329,10 @@ export class MissionService {
         where: { userId: progress.userId, missionId: progress.currentMissionId },
       });
 
+      let onboardingRecord: { id: string } | null = null;
+
       if (existing) {
-        await prisma.onboardingProgress.update({
+        onboardingRecord = await prisma.onboardingProgress.update({
           where: { id: existing.id },
           data: {
             currentStep: stepNumber,
@@ -343,10 +345,10 @@ export class MissionService {
               riskScore: progress.riskScore,
               riskFlags: progress.riskFlags,
             } as any,
-          },
+          } as any,
         });
       } else {
-        await prisma.onboardingProgress.create({
+        onboardingRecord = await prisma.onboardingProgress.create({
           data: {
             userId: progress.userId,
             missionId: progress.currentMissionId,
@@ -369,7 +371,7 @@ export class MissionService {
       logger.debug('User progress saved to Prisma and Redis', {
         userId: progress.userId,
         totalProgress: progress.totalProgress,
-        onboardingId: result.id,
+        onboardingId: onboardingRecord?.id,
       });
     } catch (error) {
       logger.error(`Error saving user progress for ${progress.userId}`, error);

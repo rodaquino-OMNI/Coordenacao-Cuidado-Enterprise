@@ -344,13 +344,13 @@ export class OCRController {
       // Get medical summary from extracted text or metadata
       const summary = formatMedicalSummary({
         documentId: document.id,
-        documentType: document.type,
+        documentType: document.type as any,
         fileName: document.fileName,
         extractedText: document.extractedText || '',
         metadata: document.metadata as any,
         ocrProcessed: document.ocrProcessed,
         createdAt: document.createdAt,
-      });
+      } as any);
 
       res.status(200).json({
         success: true,
@@ -482,7 +482,7 @@ export class OCRController {
         fileName: document.fileName,
         extractedText: document.extractedText || '',
         metadata: (document.metadata as any) || {},
-      });
+      } as any, [] as any);
 
       // Store FHIR export event in audit log
       await prisma.auditLog.create({
@@ -491,6 +491,7 @@ export class OCRController {
           action: 'EXPORT',
           entity: 'fhir_export',
           entityId: documentId,
+          organizationId: (document as any).organizationId || 'system',
         },
       });
 

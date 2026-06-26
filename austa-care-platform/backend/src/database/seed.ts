@@ -398,6 +398,7 @@ async function main() {
         category: 'ONBOARDING',
         difficulty: 'EASY',
         points: 100,
+        organizationId: organizations[0].id,
         requiredActions: {
           steps: [
             'Preencher dados pessoais',
@@ -408,10 +409,7 @@ async function main() {
         badgeReward: 'NEWCOMER',
         estimatedTime: 10,
         isActive: true,
-        metadata: {
-          organizationId: organizations[0].id,
-          tags: ['onboarding', 'inicial'],
-        },
+        tags: ['onboarding', 'inicial'],
       },
     }),
     prisma.mission.create({
@@ -421,16 +419,15 @@ async function main() {
         category: 'ENGAGEMENT',
         difficulty: 'EASY',
         points: 150,
+        organizationId: organizations[0].id,
+        prerequisites: [],
         requiredActions: {
           steps: ['Agendar consulta'],
         },
         badgeReward: 'FIRST_APPOINTMENT',
         estimatedTime: 5,
         isActive: true,
-        metadata: {
-          organizationId: organizations[0].id,
-          tags: ['consulta', 'agendamento'],
-        },
+        tags: ['consulta', 'agendamento'],
       },
     }),
     prisma.mission.create({
@@ -440,6 +437,8 @@ async function main() {
         category: 'MEDICATION_ADHERENCE',
         difficulty: 'EASY',
         points: 200,
+        organizationId: organizations[0].id,
+        prerequisites: [],
         requiredActions: {
           steps: [
             'Acessar área de medicamentos',
@@ -449,10 +448,7 @@ async function main() {
         badgeReward: 'MEDICATION_MASTER',
         estimatedTime: 15,
         isActive: true,
-        metadata: {
-          organizationId: organizations[0].id,
-          tags: ['medicamentos', 'saúde'],
-        },
+        tags: ['medicamentos', 'saúde'],
       },
     }),
     prisma.mission.create({
@@ -462,6 +458,8 @@ async function main() {
         category: 'LIFESTYLE',
         difficulty: 'MEDIUM',
         points: 500,
+        organizationId: organizations[0].id,
+        prerequisites: [],
         requiredActions: {
           steps: [
             'Registrar atividade física por 7 dias consecutivos',
@@ -471,10 +469,7 @@ async function main() {
         badgeReward: 'FITNESS_CHAMPION',
         estimatedTime: 210,
         isActive: true,
-        metadata: {
-          organizationId: organizations[0].id,
-          tags: ['exercícios', 'bem-estar'],
-        },
+        tags: ['exercícios', 'bem-estar'],
       },
     }),
     prisma.mission.create({
@@ -484,6 +479,8 @@ async function main() {
         category: 'PREVENTIVE_CARE',
         difficulty: 'MEDIUM',
         points: 300,
+        organizationId: organizations[0].id,
+        prerequisites: [],
         requiredActions: {
           steps: [
             'Fazer check-up anual',
@@ -493,10 +490,7 @@ async function main() {
         badgeReward: 'HEALTH_GUARDIAN',
         estimatedTime: 60,
         isActive: true,
-        metadata: {
-          organizationId: organizations[0].id,
-          tags: ['exames', 'prevenção'],
-        },
+        tags: ['exames', 'prevenção'],
       },
     }),
   ]);
@@ -688,23 +682,13 @@ async function main() {
         organizationId: organizations[0].id,
         status: 'APPROVED',
         priority: 'NORMAL',
+        requestedBy: providers[0].id,
         requestedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
         approvedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        reason: 'Avaliação da função cardíaca em paciente hipertenso',
-        notes: 'Paciente com HA controlada, sem sintomas atuais',
-        metadata: {
-          description: 'Ecocardiograma transtorácico com Doppler',
-          healthDataId: healthData[0].id,
-          relatedConditions: ['Hipertensão Arterial'],
-          urgencyLevel: 'MEDIUM',
-          requestedBy: providers[0].id,
-          reviewedBy: providers[3].id,
-          approvedBy: providers[3].id,
-          reviewedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
-          validFrom: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      },
+        justification: 'Avaliação da função cardíaca em paciente hipertenso',
+        clinicalNotes: 'Paciente com HA controlada, sem sintomas atuais',
+      } as any,
     }),
     prisma.authorization.create({
       data: {
@@ -716,18 +700,15 @@ async function main() {
         organizationId: organizations[0].id,
         status: 'PENDING',
         priority: 'URGENT',
+        requestedBy: providers[1].id,
         requestedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
         validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        reason: 'Controle glicêmico inadequado com medicação oral',
-        notes: 'HbA1c 8.5%, indicado início de insulinoterapia',
-        metadata: {
-          description: 'Insulina NPH 100UI/ml - 3 frascos',
-          healthDataId: healthData[2].id,
-          relatedConditions: ['Diabetes Mellitus Tipo 2'],
-          urgencyLevel: 'HIGH',
-          requestedBy: providers[1].id,
-        },
-      },
+        justification: 'Controle glicêmico inadequado com medicação oral',
+        clinicalNotes: 'HbA1c 8.5%, indicado início de insulinoterapia',
+        healthDataId: healthData[2].id,
+        relatedConditions: ['Diabetes Mellitus Tipo 2'],
+        urgencyLevel: 'HIGH' as any,
+      } as any,
     }),
   ]);
   console.log(`✅ Created ${authorizations.length} authorizations\n`);
@@ -870,29 +851,27 @@ async function main() {
       isActive: true,
       lastSyncAt: new Date(Date.now() - 60 * 60 * 1000),
       syncInterval: 300,
-      metadata: {
-        syncEnabled: true,
-        nextSyncAt: new Date(Date.now() + 4 * 60 * 1000).toISOString(),
-        fieldMapping: {
-          patient: {
-            tasyField: 'CD_PACIENTE',
-            austaField: 'userId',
-          },
-          provider: {
-            tasyField: 'CD_PRESTADOR',
-            austaField: 'providerId',
-          },
-          procedure: {
-            tasyField: 'CD_PROCEDIMENTO',
-            austaField: 'procedureCode',
-          },
+      syncEnabled: true,
+      nextSyncAt: new Date(Date.now() + 4 * 60 * 1000),
+      fieldMapping: {
+        patient: {
+          tasyField: 'CD_PACIENTE',
+          austaField: 'userId',
         },
-        status: 'ACTIVE',
-        errorCount: 0,
-        avgSyncTime: 45.5,
-        recordsProcessed: 1250,
-        recordsFailured: 5,
+        provider: {
+          tasyField: 'CD_PRESTADOR',
+          austaField: 'providerId',
+        },
+        procedure: {
+          tasyField: 'CD_PROCEDIMENTO',
+          austaField: 'procedureCode',
+        },
       },
+      status: 'ACTIVE',
+      errorCount: 0,
+      avgSyncTime: 45.5,
+      recordsProcessed: 1250,
+      recordsFailured: 5,
     },
   });
   console.log(`✅ Created Tasy integration\n`);

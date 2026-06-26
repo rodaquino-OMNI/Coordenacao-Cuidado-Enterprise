@@ -132,7 +132,7 @@ router.post('/webhook',
                   if (!conversation && user) {
                     conversation = await prisma.conversation.create({
                       data: {
-                        userId: user.id,
+                        userId: user?.id || "",
                         whatsappChatId: `wa_${message.from}_${Date.now()}`,
                         organizationId: user.organizationId,
                         channel: 'WHATSAPP',
@@ -146,7 +146,7 @@ router.post('/webhook',
                     await prisma.message.create({
                       data: {
                         conversationId: conversation.id,
-                        userId: user?.id,
+                        userId: user?.id || '',
                         whatsappMessageId: message.id,
                         content: message.text?.body || message.type,
                         type: message.type?.toUpperCase() as any || 'TEXT',
@@ -272,7 +272,7 @@ router.post('/send',
         let conversation = user
           ? await prisma.conversation.findFirst({
               where: {
-                userId: user.id,
+                userId: user?.id || "",
                 channel: 'WHATSAPP',
                 status: 'ACTIVE',
               },
@@ -282,7 +282,7 @@ router.post('/send',
         if (!conversation && user) {
           conversation = await prisma.conversation.create({
             data: {
-              userId: user.id,
+              userId: user?.id || "",
               whatsappChatId: `wa_${to}_${Date.now()}`,
               organizationId: user.organizationId,
               channel: 'WHATSAPP',
@@ -296,7 +296,7 @@ router.post('/send',
           await prisma.message.create({
             data: {
               conversationId: conversation.id,
-              userId: user?.id,
+              userId: user?.id || '',
               whatsappMessageId: result.messageId,
               content: text?.body || template?.name || 'Message',
               type: type === 'text' ? 'TEXT' : 'TEXT',
@@ -440,7 +440,7 @@ router.get('/messages',
         to: msg.direction === 'OUTBOUND'
           ? msg.conversation?.user?.phone || 'unknown'
           : 'system',
-        type: msg.contentType.toLowerCase(),
+        type: (msg.type as string).toLowerCase(),
         text: { body: msg.content },
         timestamp: msg.sentAt,
         status: msg.status.toLowerCase(),
@@ -729,7 +729,7 @@ router.post('/send-template',
         let conversation = user
           ? await prisma.conversation.findFirst({
               where: {
-                userId: user.id,
+                userId: user?.id || "",
                 channel: 'WHATSAPP',
                 status: 'ACTIVE',
               },
@@ -739,7 +739,7 @@ router.post('/send-template',
         if (!conversation && user) {
           conversation = await prisma.conversation.create({
             data: {
-              userId: user.id,
+              userId: user?.id || "",
               whatsappChatId: `wa_${to}_${Date.now()}`,
               organizationId: user.organizationId,
               channel: 'WHATSAPP',
@@ -753,14 +753,14 @@ router.post('/send-template',
           await prisma.message.create({
             data: {
               conversationId: conversation.id,
-              userId: user?.id,
+              userId: user?.id || '',
               whatsappMessageId: result.messageId,
               content: `Template: ${templateName}`,
               type: 'TEXT',
               direction: 'OUTBOUND',
               status: 'SENT',
               sentAt: new Date(),
-              metadata: { templateName, language, parameters },
+              metadata: { templateName, language, parameters } as any,
             },
           });
 

@@ -172,7 +172,7 @@ model Conversation {
   whatsappChatId String             @unique // WhatsApp Business API chat ID
   status         ConversationStatus @default(ACTIVE)
   type           ConversationType   @default(SUPPORT)
-  channel        String?            @default("whatsapp") // Communication channel
+  channel        CommunicationChannel @default(WHATSAPP) // Communication channel
 
   // User & Organization
   userId         String
@@ -367,7 +367,6 @@ model Mission {
   badgeReward  String?
   metadata     Json?    // Extensible mission metadata
   unlockReward String? // What this mission unlocks
-  metadata     Json?
 
   // Requirements
   prerequisites   String[] // Mission IDs that must be completed first
@@ -1319,17 +1318,4 @@ enum CommunicationChannel {
   TELEGRAM
 }
 
-enum MissionDifficulty {
-  EASY
-  MEDIUM
-  HARD
-  EXPERT
-}
 
-enum PointTransactionType {
-  EARNED
-  SPENT
-  BONUS
-  PENALTY
-  REDEEMED
-}

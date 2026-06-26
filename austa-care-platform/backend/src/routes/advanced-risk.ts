@@ -165,8 +165,8 @@ router.get('/user/:userId/summary',
         if (scores.length >= 3) {
           const recent = scores.slice(0, Math.floor(scores.length / 2));
           const older = scores.slice(Math.floor(scores.length / 2));
-          const recentAvg = this.getRiskLevelWeight(recent);
-          const olderAvg = this.getRiskLevelWeight(older);
+          const recentAvg = getRiskLevelWeight(recent);
+          const olderAvg = getRiskLevelWeight(older);
           trends[cat] = recentAvg < olderAvg ? 'improving' : recentAvg > olderAvg ? 'worsening' : 'stable';
         } else {
           trends[cat] = 'stable';
@@ -430,19 +430,19 @@ router.put('/user/:userId/intervention',
         data: {
           userId,
           type: HealthDataType.OTHER,
-          source: 'intervention',
+          source: 'intervention' as any,
           value: {
             intervention,
             expectedOutcome,
             timeline,
             recordedAt: new Date().toISOString(),
             recordedBy: (req as any).user?.id || 'system',
-          },
+          } as any,
           metadata: {
             interventionType: intervention.type || 'manual',
             recordedBy: (req as any).user?.id || 'system',
           },
-        },
+        } as any,
       });
       
       logger.info('Intervention recorded', { userId, interventionId: interventionRecord.id });
@@ -491,7 +491,7 @@ router.get('/export/:userId',
         where: {
           userId,
           type: HealthDataType.OTHER,
-          source: 'intervention',
+          source: 'intervention' as any,
         },
         orderBy: { recordedAt: 'asc' },
       });

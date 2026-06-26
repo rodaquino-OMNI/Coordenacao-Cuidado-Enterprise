@@ -435,7 +435,7 @@ router.post('/batch',
       })), {
         documentType: prismaDocType,
         language: language || 'pt-BR',
-      }).catch(err => {
+      } as any).catch(err => {
         logger.error('Background batch OCR failed', { error: err });
       });
 
@@ -679,7 +679,7 @@ async function triggerOCRJob(
     const result = await orchestrator.processDocument(storagePath, {
       language: options.language,
       extractEntities: options.extractEntities,
-    });
+    } as any);
 
     // Update document with OCR results
     await prisma.document.update({
@@ -695,7 +695,7 @@ async function triggerOCRJob(
           language: options.language,
           fhirResources: result.fhirResources,
           validationResults: result.validationResults,
-        },
+        } as any,
         processedAt: new Date(),
       },
     });

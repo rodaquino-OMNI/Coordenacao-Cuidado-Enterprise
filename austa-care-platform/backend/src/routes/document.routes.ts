@@ -600,7 +600,7 @@ router.get('/:documentId/ocr',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      const extracted = (doc.extractedData as Record<string, any> | null) || {};
+      const extracted = (document.extractedData as Record<string, any> | null) || {};
       const ocrResult = {
         documentId: document.id,
         status: document.status?.toLowerCase() || 'pending',
@@ -770,7 +770,7 @@ async function triggerOCRProcessing(documentId: string, storagePath: string): Pr
           language: 'pt-BR',
           fhirResources: result.fhirResources,
           validationResults: result.validationResults,
-        },
+        } as any,
         processedAt: new Date(),
       },
     });

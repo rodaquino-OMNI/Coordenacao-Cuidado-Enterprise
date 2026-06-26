@@ -90,7 +90,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       data: {
         userId: validated.userId,
         organizationId: userOrg.organizationId,
-        type: validated.type === 'MEDICAL_REPORT' ? 'MEDICAL_RECORD' : validated.type as any,
+        type: ((validated.type as string) === 'MEDICAL_REPORT' ? 'MEDICAL_RECORD' : validated.type) as any,
         description: validated.description,
         filename: req.file.originalname,
         originalName: req.file.originalname,

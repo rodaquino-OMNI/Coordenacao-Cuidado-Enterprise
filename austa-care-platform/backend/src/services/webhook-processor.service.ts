@@ -13,6 +13,7 @@ import {
 } from '@/types/whatsapp';
 import { EventEmitter } from 'events';
 import { prisma } from '../config/database';
+import { CommunicationChannel } from '@prisma/client';
 import { ConversationFlowEngine } from './conversationFlowEngine';
 import { PersonaType } from '../types/ai';
 
@@ -635,7 +636,7 @@ export class WebhookProcessorService extends EventEmitter {
         whatsappChatId: phone,
         userId,
         organizationId,
-        channel: 'whatsapp',
+        channel: CommunicationChannel.WHATSAPP,
         status: 'ACTIVE',
         type: 'SUPPORT',
         priority: 'NORMAL',
@@ -680,7 +681,7 @@ export class WebhookProcessorService extends EventEmitter {
         direction: 'INBOUND',
         type: contentType as any,
         content,
-        metadata: { raw: payload },
+        metadata: { raw: payload } as any,
         status: 'DELIVERED',
         sentAt: new Date(payload.momment || Date.now()),
       },
