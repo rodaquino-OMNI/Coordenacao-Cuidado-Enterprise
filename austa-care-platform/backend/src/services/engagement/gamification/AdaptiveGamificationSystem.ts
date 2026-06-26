@@ -1,4 +1,6 @@
 import { BaseEngagementService, Repository, MockRepository } from '../base/BaseEngagementService';
+import { prisma } from '../../../config/database';
+import { logger } from '../../../utils/logger';
 
 export interface UserProgress {
   id?: string;
@@ -46,22 +48,40 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
   }
 
   protected async onInitialize(): Promise<void> {
-    console.log('AdaptiveGamificationSystem initialized');
+    logger.info('AdaptiveGamificationSystem initialized (Prisma-connected)');
   }
 
   async getUserProgress(userId: string): Promise<UserProgress> {
+    // Check local repository first (for testing)
     let progress = await this.userProgressRepository.findOne({ where: { userId } });
     
     if (!progress) {
-      progress = {
-        userId,
-        level: 1,
-        points: 0,
-        badges: [],
-        achievements: [],
-        lastActivity: new Date()
-      };
-      progress = await this.userProgressRepository.save(progress);
+      // Fallback to Prisma HealthPoints
+      const healthPoints = await prisma.healthPoints.findUnique({
+        where: { userId },
+      });
+
+      if (healthPoints) {
+        progress = {
+          userId,
+          level: healthPoints.level,
+          points: healthPoints.currentPoints,
+          badges: [],
+          achievements: [],
+          lastActivity: healthPoints.lastActivityAt || new Date(),
+        };
+      } else {
+        // Create default
+        progress = {
+          userId,
+          level: 1,
+          points: 0,
+          badges: [],
+          achievements: [],
+          lastActivity: new Date(),
+        };
+        progress = await this.userProgressRepository.save(progress);
+      }
     }
     
     return progress;
@@ -79,6 +99,38 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       this.emit('level_up', { userId, newLevel, points: progress.points });
     }
     
+    // Persist to Prisma HealthPoints
+    await prisma.healthPoints.upsert({
+      where: { userId },
+      create: {
+        userId,
+        currentPoints: points,
+        lifetimePoints: points,
+        level: newLevel,
+        streak: 1,
+        longestStreak: 1,
+        lastActivityAt: new Date(),
+      },
+      update: {
+        currentPoints: { increment: points },
+        lifetimePoints: { increment: points },
+        level: newLevel,
+        lastActivityAt: new Date(),
+      },
+    });
+
+    // Create PointTransaction for audit
+    await prisma.pointTransaction.create({
+      data: {
+        userId,
+        healthPointsId: (await prisma.healthPoints.findUnique({ where: { userId } }))!.id,
+        points,
+        type: 'EARNED',
+        reason,
+      },
+    });
+
+    logger.info('Points awarded via Prisma', { userId, points, reason, newLevel });
     return await this.userProgressRepository.save(progress);
   }
 

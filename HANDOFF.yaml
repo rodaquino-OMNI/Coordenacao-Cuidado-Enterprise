@@ -12,14 +12,6 @@ blocked:
     opened_by: "parreira"
     owner_type: "Especialista regulatório ANVISA + Diretor Médico"
 
-  - id: "BLK-002"
-    what: "Confusão HIPAA/LGPD no código e documentação (EM RESOLUÇÃO)"
-    reason: "15+ referências a HIPAA em schema, docs, e package.json. HIPAA NÃO se aplica ao Brasil. Substituindo por LGPD/ANS/ANVISA."
-    severity: "🔴 CRITICAL"
-    opened: "2026-06-26"
-    opened_by: "parreira"
-    owner_type: "DPO/Encarregado LGPD + CTO"
-
   - id: "BLK-003"
     what: "Validação clínica dos algoritmos de scoring pendente"
     reason: "Risk assessment (1564 linhas), emergency detection (579 linhas), e questionário de onboarding (958 linhas) implementam lógica clínica sem validação por equipe médica"
@@ -44,12 +36,14 @@ blocked:
     opened_by: "parreira"
     owner_type: "Tech Lead + DevOps"
 
+completed:
+  - id: "BLK-002"
+    what: "Confusão HIPAA/LGPD — substituição completa por LGPD/ANS/ANVISA"
+    resolved: "21 arquivos modificados, 0 referências HIPAA restantes, migration 002 gerada"
+    closed: "2026-06-26"
+    closed_by: "parreira (Wave 0)"
   - id: "BLK-006"
-    what: "Região AWS incorreta — us-east-1 (EUA) em vez de sa-east-1 (Brasil)"
-    reason: "Terraform tfvars.example configura aws_region = us-east-1. Dados de pacientes brasileiros seriam processados nos EUA, violando LGPD Art. 33 (transferência internacional sem safeguards)"
-    severity: "🔴 CRITICAL"
-    opened: "2026-06-26"
-    opened_by: "compliance-agent"
-    owner_type: "DevOps + DPO"
-
-completed: []
+    what: "Região AWS us-east-1 → sa-east-1"
+    resolved: "Terraform atualizado — 25 .tf files, 6 módulos, sa-east-1 em todos os providers"
+    closed: "2026-06-26"
+    closed_by: "parreira (Wave 0)"

@@ -152,6 +152,7 @@ export interface AdvancedRiskAssessment {
   userId: string;
   assessmentId: string;
   timestamp: Date;
+  algorithmVersion?: string;
   cardiovascular: CardiovascularRisk;
   diabetes: DiabetesRisk;
   mentalHealth: MentalHealthRisk;
@@ -172,6 +173,8 @@ export interface EmergencyAlert {
   actions: string[];
   contactNumbers: string[];
   automated: boolean;
+  algorithmVersion?: string;
+  escalationStatus?: 'PENDING' | 'NOTIFIED' | 'ACKNOWLEDGED' | 'RESOLVED';
 }
 
 export interface ClinicalRecommendation {

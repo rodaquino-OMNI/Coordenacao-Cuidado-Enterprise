@@ -168,6 +168,16 @@ model HealthData {
   source               String?
   recordedAt           DateTime            @default(now())
   metadata             Json?
+
+  // Risk Assessment (Clinical Algorithms)
+  riskScore            Json?               // AdvancedRiskAssessment result
+  calculatedAt         DateTime?           // When risk score was computed
+  algorithmVersion     String?             // e.g. 'risk-v1.0.0'
+
+  // Emergency Detection
+  emergencyAlerts      Json?               // EmergencyAlert[]
+  escalationStatus     String?             // PENDING → NOTIFIED → ACKNOWLEDGED → RESOLVED
+
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -351,6 +361,7 @@ model Message {
   conversationId       String
   userId               String?
   providerId           String?
+  whatsappMessageId    String?             @unique
   content              String
   contentType          MessageContentType  @default(TEXT)
   direction            MessageDirection
@@ -369,6 +380,7 @@ model Message {
   @@index([conversationId])
   @@index([userId])
   @@index([providerId])
+  @@index([whatsappMessageId])
   @@index([sentAt])
   @@map("messages")
 }

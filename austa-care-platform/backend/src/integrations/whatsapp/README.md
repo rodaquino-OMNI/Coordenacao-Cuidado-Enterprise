@@ -1,284 +1,375 @@
-# WhatsApp Business Cloud API Client
+# Z-API WhatsApp Integration
 
-Production-ready WhatsApp Business Cloud API integration using Meta's official Cloud API.
+> **IMPORTANTE:** O AUSTA Care utiliza **Z-API (z-api.io)** como provider de WhatsApp, **NÃO** a Meta Business API (Cloud API).  
+> A Z-API é uma ponte não-oficial que conecta números de WhatsApp pessoais/business via WhatsApp Web, oferecendo uma API REST simples.
 
-## Features
+## Visão Geral
 
-- ✅ Send text messages
-- ✅ Send template messages (pre-approved templates)
-- ✅ Send media (images, documents, audio, video)
-- ✅ Interactive messages (buttons and lists)
-- ✅ Webhook handling and verification
-- ✅ Message status tracking
-- ✅ Media upload/download
-- ✅ Automatic retry with exponential backoff
-- ✅ Comprehensive error handling
-- ✅ Event publishing for all operations
+A Z-API permite enviar e receber mensagens do WhatsApp usando um número conectado via QR Code (WhatsApp Web).  
+Diferente da Meta Cloud API (que exige Business Verification e templates pré-aprovados), a Z-API oferece:
 
-## Setup
+- ✅ Envio de mensagens de texto, imagens, documentos, áudio, vídeo
+- ✅ Mensagens interativas (botões e listas)
+- ✅ Webhook para recebimento de mensagens
+- ✅ Gerenciamento de contatos e chats
+- ✅ Rate limiting integrado
+- ✅ Retry automático com exponential backoff
 
-### 1. Get WhatsApp Business API Credentials
+**Limitações importantes:**
+- ❌ Requer que o número esteja online (WhatsApp Web conectado)
+- ❌ Sujeito a bloqueios do WhatsApp (uso de número pessoal para automação)
+- ❌ Não é oficialmente sancionada pelo Meta — use com cautela em produção
+- ❌ Rate limits mais restritivos que a API oficial
 
-1. Create a Meta Business Account at https://business.facebook.com
-2. Set up WhatsApp Business API
-3. Get your credentials:
-   - Phone Number ID
-   - Business Account ID
-   - Access Token
-   - Webhook Verify Token
+## Setup da Conta Z-API
 
-### 2. Configure Environment Variables
+### 1. Criar Conta
 
-Add to `.env`:
+Acesse [https://app.z-api.io](https://app.z-api.io) e crie uma conta.
+
+### 2. Criar Instância
+
+1. No dashboard, clique em **"Nova Instância"**
+2. Escolha um nome (ex: `austa-care-prod`)
+3. Selecione o plano adequado ao seu volume de mensagens
+
+### 3. Conectar WhatsApp
+
+1. Na instância criada, clique em **"Conectar"**
+2. Um QR Code será exibido
+3. Abra o WhatsApp no seu celular → **Configurações** → **WhatsApp Web** → **Escanear QR Code**
+4. Após escanear, o status mudará para **"Conectado"**
+
+### 4. Obter Credenciais
+
+No dashboard da instância, copie:
+- **Instance ID** (ex: `3C990F24A4BC8A6F27B4C6D8E1A5F7B2`)
+- **Token** (ex: `F3A2B1C4D5E6F7A8B9C0D1E2F3A4B5C6`)
+- **Webhook Secret** (opcional — para validação de assinatura de webhooks)
+
+## Configuração de Variáveis de Ambiente
+
+Adicione ao `.env` do backend:
 
 ```bash
-WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
-WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_account_id
-WHATSAPP_ACCESS_TOKEN=your_access_token
-WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_verify_token
-WHATSAPP_WEBHOOK_SECRET=your_webhook_secret
-WHATSAPP_API_VERSION=v18.0
+# WhatsApp Provider (z-api)
+WHATSAPP_PROVIDER=z-api
+
+# Z-API Configuration
+ZAPI_BASE_URL=https://api.z-api.io
+ZAPI_INSTANCE_ID=3C990F24A4BC8A6F27B4C6D8E1A5F7B2
+ZAPI_TOKEN=F3A2B1C4D5E6F7A8B9C0D1E2F3A4B5C6
+
+# Z-API Webhook
+ZAPI_WEBHOOK_SECRET=your-webhook-secret
+ZAPI_WEBHOOK_VERIFY_TOKEN=austa-webhook-verify-token-2024
+
+# Z-API Rate Limits & Retry
+ZAPI_RATE_LIMIT_REQUESTS=20
+ZAPI_RATE_LIMIT_WINDOW_MS=60000
+ZAPI_RETRY_ATTEMPTS=3
+ZAPI_RETRY_DELAY_MS=1000
 ```
 
-### 3. Initialize Client
+## Configuração do Webhook
+
+### 1. Configurar URL de Webhook no Z-API
+
+No dashboard da instância, configure o webhook:
+- **URL:** `https://seu-dominio.com/api/webhooks/whatsapp`
+- **Eventos:** Marcar `messages` (recebimento de mensagens) e `status` (status de envio)
+
+### 2. Endpoint de Verificação
+
+A Z-API envia uma requisição `GET` para verificar o webhook. O endpoint deve responder com o token:
 
 ```typescript
-import { getWhatsAppClient } from './integrations/whatsapp/whatsapp-business.client';
+// src/controllers/webhook.controller.ts
+export async function verifyWebhook(req: Request, res: Response) {
+  const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
-const whatsappClient = getWhatsAppClient({
-  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID!,
-  businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID!,
-  accessToken: process.env.WHATSAPP_ACCESS_TOKEN!,
-  webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
-  webhookSecret: process.env.WHATSAPP_WEBHOOK_SECRET,
-  apiVersion: 'v18.0',
+  if (mode === 'subscribe' && token === config.zapi.webhookVerifyToken) {
+    logger.info('Webhook verified successfully');
+    return res.status(200).send(challenge);
+  }
+
+  logger.warn('Webhook verification failed');
+  return res.sendStatus(403);
+}
+```
+
+### 3. Processamento de Mensagens Recebidas
+
+```typescript
+// src/controllers/webhook.controller.ts
+export async function handleIncomingMessage(req: Request, res: Response) {
+  const payload = req.body;
+
+  // Verificar assinatura do webhook
+  const signature = req.headers['x-webhook-signature'];
+  if (config.zapi.webhookSecret && signature !== config.zapi.webhookSecret) {
+    return res.sendStatus(403);
+  }
+
+  // Processar mensagem
+  if (payload.type === 'message' && payload.message) {
+    const { phone, message } = payload.message;
+
+    // Verificar idempotência: evitar processar mensagem duplicada
+    const isDuplicate = await prisma.message.findFirst({
+      where: { whatsappMessageId: payload.message.id }
+    });
+
+    if (isDuplicate) {
+      logger.warn('Duplicate message received, skipping', { messageId: payload.message.id });
+      return res.sendStatus(200);
+    }
+
+    // Processar com AI
+    const aiResponse = await whatsappAIIntegration.processIncomingMessage({
+      phone,
+      message: message.text || message.caption || '',
+      senderName: payload.message.senderName,
+      timestamp: new Date(payload.message.timestamp)
+    });
+
+    // Enviar resposta
+    await whatsappService.sendTextMessage({
+      phone,
+      message: aiResponse.message
+    });
+
+    // Persistir no banco
+    await prisma.message.create({
+      data: {
+        id: payload.message.id, // ID do Z-API como UUID local
+        whatsappMessageId: payload.message.id, // ID original para idempotência
+        conversationId: conversation.id,
+        userId: user.id,
+        content: message.text || message.caption || '',
+        contentType: 'TEXT',
+        direction: 'INBOUND',
+        status: 'DELIVERED',
+      }
+    });
+  }
+
+  return res.sendStatus(200);
+}
+```
+
+## Uso do WhatsAppService
+
+### Enviar Mensagem de Texto
+
+```typescript
+import { whatsappService } from '@/services/whatsapp.service';
+
+const response = await whatsappService.sendTextMessage({
+  phone: '11999999999',  // Com ou sem código do país
+  message: 'Olá! Como você está se sentindo hoje?',
+  delayMessage: 0,  // Delay em ms (opcional)
+});
+
+console.log('Message ID:', response.messageId);
+console.log('Status:', response.status);
+```
+
+### Enviar Imagem
+
+```typescript
+await whatsappService.sendImageMessage({
+  phone: '11999999999',
+  image: 'https://exemplo.com/exame.jpg',  // URL pública
+  caption: 'Seu resultado de exame',       // Opcional
 });
 ```
 
-## Usage Examples
-
-### Send Text Message
+### Enviar Documento
 
 ```typescript
-const response = await whatsappClient.sendText(
-  '5511999999999',
-  'Olá! Bem-vindo ao AUSTA Care.'
-);
+await whatsappService.sendDocumentMessage({
+  phone: '11999999999',
+  document: 'https://exemplo.com/prescricao.pdf',
+  fileName: 'Prescricao_Medica.pdf',
+  caption: 'Sua receita médica',
+});
 ```
 
-### Send Template Message
+### Enviar Mensagem Interativa (Botões)
 
 ```typescript
-const response = await whatsappClient.sendTemplate(
-  '5511999999999',
-  'appointment_reminder',
-  'pt_BR',
-  [
-    {
-      type: 'body',
-      parameters: [
-        { type: 'text', text: 'João Silva' },
-        { type: 'text', text: '15/11/2025 às 14:00' },
-      ],
-    },
-  ]
-);
-```
-
-### Send Interactive Buttons
-
-```typescript
-const response = await whatsappClient.sendInteractiveButtons(
-  '5511999999999',
-  'Como você está se sentindo hoje?',
-  [
-    { id: 'btn_1', title: 'Muito Bem' },
-    { id: 'btn_2', title: 'Bem' },
-    { id: 'btn_3', title: 'Mal' },
+await whatsappService.sendButtonMessage({
+  phone: '11999999999',
+  message: 'Como você está se sentindo hoje?',
+  buttonText: 'Selecionar',
+  buttons: [
+    { id: 'btn_bem', text: 'Muito Bem' },
+    { id: 'btn_regular', text: 'Regular' },
+    { id: 'btn_mal', text: 'Mal' },
   ],
-  'Avaliação de Saúde',
-  'Responda para continuarmos'
-);
+  footer: 'Avaliação de Saúde',
+});
 ```
 
-### Send Interactive List
+### Enviar Lista de Opções
 
 ```typescript
-const response = await whatsappClient.sendInteractiveList(
-  '5511999999999',
-  'Selecione uma opção:',
-  'Ver Opções',
-  [
+await whatsappService.sendListMessage({
+  phone: '11999999999',
+  message: 'Selecione uma opção:',
+  buttonText: 'Ver Opções',
+  sections: [
     {
       title: 'Consultas',
       rows: [
-        { id: 'opt_1', title: 'Agendar Consulta', description: 'Agende uma nova consulta' },
-        { id: 'opt_2', title: 'Ver Consultas', description: 'Consultas agendadas' },
+        { id: 'opt_agendar', title: 'Agendar Consulta', description: 'Agende sua próxima consulta' },
+        { id: 'opt_ver', title: 'Ver Consultas', description: 'Veja consultas agendadas' },
       ],
     },
     {
       title: 'Exames',
       rows: [
-        { id: 'opt_3', title: 'Resultados', description: 'Ver resultados de exames' },
+        { id: 'opt_resultados', title: 'Resultados', description: 'Ver resultados de exames' },
       ],
     },
   ],
-  'Menu Principal'
-);
-```
-
-### Send Image
-
-```typescript
-const response = await whatsappClient.sendImage(
-  '5511999999999',
-  'https://example.com/image.jpg',
-  'Seu resultado de exame'
-);
-```
-
-### Send Document
-
-```typescript
-const response = await whatsappClient.sendDocument(
-  '5511999999999',
-  'https://example.com/prescription.pdf',
-  'Receita_Médica.pdf',
-  'Sua receita médica'
-);
-```
-
-## Webhook Handling
-
-### Setup Webhook Endpoint
-
-```typescript
-import express from 'express';
-
-const app = express();
-
-// Webhook verification (GET)
-app.get('/webhooks/whatsapp', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  const result = whatsappClient.verifyWebhook(mode, token, challenge);
-
-  if (result) {
-    res.status(200).send(result);
-  } else {
-    res.sendStatus(403);
-  }
-});
-
-// Webhook events (POST)
-app.post('/webhooks/whatsapp', async (req, res) => {
-  const signature = req.headers['x-hub-signature-256'];
-  const payload = JSON.stringify(req.body);
-
-  // Verify signature
-  if (!whatsappClient.verifyWebhookSignature(payload, signature)) {
-    return res.sendStatus(403);
-  }
-
-  // Process webhook
-  await whatsappClient.processWebhook(req.body);
-
-  res.sendStatus(200);
+  footer: 'Menu Principal',
 });
 ```
 
-## Event Publishing
+## Idempotência de Mensagens
 
-The client publishes the following events via Kafka:
+Para evitar processamento duplicado de mensagens (ex: webhook reenviado), o sistema implementa idempotência:
 
-- `whatsapp.message.sent` - Message sent successfully
-- `whatsapp.message.failed` - Message failed to send
-- `whatsapp.message.received` - Incoming message received
-- `whatsapp.message.status` - Message status update (delivered, read, etc.)
-
-Subscribe to these events for processing:
+1. **No modelo Message do Prisma**, o campo `whatsappMessageId` armazena o ID original da Z-API
+2. **Antes de processar**, o sistema verifica se já existe uma mensagem com o mesmo `whatsappMessageId`
+3. **Se duplicada**, loga um warning e retorna 200 (sem reprocessar)
 
 ```typescript
-// Example: Handle incoming messages
-kafkaConsumer.on('whatsapp.message.received', async (event) => {
-  const { message, from } = event.data;
-
-  if (message.type === 'text') {
-    console.log(`Received from ${from}: ${message.text.body}`);
-  }
+// Verificação de idempotência no webhook handler
+const existingMessage = await prisma.message.findUnique({
+  where: { whatsappMessageId: zapiMessageId }
 });
-```
 
-## Error Handling
-
-The client includes comprehensive error handling:
-
-- Automatic retry with exponential backoff (default: 3 attempts)
-- Rate limit detection and logging
-- Detailed error information including Facebook trace IDs
-- Graceful degradation
-
-```typescript
-try {
-  await whatsappClient.sendText('5511999999999', 'Hello');
-} catch (error) {
-  console.error('Failed to send message:', error.message);
-  console.error('Error code:', error.code);
-  console.error('FB Trace ID:', error.fbtrace_id);
+if (existingMessage) {
+  return res.status(200).json({ status: 'duplicate', message: 'Already processed' });
 }
 ```
 
-## Media Handling
+## Retry com Exponential Backoff
 
-### Upload Media
+O WhatsAppService implementa retry automático com backoff exponencial:
+
+| Tentativa | Delay       | Comportamento                           |
+|-----------|-------------|-----------------------------------------|
+| 1         | 0ms         | Envio imediato                          |
+| 2         | 1000ms      | Primeiro retry                          |
+| 3         | 2000ms      | Segundo retry (backoff: 2x)             |
+| 4+        | 30000ms cap | Retrys adicionais até maxAttempts       |
+
+**Regras de retry:**
+- ✅ Erros de rede/timeout → retry
+- ✅ Rate limiting (429) → retry após `Retry-After`
+- ✅ Erros de servidor (5xx) → retry
+- ❌ Erros de cliente (4xx exceto 429) → NÃO retry
+
+Além disso, mensagens que falham são colocadas em uma **fila de retry** (`MessageQueue`) que tenta reenviar com backoff configurável.
+
+## Status da Instância
 
 ```typescript
-const mediaBuffer = fs.readFileSync('./image.jpg');
-const mediaId = await whatsappClient.uploadMedia(mediaBuffer, 'image/jpeg');
-
-// Use media ID in message
-await whatsappClient.sendMessage({
-  messaging_product: 'whatsapp',
-  to: '5511999999999',
-  type: 'image',
-  image: { id: mediaId },
-});
+const status = await whatsappService.getInstanceStatus();
+console.log('Connected:', status.connected);
+console.log('Phone:', status.phone);
+console.log('State:', status.state); // CONNECTED | DISCONNECTED | QRCODE
 ```
 
-### Download Media
+Se a instância estiver desconectada, gere um novo QR Code:
 
 ```typescript
-const mediaBuffer = await whatsappClient.downloadMedia('media_id_here');
-fs.writeFileSync('./downloaded.jpg', mediaBuffer);
+const qrCode = await whatsappService.getQRCode();
+// Enviar qrCode.qrcode (base64) ou qrCode.urlCode para o frontend
 ```
 
-## Template Message Guidelines
+## Troubleshooting
 
-1. All templates must be pre-approved by Meta
-2. Template names use lowercase and underscores (e.g., `appointment_reminder`)
-3. Maximum 3 buttons per message
-4. Button text limited to 20 characters
-5. Support for dynamic parameters in body and header
+### "Instance not connected"
+- Verifique se o WhatsApp no celular está online
+- Regenere o QR Code e escaneie novamente
+- Se o celular ficar offline por muito tempo, a Z-API pode desconectar
 
-## Best Practices
+### "Rate limit exceeded"
+- Aguarde o tempo indicado no header `Retry-After`
+- Ajuste `ZAPI_RATE_LIMIT_REQUESTS` no `.env`
+- Considere upgrade de plano na Z-API
 
-1. **Rate Limits**: Meta enforces rate limits - the client logs these automatically
-2. **Message Templates**: Use templates for proactive messaging (24h window rule)
-3. **Interactive Messages**: Use for better user engagement
-4. **Webhook Security**: Always verify webhook signatures
-5. **Error Handling**: Implement proper retry logic for failed messages
-6. **Media Storage**: Store media URLs for at least 30 days
+### "Message not delivered"
+- Destinatário pode não ter WhatsApp
+- Número bloqueou a conta
+- Formato do número incorreto (use DDI + DDD + número)
 
-## Testing
+### "Webhook not receiving messages"
+- Verifique se a URL do webhook está acessível publicamente
+- Confirme que o endpoint responde 200 rapidamente
+- Verifique os logs da Z-API no dashboard
 
-```bash
-npm test -- whatsapp
+## Diferenças: Z-API vs Meta Cloud API
+
+| Característica           | Z-API (z-api.io)              | Meta Cloud API                  |
+|--------------------------|-------------------------------|---------------------------------|
+| **Tipo**                 | Não-oficial (WhatsApp Web)    | Oficial (Meta/Facebook)         |
+| **Setup**                | QR Code, 5 minutos            | Business Verification, semanas  |
+| **Custo**                | ~R$50-200/mês (plano Z-API)   | Por conversa (Meta pricing)     |
+| **Mensagens proativas**  | Sem restrições de template    | Templates pré-aprovados apenas  |
+| **Estabilidade**         | Depende do WhatsApp Web       | Infraestrutura oficial Meta     |
+| **LGPD/Compliance**      | ❌ Zona cinzenta              | ✅ Oficial, auditável           |
+| **Recomendado para**     | MVP, testes, baixo volume     | Produção em escala, compliance  |
+
+> **Nota:** Para produção em escala com exigências de compliance (LGPD, ANS), considere migrar para a Meta Cloud API.
+> A Z-API é adequada para MVPs, testes e cenários de baixo volume (< 1000 mensagens/dia).
+
+## Arquitetura da Integração
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                      AUSTA Care Platform                  │
+│                                                          │
+│  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ Webhook     │───▶│ WhatsApp AI  │───▶│ WhatsApp    │  │
+│  │ Controller  │    │ Integration  │    │ Service     │  │
+│  └─────────────┘    └──────────────┘    └──────┬──────┘  │
+│                                                 │        │
+│  ┌──────────────────────────┐                   │        │
+│  │       Prisma DB          │                   │        │
+│  │  ┌────────┐ ┌─────────┐  │                   │        │
+│  │  │Message │ │Conversa-│  │                   │        │
+│  │  │(idem-  │ │tion     │  │                   │        │
+│  │  │potence)│ │         │  │                   │        │
+│  │  └────────┘ └─────────┘  │                   │        │
+│  └──────────────────────────┘                   │        │
+│                                                  │        │
+│  ┌──────────────────────────────────────┐        │        │
+│  │           lib/retry.ts               │◀───────┘        │
+│  │  Exponential backoff + jitter        │                 │
+│  └──────────────────────────────────────┘                 │
+└──────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │    Z-API (z-api.io)     │
+              │  REST API Gateway       │
+              └───────────┬─────────────┘
+                          │
+                          ▼
+              ┌─────────────────────────┐
+              │    WhatsApp Web         │
+              │  (Celular conectado)    │
+              └─────────────────────────┘
 ```
 
-## Resources
+## Referências
 
-- [WhatsApp Business Cloud API Documentation](https://developers.facebook.com/docs/whatsapp/cloud-api)
-- [Message Templates](https://developers.facebook.com/docs/whatsapp/message-templates)
-- [Webhook Reference](https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks)
+- [Documentação Z-API](https://z-api.io/docs/)
+- [Z-API Dashboard](https://app.z-api.io)
+- [Z-API Endpoints (Swagger)](https://z-api.io/api-reference)

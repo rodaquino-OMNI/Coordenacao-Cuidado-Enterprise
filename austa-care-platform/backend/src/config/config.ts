@@ -24,6 +24,9 @@ const envSchema = z.object({
   KAFKA_SASL_USERNAME: z.string().optional(),
   KAFKA_SASL_PASSWORD: z.string().optional(),
   
+  // WhatsApp Provider
+  WHATSAPP_PROVIDER: z.enum(['z-api']).default('z-api'),
+  
   // WhatsApp Z-API
   ZAPI_BASE_URL: z.string().url('Invalid Z-API base URL').default('https://api.z-api.io'),
   ZAPI_INSTANCE_ID: z.string().min(1, 'Z-API instance ID is required'),
@@ -113,6 +116,10 @@ export const config = {
       username: env.KAFKA_SASL_USERNAME,
       password: env.KAFKA_SASL_PASSWORD,
     } : undefined,
+  },
+  
+  whatsapp: {
+    provider: env.WHATSAPP_PROVIDER,
   },
   
   zapi: {

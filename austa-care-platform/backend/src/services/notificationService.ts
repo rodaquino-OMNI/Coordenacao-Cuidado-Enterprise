@@ -1,10 +1,14 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
 import { NotificationTemplate, WorkflowAction } from '../types/authorization';
+import { whatsappService } from './whatsapp.service';
+import { withRetry, defaultShouldRetry } from '../lib/retry';
 
 /**
  * Notification Service for Authorization Workflow
- * Handles multi-channel notifications (Email, SMS, WhatsApp, System)
+ * Handles multi-channel notifications (Email, SMS, WhatsApp via Z-API, System)
+ * 
+ * WhatsApp provider: Z-API (z-api.io), NOT Meta Business API
  */
 export class NotificationService extends EventEmitter {
   private templates: Map<string, NotificationTemplate>;
@@ -563,17 +567,29 @@ export class NotificationService extends EventEmitter {
   }
 
   /**
-   * Send WhatsApp notification
+   * Send WhatsApp notification via Z-API
    */
   private async sendWhatsApp(recipient: any, content: any): Promise<void> {
-    // Implementation would use WhatsApp Business API or Z-API
-    logger.info('Sending WhatsApp notification', {
+    logger.info('Sending WhatsApp notification via Z-API', {
       to: recipient.phone,
-      content: content.content
+      contentPreview: content.content?.substring(0, 100),
     });
 
-    // Mock implementation
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await withRetry(
+      () => whatsappService.sendTextMessage({
+        phone: recipient.phone,
+        message: content.content,
+      }),
+      {
+        operationName: 'sendWhatsAppNotification',
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+      }
+    );
+
+    logger.info('WhatsApp notification sent via Z-API', {
+      to: recipient.phone,
+    });
   }
 
   /**

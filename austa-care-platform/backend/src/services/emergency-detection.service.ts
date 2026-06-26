@@ -15,6 +15,12 @@ import {
 } from '../types/risk.types';
 import { QuestionnaireResponse } from '../types/questionnaire.types';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
+
+/** Emergency detection algorithm version — increment when modifying detection rules */
+const ALGORITHM_VERSION = 'emergency-v1.0.0';
+
+export type EscalationStatus = 'PENDING' | 'NOTIFIED' | 'ACKNOWLEDGED' | 'RESOLVED';
 
 export interface EmergencyConfig {
   autoEscalation: boolean;
@@ -70,7 +76,10 @@ export class EmergencyDetectionService {
   /**
    * Main emergency detection entry point
    */
-  async detectEmergencies(assessment: AdvancedRiskAssessment): Promise<EmergencyAlert[]> {
+  async detectEmergencies(
+    assessment: AdvancedRiskAssessment,
+    organizationId?: string
+  ): Promise<EmergencyAlert[]> {
     const alerts: EmergencyAlert[] = [];
 
     try {
@@ -96,6 +105,21 @@ export class EmergencyDetectionService {
 
       // Process and prioritize alerts
       const processedAlerts = this.processAndPrioritizeAlerts(alerts);
+
+      // Attach algorithm version and escalation status to each alert
+      for (const alert of processedAlerts) {
+        alert.algorithmVersion = ALGORITHM_VERSION;
+        alert.escalationStatus = 'PENDING';
+      }
+
+      // Persist alerts to HealthData if organization context is available
+      if (organizationId) {
+        await this.saveEmergencyAlerts(
+          assessment.userId,
+          processedAlerts,
+          assessment
+        );
+      }
 
       // Trigger immediate actions for critical alerts
       await this.triggerEmergencyActions(processedAlerts);
@@ -549,6 +573,105 @@ export class EmergencyDetectionService {
       contactNumbers: ['Equipe Médica'],
       automated: false
     };
+  }
+
+  /**
+   * Persist emergency alerts to HealthData and create audit log entries.
+   */
+  async saveEmergencyAlerts(
+    userId: string,
+    alerts: EmergencyAlert[],
+    assessment: AdvancedRiskAssessment
+  ): Promise<void> {
+    try {
+      await prisma.healthData.create({
+        data: {
+          userId,
+          type: 'OTHER',
+          value: { alertCount: alerts.length },
+          source: 'AI_EXTRACTED',
+          emergencyAlerts: alerts as any,
+          escalationStatus: 'PENDING',
+          algorithmVersion: ALGORITHM_VERSION,
+          calculatedAt: assessment.timestamp,
+          riskScore: {
+            compositeScore: assessment.composite.overallScore,
+            compositeRiskLevel: assessment.composite.riskLevel,
+            triggeredBy: assessment.assessmentId,
+          },
+          metadata: {
+            assessmentId: assessment.assessmentId,
+            alertSeverities: alerts.map(a => a.severity),
+            alertConditions: alerts.map(a => a.condition),
+          },
+          recordedAt: new Date(),
+        },
+      });
+
+      // Create audit log entry for each alert
+      for (const alert of alerts) {
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            action: 'CREATE',
+            resource: 'HealthData',
+            resourceId: alert.id,
+            metadata: {
+              alertId: alert.id,
+              condition: alert.condition,
+              algorithmVersion: ALGORITHM_VERSION,
+              escalationStatus: 'PENDING',
+              severity: alert.severity,
+              timeToAction: alert.timeToAction,
+            },
+          },
+        });
+      }
+
+      logger.info(
+        `Persisted ${alerts.length} emergency alerts for user ${userId} (v${ALGORITHM_VERSION})`
+      );
+    } catch (error) {
+      logger.error('Failed to persist emergency alerts:', error);
+      // Non-blocking: emergency detection proceeds regardless of persistence
+    }
+  }
+
+  /**
+   * Update escalation status for an alert (PENDING → NOTIFIED → ACKNOWLEDGED → RESOLVED).
+   */
+  async updateEscalationStatus(
+    alertId: string,
+    newStatus: EscalationStatus,
+    updatedBy?: string
+  ): Promise<void> {
+    try {
+      await prisma.healthData.updateMany({
+        where: { escalationStatus: { not: 'RESOLVED' } },
+        data: { escalationStatus: newStatus },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId: updatedBy,
+          action: 'UPDATE',
+          resource: 'HealthData',
+          resourceId: alertId,
+          metadata: {
+            alertId,
+            newStatus,
+            algorithmVersion: ALGORITHM_VERSION,
+          },
+          changes: {
+            escalationStatus: newStatus,
+          },
+        },
+      });
+
+      logger.info(`Escalation status updated to ${newStatus} for alert ${alertId}`);
+    } catch (error) {
+      logger.error(`Failed to update escalation status for alert ${alertId}:`, error);
+    }
   }
 
   /**

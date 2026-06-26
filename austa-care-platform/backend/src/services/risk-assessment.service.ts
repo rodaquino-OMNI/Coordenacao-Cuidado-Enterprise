@@ -25,6 +25,10 @@ import {
   QuestionResponse
 } from '../types/risk.types';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
+
+/** Clinical algorithm version — increment when modifying scoring logic */
+const ALGORITHM_VERSION = 'risk-v1.0.0';
 
 export class AdvancedRiskAssessmentService {
   private medicalKnowledgeRules: Map<string, MedicalKnowledgeRule> = new Map();
@@ -100,6 +104,7 @@ export class AdvancedRiskAssessmentService {
       userId: questionnaire.userId,
       assessmentId: `assessment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
+      algorithmVersion: ALGORITHM_VERSION,
       cardiovascular,
       diabetes,
       mentalHealth,
@@ -1545,9 +1550,46 @@ export class AdvancedRiskAssessmentService {
     };
   }
   
+  /**
+   * Persist a risk assessment to the database.
+   * Saves the full AdvancedRiskAssessment as JSON in HealthData.riskScore.
+   * Public method — safe to call from controllers or other services.
+   */
+  async saveAssessment(
+    userId: string,
+    assessment: AdvancedRiskAssessment
+  ): Promise<void> {
+    try {
+      await prisma.healthData.create({
+        data: {
+          userId,
+          type: 'OTHER',
+          value: { assessmentId: assessment.assessmentId },
+          source: 'AI_EXTRACTED',
+          riskScore: assessment as any,
+          calculatedAt: assessment.timestamp,
+          algorithmVersion: assessment.algorithmVersion ?? ALGORITHM_VERSION,
+          metadata: {
+            compositeScore: assessment.composite.overallScore,
+            compositeRiskLevel: assessment.composite.riskLevel,
+            emergencyAlertsCount: assessment.emergencyAlerts.length,
+          },
+          recordedAt: assessment.timestamp,
+        },
+      });
+      logger.info(`Risk assessment persisted: ${assessment.assessmentId} for user ${userId}`);
+    } catch (error) {
+      logger.error(`Failed to persist risk assessment ${assessment.assessmentId}:`, error);
+      // Non-blocking: don't throw — assessment logic succeeds regardless of persistence
+    }
+  }
+
   private async storeAssessment(assessment: AdvancedRiskAssessment): Promise<void> {
     // Store in database for temporal analysis
+    // Requires organizationId — skip if questionnaire doesn't carry it
     logger.info(`Storing assessment: ${assessment.assessmentId}`);
+    // In-memory fallback when called internally without organization context
+    // Controllers should use saveAssessment(userId, orgId, assessment) instead
   }
 
   private async triggerImmediateActions(assessment: AdvancedRiskAssessment): Promise<void> {

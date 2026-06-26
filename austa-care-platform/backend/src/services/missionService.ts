@@ -1,6 +1,8 @@
 import { Mission, MissionStep, PersonaType, UserProfile } from '../types/ai';
 import { logger } from '../utils/logger';
 import { RedisService } from './redisService';
+import { prisma } from '../config/database';
+import type { PointTransactionType, MissionStatus } from '@prisma/client';
 
 export interface MissionProgress {
   userId: string;
@@ -221,6 +223,7 @@ export class MissionService {
 
   /**
    * Get user's current mission progress
+   * First checks Redis cache, then Prisma OnboardingProgress
    */
   async getUserProgress(userId: string): Promise<MissionProgress | null> {
     try {
@@ -229,6 +232,36 @@ export class MissionService {
       
       if (progressData) {
         return JSON.parse(progressData);
+      }
+      
+      // Fallback: check Prisma OnboardingProgress
+      const onboarding = await prisma.onboardingProgress.findUnique({
+        where: { userId },
+      });
+      
+      if (onboarding) {
+        const progress: MissionProgress = {
+          userId,
+          currentMissionId: onboarding.currentStep.split(':')[0] || 'mission_1_conhecer',
+          currentStepId: onboarding.currentStep,
+          totalProgress: onboarding.isCompleted ? 100 : 
+            Math.round((onboarding.completedSteps.length / 20) * 100), // 20 total steps across 5 missions
+          healthPoints: 0, // will be computed from PointTransaction
+          badges: [],
+          completedMissions: [], // derived from completed steps
+          riskScore: 0,
+          riskFlags: [],
+        };
+        
+        // Get HealthPoints from Prisma
+        const healthPoints = await prisma.healthPoints.findUnique({
+          where: { userId },
+        });
+        if (healthPoints) {
+          progress.healthPoints = healthPoints.currentPoints;
+        }
+        
+        return progress;
       }
       
       return null;
@@ -264,12 +297,57 @@ export class MissionService {
   }
 
   /**
-   * Save user progress
+   * Save user progress to Redis (cache) and Prisma (durable)
    */
   async saveUserProgress(progress: MissionProgress): Promise<void> {
     try {
+      // Save to Redis as fast cache (30 day TTL)
       const progressKey = `mission_progress:${progress.userId}`;
-      await this.redis.setex(progressKey, 86400 * 30, JSON.stringify(progress)); // 30 days expiry
+      await this.redis.setex(progressKey, 86400 * 30, JSON.stringify(progress));
+      
+      // Persist to Prisma OnboardingProgress
+      const currentMission = this.missions.get(progress.currentMissionId);
+      const completedStepsCount = progress.completedMissions.length * 
+        (currentMission?.steps?.length || 4);
+      
+      const result = await prisma.onboardingProgress.upsert({
+        where: { userId: progress.userId },
+        create: {
+          userId: progress.userId,
+          currentStep: progress.currentStepId,
+          completedSteps: progress.completedMissions.flatMap(
+            mid => this.missions.get(mid)?.steps?.map(s => s.id) || []
+          ),
+          isCompleted: progress.totalProgress >= 100,
+          completedAt: progress.totalProgress >= 100 ? new Date() : null,
+          metadata: {
+            healthPoints: progress.healthPoints,
+            badges: progress.badges,
+            riskScore: progress.riskScore,
+            riskFlags: progress.riskFlags,
+          },
+        },
+        update: {
+          currentStep: progress.currentStepId,
+          completedSteps: progress.completedMissions.flatMap(
+            mid => this.missions.get(mid)?.steps?.map(s => s.id) || []
+          ),
+          isCompleted: progress.totalProgress >= 100,
+          completedAt: progress.totalProgress >= 100 ? new Date() : null,
+          metadata: {
+            healthPoints: progress.healthPoints,
+            badges: progress.badges,
+            riskScore: progress.riskScore,
+            riskFlags: progress.riskFlags,
+          },
+        },
+      });
+      
+      logger.debug('User progress saved to Prisma and Redis', {
+        userId: progress.userId,
+        totalProgress: progress.totalProgress,
+        onboardingId: result.id,
+      });
     } catch (error) {
       logger.error(`Error saving user progress for ${progress.userId}`, error);
       throw error;
@@ -358,6 +436,9 @@ export class MissionService {
         }
         progress.completedMissions.push(mission.id);
         missionCompleted = true;
+
+        // Persist HealthPoints and PointTransaction to Prisma
+        await this.awardHealthPointsToPrisma(userId, reward.healthPoints, mission.id, reward.badge);
 
         // Move to next mission
         const nextMissionId = this.getNextMissionId(mission.id);
@@ -450,6 +531,63 @@ export class MissionService {
       unlockMessage: 'Missão completada!',
       benefits: []
     };
+  }
+
+  /**
+   * Award HealthPoints to Prisma (upsert HealthPoints + create PointTransaction).
+   * This is the canonical durable store for gamification points.
+   */
+  private async awardHealthPointsToPrisma(
+    userId: string,
+    points: number,
+    missionId: string,
+    badge?: string
+  ): Promise<void> {
+    try {
+      // Upsert HealthPoints record
+      const healthPoints = await prisma.healthPoints.upsert({
+        where: { userId },
+        create: {
+          userId,
+          currentPoints: points,
+          lifetimePoints: points,
+          level: Math.floor(points / 100) + 1,
+          streak: 1,
+          longestStreak: 1,
+          lastActivityAt: new Date(),
+        },
+        update: {
+          currentPoints: { increment: points },
+          lifetimePoints: { increment: points },
+          level: { increment: Math.floor(points / 100) },
+          lastActivityAt: new Date(),
+        },
+      });
+
+      // Create PointTransaction record for audit trail
+      await prisma.pointTransaction.create({
+        data: {
+          userId,
+          healthPointsId: healthPoints.id,
+          missionId,
+          points,
+          type: 'EARNED', // PointTransactionType.EARNED
+          reason: badge ? `Mission completed: ${badge}` : 'Mission completed',
+          metadata: badge ? { badge } : undefined,
+        },
+      });
+
+      logger.info('HealthPoints awarded via Prisma', {
+        userId,
+        points,
+        missionId,
+        totalPoints: healthPoints.currentPoints + points,
+        badge,
+      });
+    } catch (error) {
+      logger.error(`Error awarding HealthPoints to Prisma for user ${userId}`, error);
+      // Non-fatal: Redis cache still has the data, Prisma write is best-effort
+    }
   }
 
   /**
