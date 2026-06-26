@@ -137,28 +137,34 @@ async function initializeServices() {
   try {
     logger.info('Initializing infrastructure services...');
 
-    // Initialize Kafka
-    logger.info('Connecting to Kafka...');
-    await kafkaClient.connectProducer();
-    await kafkaClient.connectAdmin();
-    
-    // Create Kafka topics
-    await kafkaClient.createTopics([
-      { topic: 'austa.care.user.registered' },
-      { topic: 'austa.care.conversation.started' },
-      { topic: 'austa.care.message.received' },
-      { topic: 'austa.care.ai.symptom.analyzed' },
-      { topic: 'austa.care.risk.calculated' },
-      { topic: 'austa.care.authorization.requested' },
-      { topic: 'austa.care.authorization.approved' },
-      { topic: 'austa.care.health.data.updated' },
-      { topic: 'austa.care.document.uploaded' },
-      { topic: 'austa.care.document.processed' },
-      { topic: 'austa.care.integration.tasy.sync.completed' },
-      { topic: 'austa.care.notification.scheduled' },
-      { topic: 'austa.care.dead-letter' },
-    ]);
-    logger.info('✅ Kafka connected and topics created');
+    // Initialize Kafka (non-fatal — server operates without event streaming if unavailable)
+    try {
+      logger.info('Connecting to Kafka...');
+      await kafkaClient.connectProducer();
+      await kafkaClient.connectAdmin();
+      
+      // Create Kafka topics
+      await kafkaClient.createTopics([
+        { topic: 'austa.care.user.registered' },
+        { topic: 'austa.care.conversation.started' },
+        { topic: 'austa.care.message.received' },
+        { topic: 'austa.care.ai.symptom.analyzed' },
+        { topic: 'austa.care.risk.calculated' },
+        { topic: 'austa.care.authorization.requested' },
+        { topic: 'austa.care.authorization.approved' },
+        { topic: 'austa.care.health.data.updated' },
+        { topic: 'austa.care.document.uploaded' },
+        { topic: 'austa.care.document.processed' },
+        { topic: 'austa.care.integration.tasy.sync.completed' },
+        { topic: 'austa.care.notification.scheduled' },
+        { topic: 'austa.care.dead-letter' },
+      ]);
+      logger.info('✅ Kafka connected and topics created');
+    } catch (error) {
+      logger.warn('⚠️  Kafka unavailable — server operating without event streaming', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Initialize Redis (non-blocking - optional for development)
     logger.info('Connecting to Redis...');
@@ -169,20 +175,32 @@ async function initializeServices() {
       logger.warn('⚠️  Redis unavailable - server operating in degraded mode (caching disabled)');
     }
 
-    // Initialize MongoDB
-    logger.info('Connecting to MongoDB...');
-    await mongoDBClient.connect();
-    logger.info('✅ MongoDB connected');
+    // Initialize MongoDB (non-fatal — ML pipeline uses it; server operates without if unavailable)
+    try {
+      logger.info('Connecting to MongoDB...');
+      await mongoDBClient.connect();
+      logger.info('✅ MongoDB connected');
+    } catch (error) {
+      logger.warn('⚠️  MongoDB unavailable — ML features disabled', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Initialize WebSocket server
     logger.info('Initializing WebSocket server...');
     await websocketServer.initialize(httpServer);
     logger.info('✅ WebSocket server initialized');
 
-    // Initialize ML Pipeline
-    logger.info('Initializing ML Pipeline...');
-    await mlPipeline.initialize();
-    logger.info('✅ ML Pipeline initialized');
+    // Initialize ML Pipeline (non-fatal — clinical risk scoring still works via direct service calls)
+    try {
+      logger.info('Initializing ML Pipeline...');
+      await mlPipeline.initialize();
+      logger.info('✅ ML Pipeline initialized');
+    } catch (error) {
+      logger.warn('⚠️  ML Pipeline unavailable — risk scoring limited to rule-based algorithms', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     logger.info('✅ All infrastructure services initialized successfully');
   } catch (error) {
@@ -201,12 +219,12 @@ async function gracefulShutdown(signal: string) {
   });
 
   try {
-    // Shutdown services in reverse order
-    await websocketServer.shutdown();
-    await mlPipeline.shutdown();
-    await kafkaClient.disconnect();
-    await redisCluster.disconnect();
-    await mongoDBClient.disconnect();
+    // Shutdown services in reverse order (each independently — one failure doesn't block others)
+    try { await websocketServer.shutdown(); } catch (e) { logger.warn('WebSocket shutdown error:', e); }
+    try { await mlPipeline.shutdown(); } catch (e) { logger.warn('ML Pipeline shutdown error:', e); }
+    try { await kafkaClient.disconnect(); } catch (e) { logger.warn('Kafka shutdown error:', e); }
+    try { await redisCluster.disconnect(); } catch (e) { logger.warn('Redis shutdown error:', e); }
+    try { await mongoDBClient.disconnect(); } catch (e) { logger.warn('MongoDB shutdown error:', e); }
     
     logger.info('All services shut down gracefully');
     process.exit(0);
