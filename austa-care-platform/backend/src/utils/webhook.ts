@@ -123,7 +123,11 @@ export function sanitizeWebhookPayload(payload: any): any {
     for (const [key, value] of Object.entries(obj)) {
       const lowerKey = key.toLowerCase();
       if (sensitive.some(s => lowerKey.includes(s))) {
-        sanitized[key] = '[REDACTED]';
+        if (Array.isArray(value)) {
+          sanitized[key] = value.map(() => '[REDACTED]');
+        } else {
+          sanitized[key] = '[REDACTED]';
+        }
       } else {
         sanitized[key] = sanitize(value);
       }

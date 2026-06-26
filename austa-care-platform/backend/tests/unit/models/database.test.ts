@@ -428,8 +428,8 @@ describe('Database Models', () => {
       const userData = { email: 'test@test.com', name: 'Test' };
       const conversationData = { whatsappChatId: 'chat_123' };
 
-      prisma.$transaction.mockImplementation(async (operations) => {
-        const results = await Promise.all(operations.map(op => op()));
+      prisma.$transaction.mockImplementation(async (operations: any) => {
+        const results = await Promise.all(operations.map((op: any) => op()));
         return results;
       });
 

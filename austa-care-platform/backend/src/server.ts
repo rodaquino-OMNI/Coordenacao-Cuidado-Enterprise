@@ -252,3 +252,4 @@ initializeServices()
   });
 
 export default app;
+export { app };

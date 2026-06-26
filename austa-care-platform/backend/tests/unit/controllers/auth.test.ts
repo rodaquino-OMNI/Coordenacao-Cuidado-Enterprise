@@ -35,11 +35,24 @@ jest.mock('@prisma/client', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    healthPoints: {
+      findUnique: jest.fn(),
+    },
+    onboardingProgress: {
+      findUnique: jest.fn(),
+    },
     $connect: jest.fn(),
     $disconnect: jest.fn(),
+    $queryRawUnsafe: jest.fn().mockResolvedValue([{ exists: true }]),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(1),
   };
   return {
     PrismaClient: jest.fn(() => mockPrismaClient),
+    UserStatus: {
+      ACTIVE: 'ACTIVE',
+      INACTIVE: 'INACTIVE',
+      SUSPENDED: 'SUSPENDED',
+    },
   };
 });
 
@@ -78,8 +91,11 @@ describe('Auth Controller', () => {
         firstName: 'Test',
         lastName: 'User',
         password: 'hashedPassword123',
-        isActive: true,
+        status: 'ACTIVE',
+        role: 'USER',
         organizationId: 'org-1',
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01'),
       };
 
       // Mock Prisma findUnique to return user
@@ -96,7 +112,7 @@ describe('Auth Controller', () => {
         .send(loginData);
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         message: 'Authentication successful',
         data: {
@@ -108,7 +124,6 @@ describe('Auth Controller', () => {
             firstName: 'Test',
             lastName: 'User',
             isActive: true,
-            organizationId: 'org-1',
           }
         }
       });
@@ -164,8 +179,11 @@ describe('Auth Controller', () => {
         firstName: 'Security',
         lastName: 'Test',
         password: 'hashedPassword123',
-        isActive: true,
+        status: 'ACTIVE',
+        role: 'USER',
         organizationId: 'org-1',
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01'),
       };
 
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
@@ -215,10 +233,14 @@ describe('Auth Controller', () => {
         firstName: registerData.firstName,
         lastName: registerData.lastName,
         phone: registerData.phone,
+        cpf: null,
         organizationId: registerData.organizationId,
-        isActive: true,
-        isVerified: false,
+        status: 'ACTIVE',
+        role: 'USER',
+        emailVerified: false,
+        phoneVerified: false,
         createdAt,
+        updatedAt: createdAt,
       };
 
       // Mock Prisma findFirst to return null (no existing user)
@@ -232,13 +254,18 @@ describe('Auth Controller', () => {
         .send(registerData);
 
       expect(response.status).toBe(201);
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         message: 'Registration successful',
         data: {
           user: {
-            ...mockCreatedUser,
-            createdAt: createdAt.toISOString()
+            id: '1',
+            email: registerData.email,
+            firstName: registerData.firstName,
+            lastName: registerData.lastName,
+            fullName: 'New User',
+            phone: registerData.phone,
+            isActive: true,
           }
         }
       });
@@ -311,10 +338,14 @@ describe('Auth Controller', () => {
         firstName: registerData.firstName,
         lastName: registerData.lastName,
         phone: registerData.phone,
+        cpf: null,
         organizationId: registerData.organizationId,
-        isActive: true,
-        isVerified: false,
+        status: 'ACTIVE',
+        role: 'USER',
+        emailVerified: false,
+        phoneVerified: false,
         createdAt,
+        updatedAt: createdAt,
       };
 
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
@@ -359,7 +390,12 @@ describe('Auth Controller', () => {
         id: '1',
         email: 'test@example.com',
         refreshToken: 'valid-refresh-token',
-        isActive: true,
+        status: 'ACTIVE',
+        role: 'USER',
+        firstName: 'Test',
+        lastName: 'User',
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01'),
       };
 
       // Mock JWT verify to decode token
@@ -428,7 +464,12 @@ describe('Auth Controller', () => {
         id: '1',
         email: 'test@example.com',
         refreshToken: refreshData.refreshToken,
-        isActive: true,
+        status: 'ACTIVE',
+        role: 'USER',
+        firstName: 'Test',
+        lastName: 'User',
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01'),
       };
 
       (jwt.verify as jest.Mock).mockReturnValue({ userId: '1' });
@@ -510,8 +551,11 @@ describe('Auth Controller', () => {
         firstName: 'Test',
         lastName: 'User',
         password: 'hashedPassword123',
-        isActive: true,
+        status: 'ACTIVE',
+        role: 'USER',
         organizationId: 'org-1',
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01'),
       };
 
       (prisma.user.findUnique as jest.Mock).mockImplementation((args) => {

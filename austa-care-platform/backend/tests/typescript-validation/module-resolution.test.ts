@@ -23,7 +23,7 @@ describe('Module Resolution Validation', () => {
   describe('Path Alias Resolution', () => {
     it('should have @ alias configured in tsconfig', () => {
       expect(tsconfigPaths).toHaveProperty('@/*');
-      expect(tsconfigPaths['@/*']).toContain('src/*');
+      expect(tsconfigPaths['@/*']).toContain('./src/*');
     });
 
     it('should resolve @/utils modules', () => {

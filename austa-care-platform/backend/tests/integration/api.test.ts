@@ -278,7 +278,7 @@ describe('API Integration Tests', () => {
       ];
       
       for (const endpoint of endpoints) {
-        const response = await request(app)
+        const response = await (request(app) as any)
           [endpoint.method](endpoint.path)
           .send(endpoint.data);
         
@@ -300,7 +300,7 @@ describe('API Integration Tests', () => {
       ];
       
       for (const testCase of testCases) {
-        let requestBuilder = request(app);
+        let requestBuilder: any = request(app);
         
         if (testCase.method === 'POST') {
           requestBuilder = requestBuilder.post(testCase.path);

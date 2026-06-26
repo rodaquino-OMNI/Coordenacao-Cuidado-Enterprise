@@ -412,6 +412,32 @@ describe('AdvancedRiskAssessmentService', () => {
 
   function getSeverityWeight(severity: string): number {
     const weights = { immediate: 3, critical: 2, high: 1 };
-    return weights[severity] || 0;
+    return (weights as any)[severity] || 0;
   }
 });
+
+// Custom Jest matcher for multiple values
+expect.extend({
+  toBeOneOf(received: any, expectedValues: any[]) {
+    const pass = expectedValues.includes(received);
+    if (pass) {
+      return {
+        message: () => `expected ${received} not to be one of ${expectedValues}`,
+        pass: true,
+      };
+    } else {
+      return {
+        message: () => `expected ${received} to be one of ${expectedValues}`,
+        pass: false,
+      };
+    }
+  },
+});
+
+declare global {
+  namespace jest {
+    interface Matchers<R> {
+      toBeOneOf(expectedValues: any[]): R;
+    }
+  }
+}

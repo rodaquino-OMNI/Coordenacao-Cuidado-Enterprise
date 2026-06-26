@@ -16,6 +16,15 @@ jest.mock('@/utils/logger', () => ({
   },
 }));
 
+// Mock Redis cluster
+jest.mock('@/infrastructure/redis/redis.cluster', () => ({
+  redisCluster: {
+    isRedisAvailable: jest.fn().mockReturnValue(true),
+    healthCheck: jest.fn().mockResolvedValue(true),
+  },
+  RedisClusterClient: jest.fn(),
+}));
+
 describe('Health Controller', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -41,7 +50,7 @@ describe('Health Controller', () => {
           api: 'healthy',
           database: 'checking...',
           redis: 'checking...',
-          whatsapp: 'checking...',
+          encryption: 'checking...',
         }
       });
     });
@@ -97,12 +106,12 @@ describe('Health Controller', () => {
         services: {
           database: 'healthy',
           redis: 'healthy',
-          whatsapp: 'healthy',
+          encryption: 'healthy',
         },
         checks: expect.arrayContaining([
-          { service: 'database', status: 'fulfilled', error: undefined },
-          { service: 'redis', status: 'fulfilled', error: undefined },
-          { service: 'whatsapp', status: 'fulfilled', error: undefined },
+          { service: 'database', status: 'healthy', error: undefined },
+          { service: 'redis', status: 'healthy', error: undefined },
+          { service: 'encryption', status: 'healthy', error: undefined },
         ])
       });
     });

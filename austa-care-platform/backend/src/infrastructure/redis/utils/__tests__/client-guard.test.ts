@@ -21,7 +21,7 @@ import { redisCluster } from '../../redis.cluster';
 jest.mock('../../redis.cluster', () => ({
   redisCluster: {
     getClient: jest.fn(),
-    isClusterConnected: jest.fn(),
+    isRedisAvailable: jest.fn(),
   },
 }));
 
@@ -62,14 +62,14 @@ describe('Redis Client Guard Utilities', () => {
 
     it('should throw RedisClientGuardError when client unavailable', () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(null);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(false);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(false);
 
       expect(() => getRedisClientOrThrow()).toThrow(RedisClientGuardError);
     });
 
     it('should include context in error', () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(null);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(false);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(false);
 
       try {
         getRedisClientOrThrow();
@@ -79,7 +79,7 @@ describe('Redis Client Guard Utilities', () => {
         if (error instanceof RedisClientGuardError) {
           expect(error.code).toBe('REDIS_CLIENT_UNAVAILABLE');
           expect(error.context).toBeDefined();
-          expect(error.context?.isConnected).toBe(false);
+          expect(error.context?.isAvailable).toBe(false);
         }
       }
     });
@@ -149,7 +149,7 @@ describe('Redis Client Guard Utilities', () => {
 
     it('should throw when client unavailable and no fallback', async () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(null);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(false);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(false);
       const mockOperation = jest.fn();
 
       await expect(withRedisClient(mockOperation)).rejects.toThrow(
@@ -201,7 +201,7 @@ describe('Redis Client Guard Utilities', () => {
 
     it('should throw when client unavailable', async () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(null);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(false);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(false);
 
       const operations = [jest.fn(), jest.fn()];
 
@@ -264,26 +264,26 @@ describe('Redis Client Guard Utilities', () => {
   describe('checkRedisHealth', () => {
     it('should return healthy status when Redis available and responsive', async () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(mockClient);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(true);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(true);
 
       const health = await checkRedisHealth();
 
       expect(health.isHealthy).toBe(true);
       expect(health.hasClient).toBe(true);
-      expect(health.isConnected).toBe(true);
+      expect(health.isAvailable).toBe(true);
       expect(health.timestamp).toBeDefined();
       expect(health.error).toBeUndefined();
     });
 
     it('should return unhealthy when client not initialized', async () => {
       (redisCluster.getClient as jest.Mock).mockReturnValue(null);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(false);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(false);
 
       const health = await checkRedisHealth();
 
       expect(health.isHealthy).toBe(false);
       expect(health.hasClient).toBe(false);
-      expect(health.isConnected).toBe(false);
+      expect(health.isAvailable).toBe(false);
       expect(health.error).toBe('Redis client not initialized');
     });
 
@@ -293,13 +293,13 @@ describe('Redis Client Guard Utilities', () => {
         ping: jest.fn().mockRejectedValue(new Error('Connection lost')),
       };
       (redisCluster.getClient as jest.Mock).mockReturnValue(failingClient);
-      (redisCluster.isClusterConnected as jest.Mock).mockReturnValue(true);
+      (redisCluster.isRedisAvailable as jest.Mock).mockReturnValue(true);
 
       const health = await checkRedisHealth();
 
       expect(health.isHealthy).toBe(false);
       expect(health.hasClient).toBe(true);
-      expect(health.error).toBe('Connection lost');
+      expect(health.error).toBe('Error: Connection lost');
     });
   });
 

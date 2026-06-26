@@ -30,7 +30,24 @@ if (missingVars.length > 0) {
 import { logger } from '@/utils/logger';
 
 // Mock external services during tests
-jest.mock('axios');
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    interceptors: {
+      request: { use: jest.fn(), eject: jest.fn() },
+      response: { use: jest.fn(), eject: jest.fn() },
+    },
+    create: jest.fn(function(this: any) { return this; }),
+  },
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+}));
 jest.mock('redis', () => ({
   createClient: jest.fn(() => ({
     connect: jest.fn(),
@@ -103,6 +120,8 @@ jest.mock('@prisma/client', () => ({
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $transaction: jest.fn(),
+    $queryRawUnsafe: jest.fn().mockResolvedValue([{ exists: true }]),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(1),
   })),
 }));
 

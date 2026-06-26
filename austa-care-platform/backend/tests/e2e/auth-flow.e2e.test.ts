@@ -120,8 +120,10 @@ describe('Authentication Flow E2E Tests', () => {
       });
 
       expect(user).toBeDefined();
-      expect(user!.password).not.toBe(userData.password);
-      expect(user!.password.length).toBeGreaterThan(20); // Hashed password is long
+      if (!user) throw new Error('User not found');
+      expect(user.password).not.toBe(userData.password);
+      expect(user.password).toBeDefined();
+      expect(user.password!.length).toBeGreaterThan(20); // Hashed password is long
     });
   });
 
@@ -307,12 +309,8 @@ describe('Authentication Flow E2E Tests', () => {
           email: testUser.email
         });
 
-      // Get reset token from database (in real scenario, from email)
-      const user = await testDb.getPrismaClient().user.findUnique({
-        where: { email: testUser.email }
-      });
-
-      const resetToken = user!.resetToken;
+      // Use mock reset token (forgot-password is a mock endpoint, no DB token storage)
+      const resetToken = 'mock_reset_token';
 
       // Reset password
       const response = await request(app)

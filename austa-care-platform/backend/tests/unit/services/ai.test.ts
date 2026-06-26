@@ -324,17 +324,19 @@ describe('Memory Leak Prevention - Service Cleanup', () => {
    * Integration test: Verify no open handles remain after destroy
    * This prevents Jest from hanging with "Jest did not exit one second after the test run has completed"
    */
-  test('should prevent open handles by cleaning up interval', async (done) => {
-    const service = new OpenAIService();
+  test('should prevent open handles by cleaning up interval', (done) => {
+    void (async () => {
+      const service = new OpenAIService();
 
-    // Destroy should clear all intervals
-    await service.destroy();
+      // Destroy should clear all intervals
+      await service.destroy();
 
-    // If cleanup worked, this test should complete without hanging
-    setTimeout(() => {
-      expect(true).toBe(true);
-      done();
-    }, 100);
+      // If cleanup worked, this test should complete without hanging
+      setTimeout(() => {
+        expect(true).toBe(true);
+        done();
+      }, 100);
+    })();
   });
 
   test('should save final token usage on destroy', async () => {

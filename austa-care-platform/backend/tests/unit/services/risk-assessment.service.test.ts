@@ -614,23 +614,26 @@ function createMockQuestionnaire(options: {
   return {
     userId: options.userId || 'test-user-123',
     questionnaireId: 'test-questionnaire-123',
-    timestamp: new Date(),
+    completedAt: new Date(),
     extractedSymptoms: (options.symptoms || []).map(s => ({
       symptom: s.symptom,
       severity: s.severity,
       duration: s.duration,
+      frequency: 'daily',
+      associatedSymptoms: [],
+      medicalRelevance: [],
       confidence: 0.9
-    })),
+    } as any)),
     riskFactors: (options.riskFactors || []).map(rf => ({
       factor: rf.factor,
       severity: rf.severity,
       confidence: 0.85
-    })),
+    } as any)),
     emergencyFlags: [],
     responses: (options.responses || []).map(r => ({
       question: r.question,
       answer: r.answer,
       timestamp: new Date()
-    }))
+    } as any))
   };
 }

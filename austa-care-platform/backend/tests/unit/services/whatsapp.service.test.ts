@@ -39,7 +39,7 @@ describe('WhatsAppService', () => {
   describe('Initialization', () => {
     it('should create axios client with correct configuration', () => {
       expect(mockedAxios.create).toHaveBeenCalled();
-      const config = mockedAxios.create.mock.calls[0][0];
+      const config = (mockedAxios.create.mock.calls[0] as any)[0];
       expect(config.timeout).toBe(30000);
       expect(config.headers['Content-Type']).toBe('application/json');
     });
@@ -72,10 +72,7 @@ describe('WhatsAppService', () => {
     it('should get QR code for connection', async () => {
       const mockQR = {
         status: 'success',
-        value: {
-          qrcode: 'data:image/png;base64,iVBORw0KGg...',
-          urlCode: 'https://wa.me/qr/...'
-        }
+        value: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...'
       };
 
       mockAxiosInstance.get.mockResolvedValue({ data: mockQR });
@@ -83,7 +80,7 @@ describe('WhatsAppService', () => {
       const qr = await service.getQRCode();
 
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('/qr-code');
-      expect(qr.qrcode).toBeDefined();
+      expect(qr.value).toBeDefined();
     });
   });
 

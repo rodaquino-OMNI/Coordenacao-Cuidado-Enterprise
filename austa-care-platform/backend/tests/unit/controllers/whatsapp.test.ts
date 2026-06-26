@@ -37,4 +37,255 @@ describe('WhatsApp Controller', () => {
 
       expect(response.status).toBe(200);
       expect(response.text).toBe(challenge);
-      expect(logger.info).toHaveBeenCalledWith(\n        'WhatsApp webhook verification',\n        { mode: 'subscribe', token: verifyToken }\n      );\n    });\n\n    it('should reject webhook verification for non-subscribe mode', async () => {\n      const response = await request(app)\n        .get('/whatsapp/webhook')\n        .query({\n          'hub.mode': 'unsubscribe',\n          'hub.verify_token': 'test_token',\n          'hub.challenge': 'test_challenge',\n        });\n\n      expect(response.status).toBe(403);\n      expect(response.text).toBe('Forbidden');\n    });\n\n    it('should handle webhook verification errors', async () => {\n      // Mock an error in the verification process\n      jest.spyOn(logger, 'info').mockImplementation(() => {\n        throw new Error('Test error');\n      });\n\n      const response = await request(app)\n        .get('/whatsapp/webhook')\n        .query({\n          'hub.mode': 'subscribe',\n          'hub.verify_token': 'test_token',\n          'hub.challenge': 'test_challenge',\n        });\n\n      expect(response.status).toBe(500);\n      expect(response.body).toEqual({\n        success: false,\n        message: 'Webhook verification failed'\n      });\n      expect(logger.error).toHaveBeenCalled();\n    });\n  });\n\n  describe('POST /whatsapp/webhook', () => {\n    it('should process incoming webhook messages successfully', async () => {\n      const webhookPayload = {\n        object: 'whatsapp_business_account',\n        entry: [{\n          id: 'entry_id',\n          changes: [{\n            value: {\n              messaging_product: 'whatsapp',\n              metadata: {\n                display_phone_number: '1234567890',\n                phone_number_id: 'phone_id'\n              },\n              messages: [{\n                from: '5511999999999',\n                id: 'message_id',\n                timestamp: '1234567890',\n                text: {\n                  body: 'Hello, I need help with my appointment'\n                },\n                type: 'text'\n              }]\n            },\n            field: 'messages'\n          }]\n        }]\n      };\n\n      const response = await request(app)\n        .post('/whatsapp/webhook')\n        .send(webhookPayload);\n\n      expect(response.status).toBe(200);\n      expect(response.body).toEqual({\n        success: true,\n        message: 'Message received'\n      });\n      expect(logger.info).toHaveBeenCalledWith(\n        'WhatsApp webhook received',\n        { body: webhookPayload }\n      );\n    });\n\n    it('should handle webhook processing errors', async () => {\n      // Mock an error in the processing\n      jest.spyOn(logger, 'info').mockImplementation(() => {\n        throw new Error('Processing error');\n      });\n\n      const response = await request(app)\n        .post('/whatsapp/webhook')\n        .send({ test: 'data' });\n\n      expect(response.status).toBe(500);\n      expect(response.body).toEqual({\n        success: false,\n        message: 'Message processing failed'\n      });\n      expect(logger.error).toHaveBeenCalled();\n    });\n\n    it('should handle empty webhook payload', async () => {\n      const response = await request(app)\n        .post('/whatsapp/webhook')\n        .send({});\n\n      expect(response.status).toBe(200);\n      expect(response.body).toEqual({\n        success: true,\n        message: 'Message received'\n      });\n    });\n  });\n\n  describe('POST /whatsapp/send', () => {\n    it('should send text message successfully', async () => {\n      const messageData = {\n        to: '5511999999999',\n        message: 'Hello from AUSTA Care!',\n        type: 'text'\n      };\n\n      const response = await request(app)\n        .post('/whatsapp/send')\n        .send(messageData);\n\n      expect(response.status).toBe(200);\n      expect(response.body).toEqual({\n        success: true,\n        message: 'Message sending endpoint ready',\n        data: {\n          messageId: 'placeholder-message-id',\n          to: messageData.to,\n          status: 'sent'\n        }\n      });\n      expect(logger.info).toHaveBeenCalledWith(\n        'Sending WhatsApp message',\n        { to: messageData.to, type: messageData.type }\n      );\n    });\n\n    it('should default to text type when not specified', async () => {\n      const messageData = {\n        to: '5511999999999',\n        message: 'Hello without type!'\n      };\n\n      const response = await request(app)\n        .post('/whatsapp/send')\n        .send(messageData);\n\n      expect(response.status).toBe(200);\n      expect(logger.info).toHaveBeenCalledWith(\n        'Sending WhatsApp message',\n        { to: messageData.to, type: 'text' }\n      );\n    });\n\n    it('should handle message sending errors', async () => {\n      jest.spyOn(logger, 'info').mockImplementation(() => {\n        throw new Error('Sending error');\n      });\n\n      const response = await request(app)\n        .post('/whatsapp/send')\n        .send({ to: '5511999999999', message: 'Test' });\n\n      expect(response.status).toBe(500);\n      expect(response.body).toEqual({\n        success: false,\n        message: 'Message sending failed'\n      });\n      expect(logger.error).toHaveBeenCalled();\n    });\n  });\n\n  describe('POST /whatsapp/send-template', () => {\n    it('should send template message successfully', async () => {\n      const templateData = {\n        to: '5511999999999',\n        template: 'appointment_reminder',\n        language: 'pt_BR',\n        parameters: ['João', '2024-01-15', '14:00']\n      };\n\n      const response = await request(app)\n        .post('/whatsapp/send-template')\n        .send(templateData);\n\n      expect(response.status).toBe(200);\n      expect(response.body).toEqual({\n        success: true,\n        message: 'Template message sending endpoint ready',\n        data: {\n          messageId: 'placeholder-template-message-id',\n          to: templateData.to,\n          template: templateData.template,\n          status: 'sent'\n        }\n      });\n      expect(logger.info).toHaveBeenCalledWith(\n        'Sending WhatsApp template message',\n        {\n          to: templateData.to,\n          template: templateData.template,\n          language: templateData.language\n        }\n      );\n    });\n\n    it('should use default language and parameters', async () => {\n      const templateData = {\n        to: '5511999999999',\n        template: 'welcome_message'\n      };\n\n      const response = await request(app)\n        .post('/whatsapp/send-template')\n        .send(templateData);\n\n      expect(response.status).toBe(200);\n      expect(logger.info).toHaveBeenCalledWith(\n        'Sending WhatsApp template message',\n        {\n          to: templateData.to,\n          template: templateData.template,\n          language: 'pt_BR'\n        }\n      );\n    });\n\n    it('should handle template sending errors', async () => {\n      jest.spyOn(logger, 'info').mockImplementation(() => {\n        throw new Error('Template sending error');\n      });\n\n      const response = await request(app)\n        .post('/whatsapp/send-template')\n        .send({ to: '5511999999999', template: 'test_template' });\n\n      expect(response.status).toBe(500);\n      expect(response.body).toEqual({\n        success: false,\n        message: 'Template message sending failed'\n      });\n      expect(logger.error).toHaveBeenCalled();\n    });\n  });\n});
+      expect(logger.info).toHaveBeenCalledWith(
+        'WhatsApp webhook verification',
+        { mode: 'subscribe', token: verifyToken }
+      );
+    });
+
+    it('should reject webhook verification for non-subscribe mode', async () => {
+      const response = await request(app)
+        .get('/whatsapp/webhook')
+        .query({
+          'hub.mode': 'unsubscribe',
+          'hub.verify_token': 'test_token',
+          'hub.challenge': 'test_challenge',
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.text).toBe('Forbidden');
+    });
+
+    it('should handle webhook verification errors', async () => {
+      // Mock an error in the verification process
+      jest.spyOn(logger, 'info').mockImplementation(() => {
+        throw new Error('Test error');
+      });
+
+      const response = await request(app)
+        .get('/whatsapp/webhook')
+        .query({
+          'hub.mode': 'subscribe',
+          'hub.verify_token': 'test_token',
+          'hub.challenge': 'test_challenge',
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        success: false,
+        message: 'Webhook verification failed'
+      });
+      expect(logger.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /whatsapp/webhook', () => {
+    it('should process incoming webhook messages successfully', async () => {
+      const webhookPayload = {
+        object: 'whatsapp_business_account',
+        entry: [{
+          id: 'entry_id',
+          changes: [{
+            value: {
+              messaging_product: 'whatsapp',
+              metadata: {
+                display_phone_number: '1234567890',
+                phone_number_id: 'phone_id'
+              },
+              messages: [{
+                from: '5511999999999',
+                id: 'message_id',
+                timestamp: '1234567890',
+                text: {
+                  body: 'Hello, I need help with my appointment'
+                },
+                type: 'text'
+              }]
+            },
+            field: 'messages'
+          }]
+        }]
+      };
+
+      const response = await request(app)
+        .post('/whatsapp/webhook')
+        .send(webhookPayload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Message received'
+      });
+      expect(logger.info).toHaveBeenCalledWith(
+        'WhatsApp webhook received',
+        { body: webhookPayload }
+      );
+    });
+
+    it('should handle webhook processing errors', async () => {
+      // Mock an error in the processing
+      jest.spyOn(logger, 'info').mockImplementation(() => {
+        throw new Error('Processing error');
+      });
+
+      const response = await request(app)
+        .post('/whatsapp/webhook')
+        .send({ test: 'data' });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        success: false,
+        message: 'Message processing failed'
+      });
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should handle empty webhook payload', async () => {
+      const response = await request(app)
+        .post('/whatsapp/webhook')
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Message received'
+      });
+    });
+  });
+
+  describe('POST /whatsapp/send', () => {
+    it('should send text message successfully', async () => {
+      const messageData = {
+        to: '5511999999999',
+        message: 'Hello from AUSTA Care!',
+        type: 'text'
+      };
+
+      const response = await request(app)
+        .post('/whatsapp/send')
+        .send(messageData);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Message sending endpoint ready',
+        data: {
+          messageId: 'placeholder-message-id',
+          to: messageData.to,
+          status: 'sent'
+        }
+      });
+      expect(logger.info).toHaveBeenCalledWith(
+        'Sending WhatsApp message',
+        { to: messageData.to, type: messageData.type }
+      );
+    });
+
+    it('should default to text type when not specified', async () => {
+      const messageData = {
+        to: '5511999999999',
+        message: 'Hello without type!'
+      };
+
+      const response = await request(app)
+        .post('/whatsapp/send')
+        .send(messageData);
+
+      expect(response.status).toBe(200);
+      expect(logger.info).toHaveBeenCalledWith(
+        'Sending WhatsApp message',
+        { to: messageData.to, type: 'text' }
+      );
+    });
+
+    it('should handle message sending errors', async () => {
+      jest.spyOn(logger, 'info').mockImplementation(() => {
+        throw new Error('Sending error');
+      });
+
+      const response = await request(app)
+        .post('/whatsapp/send')
+        .send({ to: '5511999999999', message: 'Test' });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        success: false,
+        message: 'Message sending failed'
+      });
+      expect(logger.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /whatsapp/send-template', () => {
+    it('should send template message successfully', async () => {
+      const templateData = {
+        to: '5511999999999',
+        template: 'appointment_reminder',
+        language: 'pt_BR',
+        parameters: ['João', '2024-01-15', '14:00']
+      };
+
+      const response = await request(app)
+        .post('/whatsapp/send-template')
+        .send(templateData);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Template message sending endpoint ready',
+        data: {
+          messageId: 'placeholder-template-message-id',
+          to: templateData.to,
+          template: templateData.template,
+          status: 'sent'
+        }
+      });
+      expect(logger.info).toHaveBeenCalledWith(
+        'Sending WhatsApp template message',
+        {
+          to: templateData.to,
+          template: templateData.template,
+          language: templateData.language
+        }
+      );
+    });
+
+    it('should use default language and parameters', async () => {
+      const templateData = {
+        to: '5511999999999',
+        template: 'welcome_message'
+      };
+
+      const response = await request(app)
+        .post('/whatsapp/send-template')
+        .send(templateData);
+
+      expect(response.status).toBe(200);
+      expect(logger.info).toHaveBeenCalledWith(
+        'Sending WhatsApp template message',
+        {
+          to: templateData.to,
+          template: templateData.template,
+          language: 'pt_BR'
+        }
+      );
+    });
+
+    it('should handle template sending errors', async () => {
+      jest.spyOn(logger, 'info').mockImplementation(() => {
+        throw new Error('Template sending error');
+      });
+
+      const response = await request(app)
+        .post('/whatsapp/send-template')
+        .send({ to: '5511999999999', template: 'test_template' });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        success: false,
+        message: 'Template message sending failed'
+      });
+      expect(logger.error).toHaveBeenCalled();
+    });
+  });
+});
