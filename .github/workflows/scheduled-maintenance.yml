@@ -49,7 +49,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const packages = ['patient-service', 'appointment-service', 'notification-service', 'frontend'];
+            const packages = ['austa-backend', 'austa-frontend'];
             const retentionDays = 30;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
@@ -137,7 +137,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Run VACUUM and ANALYZE
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Update dependencies
         run: |
           # Update npm dependencies
-          for service in patient-service appointment-service notification-service frontend; do
+          for service in austa-care-platform/backend austa-care-platform/frontend; do
             cd $service
             
             # Update dependencies with security vulnerabilities
@@ -194,7 +194,7 @@ jobs:
             # Run tests to ensure nothing broke
             npm test || true
             
-            cd ..
+            cd ../../
           done
 
       - name: Create security update PR
@@ -236,11 +236,11 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region us-east-1
+          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region sa-east-1
 
       - name: Optimize container resources
         run: |
@@ -283,7 +283,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Check certificate expiration
         id: check-certs
@@ -337,7 +337,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Verify database backups
         run: |

@@ -235,3 +235,63 @@ spec:
         summary: "High authorization processing time"
         description: "P95 authorization processing time is {{ $value }}s (threshold: 30s)"
         runbook_url: "https://wiki.austa.com/runbooks/high-authorization-time"
+
+    # API Error Rate Alert (>1% em 5min)
+    - alert: HighApiErrorRate
+      expr: |
+        (
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+        ) > 0.01
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+        component: api
+      annotations:
+        summary: "High API error rate detected (>1% in 5min)"
+        description: "Service {{ $labels.service }} has an error rate of {{ $value | humanizePercentage }} (threshold: 1%) over the last 5 minutes"
+        runbook_url: "https://wiki.austa.com/runbooks/high-api-error-rate"
+
+    # Encryption Health Check
+    - alert: EncryptionHealthCheckFailed
+      expr: |
+        austa_encryption_health_status == 0
+      for: 2m
+      labels:
+        severity: critical
+        team: security
+        component: encryption
+      annotations:
+        summary: "Encryption health check failed"
+        description: "The encryption service health check is failing. Data at rest encryption may be compromised. Instance: {{ $labels.instance }}"
+        runbook_url: "https://wiki.austa.com/runbooks/encryption-health-check-failed"
+
+    # Audit Log Persistence
+    - alert: AuditLogPersistenceFailed
+      expr: |
+        rate(austa_audit_log_write_errors_total[10m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+        team: security
+        component: audit
+      annotations:
+        summary: "Audit log persistence failure detected"
+        description: "Audit log writes are failing at {{ $value }} errors/second. This may violate LGPD compliance requirements for audit trail integrity."
+        runbook_url: "https://wiki.austa.com/runbooks/audit-log-persistence-failed"
+
+    # Dead Man's Switch - Watchdog alert
+    - alert: DeadMansSwitchSilent
+      expr: |
+        vector(1)
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+        component: alerting
+      annotations:
+        summary: "Dead Man's Switch - Alerting pipeline may be broken"
+        description: "This alert fires continuously. If it ever stops, the monitoring/alerting pipeline is broken and no other alerts will be delivered. Check Prometheus, Alertmanager, and notification channels immediately."
+        runbook_url: "https://wiki.austa.com/runbooks/dead-mans-switch"

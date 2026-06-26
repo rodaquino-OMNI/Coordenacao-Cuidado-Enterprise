@@ -1,0 +1,344 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - API Overview",
+    "tags": ["austa", "api", "overview", "sre"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "15s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Latência P50 (ms)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+            "legendFormat": "{{route}} - P50",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 15,
+              "showPoints": "never",
+              "spanNulls": true
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "API Latência P95 (ms)",
+        "type": "timeseries",
+        "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+            "legendFormat": "{{route}} - P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 15,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 1000},
+                {"color": "red", "value": 3000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "API Latência P99 (ms)",
+        "type": "timeseries",
+        "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+            "legendFormat": "{{route}} - P99",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 15,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 2000},
+                {"color": "red", "value": 5000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Taxa de Erro (%)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (route) / sum(rate(http_requests_total[5m])) by (route) * 100",
+            "legendFormat": "{{route}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 0.5},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Taxa de Erro 4xx (%)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) by (route) / sum(rate(http_requests_total[5m])) by (route) * 100",
+            "legendFormat": "{{route}} 4xx",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Throughput (req/s)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (route, method)",
+            "legendFormat": "{{method}} {{route}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 10,
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {"mode": "normal"}
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Status Code Distribution",
+        "type": "barchart",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(http_requests_total[1h])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "custom": {
+              "fillOpacity": 80
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Requisições por minuto (última hora)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Uptime Backend",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "avg(up{job=\"austa-backend\"}) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 95},
+                {"color": "green", "value": 99.5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "P95 Geral (ms)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 1000},
+                {"color": "red", "value": 3000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Total Requests (1h)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(http_requests_total[1h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "none",
+          "graphMode": "area",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 12,
+        "title": "Log de Requisições Recentes (Top Erros)",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(http_requests_total{status=~\"5..\"}[15m])) by (route, method, status))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {"route": "Endpoint", "method": "Método", "status": "Status", "Value": "Erros/s"}
+            }
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "custom",
+          "current": {"text": "production", "value": "production"},
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ]
+        },
+        {
+          "name": "route_filter",
+          "type": "query",
+          "query": "label_values(http_requests_total, route)",
+          "multi": true,
+          "includeAll": true,
+          "label": "Route Filter"
+        }
+      ]
+    }
+  }
+}

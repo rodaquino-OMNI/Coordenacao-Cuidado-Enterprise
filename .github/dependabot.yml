@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # Backend npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/austa-care-platform/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    versioning-strategy: increase
+    labels:
+      - "dependencies"
+      - "backend"
+    open-pull-requests-limit: 10
+    target-branch: "develop"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+
+  # Frontend npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/austa-care-platform/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    versioning-strategy: increase
+    labels:
+      - "dependencies"
+      - "frontend"
+    open-pull-requests-limit: 10
+    target-branch: "develop"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5
+    target-branch: "develop"
+    commit-message:
+      prefix: "chore(ci)"

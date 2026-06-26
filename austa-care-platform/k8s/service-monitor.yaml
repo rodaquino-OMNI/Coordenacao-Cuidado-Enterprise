@@ -1,0 +1,57 @@
+# AUSTA Care Platform - ServiceMonitor for Prometheus Operator
+# Requer: Prometheus Operator instalado no cluster
+# Referência: https://prometheus-operator.dev/docs/operator/api/#monitoring.coreos.com/v1.ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: austa-backend
+  namespace: austa-production
+  labels:
+    app: austa-backend
+    release: kube-prometheus
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: austa-backend
+  namespaceSelector:
+    matchNames:
+      - austa-production
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'go_.*|process_.*|nodejs_.*'
+          action: drop
+        - sourceLabels: [__name__]
+          regex: 'http_request_duration_seconds.*|http_requests_total.*|http_request_size_bytes.*|http_response_size_bytes.*|up|austa_.*|whatsapp_.*|onboarding_.*|authorization_.*'
+          action: keep
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: austa-backend
+  namespace: austa-staging
+  labels:
+    app: austa-backend
+    release: kube-prometheus
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: austa-backend
+  namespaceSelector:
+    matchNames:
+      - austa-staging
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 15s
+      scheme: http
+      honorLabels: true

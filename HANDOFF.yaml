@@ -28,20 +28,19 @@ blocked:
     opened_by: "parreira"
     owner_type: "DPO/Encarregado LGPD"
 
-  - id: "BLK-005"
-    what: "6 invariantes de healthcare MVP não verificados"
-    reason: "Antes do primeiro paciente real: (1) audit trail imutável, (2) idempotência de mensagens, (3) versionamento de algoritmos, (4) criptografia em repouso, (5) health check + dead man's switch, (6) retry com backoff. Apenas #1 parcialmente implementado."
-    severity: "🟠 HIGH"
-    opened: "2026-06-26"
-    opened_by: "parreira"
-    owner_type: "Tech Lead + DevOps"
-
 completed:
   - id: "BLK-002"
     what: "Confusão HIPAA/LGPD — substituição completa por LGPD/ANS/ANVISA"
     resolved: "21 arquivos modificados, 0 referências HIPAA restantes, migration 002 gerada"
     closed: "2026-06-26"
     closed_by: "parreira (Wave 0)"
+
+  - id: "BLK-005"
+    what: "6 invariantes de healthcare MVP verificados e implementados"
+    resolved: "Todos os 6 invariantes implementados: (1) audit trail via AuditLog Prisma, (2) idempotência via whatsappMessageId @unique, (3) versionamento via algorithm-registry.ts + algorithmVersion em HealthData, (4) criptografia em repouso via pgcrypto + health check de verificação, (5) health check expandido com dead man's switch em /health/dead-mans-switch, (6) retry unificado via lib/retry.ts aplicado a WhatsApp, Tasy e Notification. Docs: docs/HEALTHCARE-INVARIANTS.md"
+    closed: "2026-06-26"
+    closed_by: "parreira (Wave 2 — healthcare invariants)"
+
   - id: "BLK-006"
     what: "Região AWS us-east-1 → sa-east-1"
     resolved: "Terraform atualizado — 25 .tf files, 6 módulos, sa-east-1 em todos os providers"

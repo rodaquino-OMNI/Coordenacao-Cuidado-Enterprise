@@ -9,8 +9,8 @@ on:
 env:
   NODE_VERSION: '18'
   REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
-  IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+  IMAGE_NAME_BACKEND: omni-saude/austa-backend
+  IMAGE_NAME_FRONTEND: omni-saude/austa-frontend
 
 jobs:
   # Security Scanning

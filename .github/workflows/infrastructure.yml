@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'infrastructure/**'
+      - 'austa-care-platform/infrastructure/**'
       - '.github/workflows/infrastructure.yml'
   pull_request:
     branches: [ main ]
     paths:
-      - 'infrastructure/**'
+      - 'austa-care-platform/infrastructure/**'
   workflow_dispatch:
     inputs:
       environment:
@@ -31,8 +31,9 @@ on:
 
 env:
   TF_VERSION: '1.6.0'
-  TERRAFORM_DIR: './infrastructure/terraform'
+  TERRAFORM_DIR: './austa-care-platform/infrastructure/terraform'
   TF_IN_AUTOMATION: true
+  AWS_REGION: 'sa-east-1'
 
 jobs:
   # Job 1: Terraform Validation
@@ -56,7 +57,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Format Check
         working-directory: ${{ env.TERRAFORM_DIR }}
@@ -72,7 +73,7 @@ jobs:
         run: |
           terraform init -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
             -backend-config="bucket=austa-care-terraform-state" \
-            -backend-config="region=us-east-1" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=austa-care-terraform-locks"
 
       - name: Terraform Validate
@@ -139,14 +140,14 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
         working-directory: ${{ env.TERRAFORM_DIR }}
         run: |
           terraform init -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
             -backend-config="bucket=austa-care-terraform-state" \
-            -backend-config="region=us-east-1" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=austa-care-terraform-locks"
 
       - name: Terraform Plan
@@ -226,7 +227,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Download Plan
         uses: actions/download-artifact@v3
@@ -239,7 +240,7 @@ jobs:
         run: |
           terraform init -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
             -backend-config="bucket=austa-care-terraform-state" \
-            -backend-config="region=us-east-1" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=austa-care-terraform-locks"
 
       - name: Create backup
@@ -263,12 +264,12 @@ jobs:
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region us-east-1
+          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region ${{ env.AWS_REGION }}
 
       - name: Deploy core Kubernetes resources
         run: |
           # Apply namespace configurations
-          kubectl apply -f infrastructure/kubernetes/namespaces/
+          kubectl apply -f austa-care-platform/k8s/namespace.yaml
           
           # Install metrics server
           kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
@@ -293,12 +294,12 @@ jobs:
           # Install Prometheus Operator
           helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
             --namespace monitoring --create-namespace \
-            --values infrastructure/helm/monitoring/prometheus-values.yaml
+            --values austa-care-platform/infrastructure/helm/monitoring/prometheus-values.yaml
           
           # Install Loki for log aggregation
           helm upgrade --install loki grafana/loki-stack \
             --namespace monitoring \
-            --values infrastructure/helm/monitoring/loki-values.yaml
+            --values austa-care-platform/infrastructure/helm/monitoring/loki-values.yaml
 
   # Job 6: Post-Deployment Validation
   validate-deployment:
@@ -316,11 +317,11 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region us-east-1
+          aws eks update-kubeconfig --name austa-care-${{ matrix.environment }} --region ${{ env.AWS_REGION }}
 
       - name: Validate EKS cluster
         run: |
@@ -349,7 +350,7 @@ jobs:
       - name: Run infrastructure tests
         run: |
           # Run Terratest or similar infrastructure tests
-          cd infrastructure/tests
+          cd austa-care-platform/infrastructure/tests
           go test -v -timeout 30m
 
   # Job 7: Disaster Recovery Test
@@ -366,7 +367,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Test RDS backup restoration
         run: |

@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: austa-config
+  namespace: austa-production
+  labels:
+    app: austa-care
+    component: backend
+data:
+  # Ambiente
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  TZ: "America/Sao_Paulo"
+
+  # Redis
+  redis-host: "redis-master.redis.svc.cluster.local"
+  REDIS_CLUSTER_ENABLED: "false"
+
+  # MongoDB
+  MONGODB_DATABASE: "austa_care"
+
+  # Kafka
+  kafka-brokers: "kafka-broker.kafka.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "austa-care-platform"
+  KAFKA_SSL_ENABLED: "false"
+
+  # AWS
+  aws-region: "us-east-1"
+
+  # OpenAI
+  OPENAI_MODEL: "gpt-4-turbo"
+  OPENAI_MAX_TOKENS: "2048"
+
+  # JWT
+  JWT_EXPIRY: "24h"
+  JWT_REFRESH_EXPIRY: "7d"
+
+  # File Upload
+  MAX_FILE_SIZE: "10485760"
+  UPLOAD_PATH: "/app/uploads"
+
+  # FHIR
+  FHIR_VERSION: "R4"
+
+  # CORS (sobrescrito via ingress annotations)
+  CORS_ORIGIN: "https://austa-care.com"
+
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+
+  # Health Check
+  HEALTH_CHECK_INTERVAL: "30000"
+
+  # WhatsApp Provider
+  WHATSAPP_PROVIDER: "z-api"
+  ZAPI_RATE_LIMIT_REQUESTS: "20"
+  ZAPI_RATE_LIMIT_WINDOW_MS: "60000"
+  ZAPI_RETRY_ATTEMPTS: "3"
+  ZAPI_RETRY_DELAY_MS: "1000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: austa-config
+  namespace: austa-staging
+  labels:
+    app: austa-care
+    component: backend
+data:
+  NODE_ENV: "staging"
+  PORT: "3000"
+  LOG_LEVEL: "debug"
+  TZ: "America/Sao_Paulo"
+  redis-host: "redis-master.redis.svc.cluster.local"
+  REDIS_CLUSTER_ENABLED: "false"
+  MONGODB_DATABASE: "austa_care_staging"
+  kafka-brokers: "kafka-broker.kafka.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "austa-care-platform-staging"
+  KAFKA_SSL_ENABLED: "false"
+  aws-region: "us-east-1"
+  OPENAI_MODEL: "gpt-4-turbo"
+  OPENAI_MAX_TOKENS: "2048"
+  JWT_EXPIRY: "24h"
+  JWT_REFRESH_EXPIRY: "7d"
+  MAX_FILE_SIZE: "10485760"
+  UPLOAD_PATH: "/app/uploads"
+  FHIR_VERSION: "R4"
+  CORS_ORIGIN: "https://staging.austa-care.com"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "200"
+  HEALTH_CHECK_INTERVAL: "30000"
+  WHATSAPP_PROVIDER: "z-api"
+  ZAPI_RATE_LIMIT_REQUESTS: "20"
+  ZAPI_RATE_LIMIT_WINDOW_MS: "60000"
+  ZAPI_RETRY_ATTEMPTS: "3"
+  ZAPI_RETRY_DELAY_MS: "1000"

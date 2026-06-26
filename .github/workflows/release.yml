@@ -84,12 +84,12 @@ jobs:
       - name: Update version files
         run: |
           # Update package.json files
-          for service in patient-service appointment-service notification-service frontend; do
+          for service in austa-care-platform/backend austa-care-platform/frontend; do
             jq --arg v "${{ steps.version.outputs.version }}" '.version = $v' $service/package.json > tmp.json && mv tmp.json $service/package.json
           done
           
           # Update Helm charts
-          for chart in infrastructure/helm/*; do
+          for chart in austa-care-platform/infrastructure/helm/*; do
             if [ -f "$chart/Chart.yaml" ]; then
               sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" "$chart/Chart.yaml"
               sed -i "s/^appVersion:.*/appVersion: ${{ steps.version.outputs.version }}/" "$chart/Chart.yaml"
@@ -109,7 +109,7 @@ jobs:
     needs: prepare-release
     strategy:
       matrix:
-        service: [patient-service, appointment-service, notification-service, frontend]
+        service: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,11 +128,11 @@ jobs:
       - name: Build and push production image
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
+          context: ./austa-care-platform/${{ matrix.service }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ needs.prepare-release.outputs.version }}
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
+            ghcr.io/omni-saude/austa-${{ matrix.service }}:${{ needs.prepare-release.outputs.version }}
+            ghcr.io/omni-saude/austa-${{ matrix.service }}:latest
           labels: |
             org.opencontainers.image.version=${{ needs.prepare-release.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -175,7 +175,7 @@ jobs:
       - name: Package Helm charts
         run: |
           mkdir -p helm-packages
-          for chart in infrastructure/helm/*; do
+          for chart in austa-care-platform/infrastructure/helm/*; do
             if [ -d "$chart" ]; then
               helm package "$chart" -d helm-packages/
             fi
@@ -207,11 +207,11 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name austa-care-staging --region us-east-1
+          aws eks update-kubeconfig --name austa-care-staging --region sa-east-1
 
       - name: Deploy with ArgoCD
         run: |
@@ -287,11 +287,11 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: sa-east-1
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name austa-care-production --region us-east-1
+          aws eks update-kubeconfig --name austa-care-production --region sa-east-1
 
       - name: Blue-Green Deployment
         run: |
@@ -360,10 +360,8 @@ jobs:
             ${{ needs.prepare-release.outputs.changelog }}
             
             ## Docker Images
-            - `ghcr.io/${{ github.repository }}/patient-service:${{ needs.prepare-release.outputs.version }}`
-            - `ghcr.io/${{ github.repository }}/appointment-service:${{ needs.prepare-release.outputs.version }}`
-            - `ghcr.io/${{ github.repository }}/notification-service:${{ needs.prepare-release.outputs.version }}`
-            - `ghcr.io/${{ github.repository }}/frontend:${{ needs.prepare-release.outputs.version }}`
+            - `ghcr.io/omni-saude/austa-backend:${{ needs.prepare-release.outputs.version }}`
+            - `ghcr.io/omni-saude/austa-frontend:${{ needs.prepare-release.outputs.version }}`
             
             ## Deployment
             - Staging: ✅ Deployed

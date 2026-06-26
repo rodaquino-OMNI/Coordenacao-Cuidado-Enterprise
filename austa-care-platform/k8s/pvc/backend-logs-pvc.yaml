@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-logs-pvc
+  namespace: austa-production
+  labels:
+    app: austa-backend
+    tier: backend
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2-encrypted
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-logs-pvc
+  namespace: austa-staging
+  labels:
+    app: austa-backend
+    tier: backend
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2-encrypted
+  resources:
+    requests:
+      storage: 5Gi

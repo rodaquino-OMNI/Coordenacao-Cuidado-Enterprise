@@ -1,0 +1,367 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - Clinical Metrics",
+    "tags": ["austa", "clinical", "healthcare", "lgpd"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "1m",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Scores de Risco por Dia (Média)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(austa_risk_score_total) by (risk_level)",
+            "legendFormat": "{{risk_level}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 5},
+                {"color": "red", "value": 8}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Distribuição de Scores de Risco (Atual)",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(austa_risk_score_total) by (risk_level)",
+            "legendFormat": "{{risk_level}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "displayLabels": ["name", "percent"],
+          "pieType": "donut"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [
+              {"type": "value", "value": "low", "text": "Baixo Risco", "color": "green"},
+              {"type": "value", "value": "medium", "text": "Médio Risco", "color": "orange"},
+              {"type": "value", "value": "high", "text": "Alto Risco", "color": "red"},
+              {"type": "value", "value": "critical", "text": "Crítico", "color": "dark-red"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Alertas de Emergência por Dia",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(austa_emergency_alerts_total[5m])) by (severity)",
+            "legendFormat": "{{severity}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "cpm",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Total de Alertas de Emergência (Hoje)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(austa_emergency_alerts_total[24h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 20},
+                {"color": "red", "value": 50}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Alertas Críticos (últimas 24h)",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 8, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(austa_emergency_alerts_total{severity=\"critical\"}[24h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Tempo Médio de Resposta WhatsApp (s)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(rate(whatsapp_response_time_seconds_sum[5m]) / rate(whatsapp_response_time_seconds_count[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 15,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 30},
+                {"color": "red", "value": 120}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Mensagens WhatsApp por Minuto",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(whatsapp_messages_total[1m])) by (direction, type)",
+            "legendFormat": "{{direction}} - {{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "cpm",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 10,
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {"mode": "normal"}
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Pacientes Ativos (WhatsApp)",
+        "type": "stat",
+        "gridPos": {"x": 20, "y": 8, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(austa_active_patients_total)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "none",
+          "graphMode": "area",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Tempo de Processamento de Autorizações (P95)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(authorization_processing_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95 Authorization Time",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "orange", "value": 15},
+                {"color": "red", "value": 30}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Autorizações Processadas por Minuto",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(authorization_processed_total[1m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "cpm",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 10,
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {"mode": "normal"}
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Taxa de Falha Webhook WhatsApp",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(whatsapp_webhook_failures_total[5m])",
+            "legendFormat": "Webhook Failures/s",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 0.1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "WhatsApp API Rate Limit Restante",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "whatsapp_api_rate_limit_remaining",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 100},
+                {"color": "green", "value": 500}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "custom",
+          "current": {"text": "production", "value": "production"},
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ]
+        }
+      ]
+    }
+  }
+}

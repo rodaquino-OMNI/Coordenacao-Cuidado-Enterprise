@@ -1,0 +1,357 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - Business Metrics",
+    "tags": ["austa", "business", "onboarding", "nps", "healthcare"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "5m",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Onboardings Completados (Diário)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(onboarding_completed_total[1d]))",
+            "legendFormat": "Completados Hoje",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(onboarding_started_total[1d]))",
+            "legendFormat": "Iniciados Hoje",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "always",
+              "spanNulls": true
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Taxa de Completude de Onboarding (%)",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(onboarding_completed_total[1h])) / sum(rate(onboarding_started_total[1h])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 50},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 85}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "auto",
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true,
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "NPS Score (Média Móvel 7d)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(austa_nps_score)",
+            "legendFormat": "NPS Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": -100,
+            "max": 100,
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true,
+              "axisPlacement": "auto"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 0},
+                {"color": "yellow", "value": 30},
+                {"color": "green", "value": 60}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "NPS Score Atual",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "avg(austa_nps_score)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 0},
+                {"color": "yellow", "value": 30},
+                {"color": "green", "value": 70}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "HealthPoints Distribuídos",
+        "type": "timeseries",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(austa_healthpoints_awarded_total[5m]))",
+            "legendFormat": "HealthPoints/min",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "cpm",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Total HealthPoints Distribuídos (Hoje)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(austa_healthpoints_awarded_total[1d]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Usuários Ativos (Últimos 7 dias)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "austa_active_users_7d",
+            "legendFormat": "Active Users",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 20,
+              "showPoints": "never",
+              "spanNulls": true
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Retenção de Pacientes (%)",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 16, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "austa_patient_retention_rate * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 50},
+                {"color": "green", "value": 75}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Programas de Saúde Ativos",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 16, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "austa_active_health_programs",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "none",
+          "graphMode": "area",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 10,
+        "title": "Pacientes por Programa de Saúde",
+        "type": "bargauge",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "austa_patients_per_program",
+            "legendFormat": "{{program}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        }
+      },
+      {
+        "id": 11,
+        "title": "Conquistas Desbloqueadas (Total)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(austa_achievements_unlocked_total) by (achievement_type)",
+            "legendFormat": "{{achievement_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "fillOpacity": 10,
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {"mode": "normal"}
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Missões Completadas vs Pendentes",
+        "type": "barchart",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "austa_missions_completed",
+            "legendFormat": "Completadas",
+            "refId": "A"
+          },
+          {
+            "expr": "austa_missions_pending",
+            "legendFormat": "Pendentes",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "custom": {
+              "fillOpacity": 80
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "custom",
+          "current": {"text": "production", "value": "production"},
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ]
+        },
+        {
+          "name": "time_range",
+          "type": "interval",
+          "auto": true,
+          "auto_count": 30,
+          "auto_min": "10s",
+          "options": [
+            {"text": "Últimos 30 min", "value": "30m"},
+            {"text": "Última 1 hora", "value": "1h"},
+            {"text": "Últimas 6 horas", "value": "6h"},
+            {"text": "Últimas 24 horas", "value": "24h"},
+            {"text": "Últimos 7 dias", "value": "7d"},
+            {"text": "Últimos 30 dias", "value": "30d"}
+          ]
+        }
+      ]
+    }
+  }
+}

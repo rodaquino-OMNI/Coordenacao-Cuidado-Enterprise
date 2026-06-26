@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { logger } from '../utils/logger';
 import { config } from '../config/config';
+import { withRetry } from '../lib/retry';
 import { AuthorizationRequest, TasyIntegration } from '../types/authorization';
 
 /**
@@ -248,13 +249,16 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
         procedureCode
       });
 
-      const response = await this.apiClient.get('/eligibility/check', {
-        params: {
-          patientId,
-          procedureCode,
-          includeDetails: true
-        }
-      });
+      const response = await withRetry(
+        () => this.apiClient.get('/eligibility/check', {
+          params: {
+            patientId,
+            procedureCode,
+            includeDetails: true
+          }
+        }),
+        { operationName: 'Tasy-performEligibilityCheck' }
+      );
 
       const eligibilityData = response.data;
 
@@ -331,7 +335,10 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
 
       const tasyRequest = this.mapAuthorizationToTasy(request);
 
-      const response = await this.apiClient.post('/authorization/submit', tasyRequest);
+      const response = await withRetry(
+        () => this.apiClient.post('/authorization/submit', tasyRequest),
+        { operationName: 'Tasy-submitAuthorization' }
+      );
 
       const authorizationNumber = response.data.authorizationNumber;
 
@@ -361,11 +368,14 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
         status
       });
 
-      await this.apiClient.put(`/authorization/${authNumber}/status`, {
-        status: this.mapStatusToTasy(status),
-        updatedAt: new Date().toISOString(),
-        source: 'AUSTA-Care-Platform'
-      });
+      await withRetry(
+        () => this.apiClient.put(`/authorization/${authNumber}/status`, {
+          status: this.mapStatusToTasy(status),
+          updatedAt: new Date().toISOString(),
+          source: 'AUSTA-Care-Platform'
+        }),
+        { operationName: 'Tasy-updateAuthorizationStatus' }
+      );
 
       this.emit('statusUpdated', {
         authNumber,
@@ -389,13 +399,16 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     try {
       logger.info('Syncing patient data from Tasy', { patientId });
 
-      const response = await this.apiClient.get(`/patient/${patientId}`, {
-        params: {
-          includeInsurance: true,
-          includeHistory: true,
-          includeDemographics: true
-        }
-      });
+      const response = await withRetry(
+        () => this.apiClient.get(`/patient/${patientId}`, {
+          params: {
+            includeInsurance: true,
+            includeHistory: true,
+            includeDemographics: true
+          }
+        }),
+        { operationName: 'Tasy-syncPatientData' }
+      );
 
       const patientData = response.data;
 

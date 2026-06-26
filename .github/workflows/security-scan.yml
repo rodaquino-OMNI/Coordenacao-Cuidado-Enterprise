@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [patient-service, appointment-service, notification-service, frontend]
+        service: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          projectBaseDir: ${{ matrix.service }}
+          projectBaseDir: austa-care-platform/${{ matrix.service }}
           args: >
             -Dsonar.projectKey=austa-care-${{ matrix.service }}
             -Dsonar.organization=austa-care
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [patient-service, appointment-service, notification-service, frontend]
+        service: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +76,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --severity-threshold=high --project-name=${{ matrix.service }}
-          file: ${{ matrix.service }}/package.json
+          file: austa-care-platform/${{ matrix.service }}/package.json
 
       - name: Upload Snyk results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v2
@@ -87,7 +87,7 @@ jobs:
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'austa-care-${{ matrix.service }}'
-          path: './${{ matrix.service }}'
+          path: './austa-care-platform/${{ matrix.service }}'
           format: 'ALL'
           args: >
             --enableRetired
@@ -107,13 +107,13 @@ jobs:
     if: github.event_name == 'push'
     strategy:
       matrix:
-        service: [patient-service, appointment-service, notification-service, frontend]
+        service: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
 
       - name: Build container image
         run: |
-          docker build -t austa-care/${{ matrix.service }}:scan ./${{ matrix.service }}
+          docker build -t austa-care/${{ matrix.service }}:scan ./austa-care-platform/${{ matrix.service }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -142,7 +142,7 @@ jobs:
         run: |
           wget https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-amd64 -O container-structure-test
           chmod +x container-structure-test
-          ./container-structure-test test --image austa-care/${{ matrix.service }}:scan --config ./${{ matrix.service }}/container-test.yaml
+          ./container-structure-test test --image austa-care/${{ matrix.service }}:scan --config ./austa-care-platform/${{ matrix.service }}/container-test.yaml
 
   # Job 4: Infrastructure as Code Scanning
   iac-scan:
@@ -154,7 +154,7 @@ jobs:
       - name: Checkov IaC Scan
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: infrastructure/terraform
+          directory: austa-care-platform/infrastructure/terraform
           framework: terraform
           output_format: sarif
           output_file_path: checkov.sarif
@@ -171,14 +171,14 @@ jobs:
         uses: tenable/terrascan-action@main
         with:
           iac_type: 'terraform'
-          iac_dir: 'infrastructure/terraform'
+          iac_dir: 'austa-care-platform/infrastructure/terraform'
           policy_type: 'aws'
           sarif_upload: true
 
       - name: tfsec scan
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
-          working_directory: infrastructure/terraform
+          working_directory: austa-care-platform/infrastructure/terraform
           format: sarif
           sarif_file: tfsec.sarif
 

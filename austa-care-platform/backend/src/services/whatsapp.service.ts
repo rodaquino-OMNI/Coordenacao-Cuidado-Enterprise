@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { logger } from '../utils/logger';
 import { config } from '../config/config';
+import { retryWithBackoff, defaultShouldRetry } from '../lib/retry';
 import {
   ZAPIResponse,
   SendMessageResponse,
@@ -177,45 +178,42 @@ export class WhatsAppService {
   }
 
   /**
-   * Execute API request with retry mechanism
+   * Execute API request with retry (unified — uses lib/retry.ts).
+   *
+   * Z-API specifics (rate-limit check, response unwrapping) are handled
+   * inside the operation callback; retry with exponential backoff is
+   * delegated to the centralized retry library.
    */
   private async executeWithRetry<T>(
     operation: () => Promise<AxiosResponse<ZAPIResponse<T>>>,
     attempts: number = config.zapi.retry.attempts,
     delayMs: number = config.zapi.retry.delayMs
   ): Promise<T> {
-    let lastError: Error;
-
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      try {
+    const { result } = await retryWithBackoff(
+      async () => {
         await this.waitForRateLimit();
-        
         const response = await operation();
         return response.data.value;
-      } catch (error) {
-        lastError = error as Error;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        logger.warn(`API request attempt ${attempt} failed`, {
-          error: errorMessage,
-          attempt,
-          maxAttempts: attempts,
-        });
-
-        // Don't retry on client errors (4xx except 429)
-        const errorWithResponse = error as any;
-        if (errorWithResponse?.response?.status >= 400 && errorWithResponse?.response?.status < 500 && errorWithResponse?.response?.status !== 429) {
-          throw lastError;
-        }
-
-        if (attempt < attempts) {
-          const exponentialDelay = delayMs * Math.pow(2, attempt - 1);
-          await this.delay(exponentialDelay);
-        }
+      },
+      {
+        maxAttempts: attempts,
+        initialDelayMs: delayMs,
+        operationName: 'Z-API',
+        shouldRetry: (error, attempt) => {
+          // Don't retry on client errors (4xx except 429)
+          const errorWithResponse = error as any;
+          if (
+            errorWithResponse?.response?.status >= 400 &&
+            errorWithResponse?.response?.status < 500 &&
+            errorWithResponse?.response?.status !== 429
+          ) {
+            return false;
+          }
+          return defaultShouldRetry(error, attempt);
+        },
       }
-    }
-
-    throw lastError!;
+    );
+    return result;
   }
 
   /**
