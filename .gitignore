@@ -540,3 +540,4 @@ next-env.d.ts
 # Nuxt.js cache
 .nuxt/
 .output/
+agentdb.rvf.lock
