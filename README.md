@@ -1,436 +1,249 @@
-# 🏥 AUSTA Care Platform - Revolutionary AI-Powered Healthcare Coordination
+# 🏥 AUSTA Care Platform — Coordenação de Cuidado com IA
 
-[![Status](https://img.shields.io/badge/Status-85%25%20Complete-brightgreen)](https://github.com/austa-health/austa-care-platform)
-[![Phase](https://img.shields.io/badge/Phase-Week%2010%20of%2012-blue)](https://github.com/austa-health/austa-care-platform)
-[![Platform](https://img.shields.io/badge/Platform-WhatsApp%20Business%20API-green)](https://business.whatsapp.com/)
-[![AI](https://img.shields.io/badge/AI-GPT--4%20Powered-blue)](https://openai.com/gpt-4)
+[![Status](https://img.shields.io/badge/Status-Alpha%20%2F%20Pre--Production-yellow)](https://github.com/austa-health/austa-care-platform)
+[![Stack](https://img.shields.io/badge/Stack-TypeScript%20Monolith%20%7C%20PostgreSQL%20%7C%20Redis-blue)](https://github.com/austa-health/austa-care-platform)
 [![Compliance](https://img.shields.io/badge/Compliance-LGPD%20%7C%20ANS%20%7C%20ANVISA-green)](https://www.gov.br/anpd/pt-br)
-[![Cloud](https://img.shields.io/badge/Cloud-AWS%20%7C%20GCP-orange)](https://aws.amazon.com/)
+[![WhatsApp](https://img.shields.io/badge/WhatsApp-Z--API%20(z--api.io)-25D366)](https://z-api.io)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%205-61DAFB)](https://react.dev)
 
-## 🚀 Transforming Healthcare Through AI-Powered Care Coordination
+> **⚠️ STATUS HONESTO — Junho 2026:** A plataforma está em fase **Alpha/Pre-Production**. O backend é um **monolito TypeScript modular** (Express + Prisma), não microserviços. Documentação anterior descrevia uma arquitetura de 12 containers que não existe. Esta versão do README reflete a realidade do código.
 
-The official **AUSTA Care Coordination Platform** repository - A revolutionary HealthTech solution that's redefining how healthcare providers care for their beneficiaries, migrating from a reactive model to a **proactive, predictive, and deeply personalized ecosystem**.
+## 🎯 O Problema Que Resolvemos
 
-> ### 🎉 **BREAKING: Platform is 85% PRODUCTION READY - Ahead of Schedule!**
-> Originally estimated at 40% complete, comprehensive analysis reveals we're actually **85% ready for production deployment**. All core features, advanced AI/ML capabilities, and enterprise infrastructure are IMPLEMENTED. Final 4-week sprint to launch! 🚀
+Operadoras de saúde enfrentam desafios críticos:
 
-### 🌟 Our Vision
+- **Altos custos de sinistro** devido a modelos de cuidado reativos
+- **Baixo engajamento** com programas de saúde (<20% de participação)
+- **Processos manuais** consumindo 70% do tempo operacional
+- **Detecção tardia** de condições crônicas que poderiam ser prevenidas
+- **Cuidado fragmentado** sem visão unificada do paciente
 
-Creating Brazil's first truly predictive healthcare platform, where every beneficiary receives personalized care **before they even realize the need**, through an exceptional digital experience centered on WhatsApp - the app 99% of Brazilians already use daily.
+## 💡 Nossa Solução
 
-## 🎯 The Problem We Solve
+**AUSTA Care Platform** é um sistema de inteligência com IA que transforma a jornada de cuidado:
 
-Healthcare operators face critical challenges:
+### 🤖 Assistente Virtual Inteligente
+- Agentes virtuais humanizados (Zeca/Ana) via **WhatsApp — app que 99% dos brasileiros usam**
+- Análise de sintomas em tempo real com triagem inteligente
+- Detecção preditiva de risco usando machine learning
+- Personalização baseada em comportamento e histórico
 
-- **High claim costs** due to reactive care models
-- **Low engagement** with health programs (<20% participation)
-- **Manual processes** consuming 70% of operational time
-- **Late detection** of chronic conditions that could be prevented
-- **Fragmented care** with no unified patient view
+### 📊 Inteligência Operacional
+- Automação de autorizações e agendamentos
+- Orquestração inteligente de fluxos de cuidado
+- Insights preditivos para intervenção proativa
+- Dashboard 360° com visão completa do beneficiário
 
-## 💡 Our Solution
+## 📈 Status Atual do Desenvolvimento
 
-**AUSTA Care Platform** is an AI-powered intelligence system that completely transforms the healthcare journey:
+### Estado Real (Junho 2026)
 
-### 🤖 Advanced Conversational AI
-- **Humanized virtual assistants** (Zeca/Ana) engaging via WhatsApp
-- **Real-time symptom analysis** with intelligent triage
-- **Predictive risk detection** using advanced ML
-- **Deep personalization** based on behavior and history
+| Área | Status | Detalhe |
+|------|--------|---------|
+| **Backend** | ✅ Funcional | TypeScript/Express monolith + Prisma ORM |
+| **Database** | ✅ Funcional | PostgreSQL 15 com pgcrypto |
+| **Cache** | ✅ Funcional | Redis 7 (sessões, rate limiting, filas BullMQ) |
+| **WhatsApp** | ✅ Funcional | Z-API (z-api.io) — gateway brasileiro |
+| **IA/NLP** | ✅ Funcional | OpenAI GPT-4 via LangChain |
+| **Frontend** | ✅ Funcional | React 18 + Vite 5 + TailwindCSS |
+| **Testes** | ✅ Implementados | Unit + Integration + E2E (Jest/Vitest) |
+| **CI/CD** | 🔄 Configurando | Docker Compose local; K8s planejado |
+| **Produção** | 🔜 Pre-Production | Deploy em VM única; sem multi-region ainda |
 
-### 📊 Operational Intelligence
-- **85% automation** of authorizations and scheduling
-- **Intelligent orchestration** of complex care flows
-- **Predictive insights** for proactive intervention
-- **360° dashboard** with complete beneficiary view
-
-### 🏆 Proven Results
-- **15% reduction in claim costs** through prevention ✅
-- **NPS >70** with differentiated experience ✅
-- **90% first-contact resolution** ✅
-- **30% reduction** in operational costs ✅
-- **85% onboarding completion** rate ✅
-- **<30 seconds** for automated authorizations ✅
-
-## 📈 Current Development Status
-
-### Overall Progress: 85% Complete ✨
+### O Que REALMENTE Existe
 
 ```
-System Architecture    ████████████████████ 100%
-Infrastructure        ████████████████████ 100%
-Backend Services      ███████████████████░  95%
-Frontend             ███████████████░░░░░  75%
-ML/AI Services       ██████████████████░░  90%
-Testing              ████████████████░░░░  80%
-Documentation        ████████████████████ 100%
-Production Deploy    █████████████████░░░  85%
+✅ 1 backend TypeScript monolith (Express + Prisma)
+✅ PostgreSQL 15 (fonte da verdade)
+✅ Redis 7 (cache, sessões)
+✅ WhatsApp via Z-API (não Meta Business API)
+✅ Frontend React 18 + Vite 5 + TailwindCSS
+✅ Testes unitários, integração e E2E
+✅ Docker Compose para desenvolvimento local
+✅ Documentação de arquitetura honesta (ver docs/)
+✅ 6 ADRs formais (docs/architecture/adr/)
 ```
 
-### ✅ Completed Features
+### O Que NÃO Existe (Ainda)
 
-#### **System Architecture & Infrastructure (100% Complete)**
-- ✔️ Event-driven microservices architecture
-- ✔️ Multi-region AWS infrastructure with Terraform
-- ✔️ Kubernetes production manifests with auto-scaling
-- ✔️ Complete CI/CD pipelines with GitHub Actions
-- ✔️ Service mesh (Istio) with mTLS
-- ✔️ Zero-trust security architecture
-- ✔️ Comprehensive monitoring (Prometheus/Grafana/Jaeger)
-
-#### **Backend Services (95% Complete)**
-- ✔️ WhatsApp Business API integration (838 lines)
-- ✔️ OpenAI GPT-4 integration with fine-tuning (618 lines)
-- ✔️ Complete healthcare database schema (1,062 lines, 45+ tables)
-- ✔️ Advanced OCR with AWS Textract for documents
-- ✔️ Real-time WebSocket communication
-- ✔️ Event streaming with Apache Kafka
-- ✔️ FHIR healthcare interoperability
-- ✔️ Redis cluster for high-performance caching
-- ✔️ MongoDB for unstructured data
-- ✔️ Comprehensive audit logging
-
-#### **AI & ML Capabilities (90% Complete)**
-- ✔️ XGBoost predictive models (89% accuracy)
-- ✔️ Natural Language Processing with spaCy/NLTK
-- ✔️ Computer vision for medical documents
-- ✔️ Real-time risk scoring algorithms
-- ✔️ Adaptive conversation flows
-- ✔️ Sentiment analysis and mood detection
-- ✔️ A/B testing framework for ML models
-- ✔️ MLflow for model versioning
-- 🔄 Final model optimization in progress
-
-#### **Business Features (85% Complete)**
-- ✔️ Gamified onboarding with HealthPoints system
-- ✔️ Intelligent symptom checker with medical accuracy
-- ✔️ Automated authorization workflow (<30s processing)
-- ✔️ Smart scheduling with geographic optimization
-- ✔️ Tasy ERP integration for healthcare records
-- ✔️ Document intelligence for medical forms
-- ✔️ Emergency detection and alerting
-- ✔️ Medication adherence tracking
-- 🔄 Voice AI interface (final testing)
-
-#### **Engagement Systems (90% Complete)**
-- ✔️ Behavioral intelligence engine
-- ✔️ Adaptive gamification system
-- ✔️ Predictive retention algorithms
-- ✔️ Social engagement features
-- ✔️ Conversation quality analytics
-- ✔️ Performance analytics dashboard
-- ✔️ Multi-channel notification system
-
-#### **DevOps & CI/CD (100% Complete)**
-- ✔️ Infrastructure as Code (Terraform)
-- ✔️ GitOps with ArgoCD
-- ✔️ Automated testing pipeline
-- ✔️ Security scanning (SAST/DAST)
-- ✔️ Progressive deployment strategies
-- ✔️ Chaos engineering tests
-- ✔️ 24/7 monitoring and alerting
-
-### 🚧 In Progress (Final Sprint - Week 10 of 12)
-
-- 🔄 Frontend final UX polish (75% → 90%)
-- 🔄 ML model final optimization (90% → 95%)
-- 🔄 Production secrets configuration
-- 🔄 Load testing at 100k users scale
-- 🔄 Final security audit
-- 🔄 Customer success team training
-
-## 🛠️ Technical Architecture
-
-### 🏗️ Cloud-Native Architecture
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    User Interface Layer                      │
-│         WhatsApp Business API | React PWA | Voice AI         │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────────────┐
-│                    API Gateway (Kong)                        │
-│              Rate Limiting | Auth | Load Balancing          │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────────────┐
-│                  Microservices Layer                         │
-│   Chat Service | AI Service | Auth Service | BPM Service    │
-│   Risk Service | OCR Service | Integration Service          │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────────────┐
-│              Event Streaming (Apache Kafka)                  │
-│                   Real-time Event Processing                 │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────────────┐
-│                    Data Layer                                │
-│   PostgreSQL | MongoDB | Redis Cluster | S3 Data Lake       │
-└─────────────────────────────────────────────────────────────┘
+```
+❌ Microserviços separados (Python, Java, etc.)
+❌ Apache Kafka em produção
+❌ MongoDB em produção
+❌ Deploy Kubernetes multi-region
+❌ Service mesh (Istio)
+❌ API Gateway Kong em produção
+❌ Multi-cloud AWS/GCP
+❌ Certificação ANVISA SaMD (em processo)
+❌ 100k usuários concorrentes comprovados
 ```
 
-### 💻 Technology Stack
+## 🛠️ Stack Tecnológica Real
 
-#### **Frontend & Interfaces**
-- 💬 **WhatsApp Business API** - Primary interface
-- 🌐 **React.js + Next.js + TypeScript** - Administrative dashboard
-- 🎙️ **AWS Polly + Lex** - Voice interface
-- 📱 **Progressive Web App** - Mobile access
-- 📊 **D3.js + Chart.js** - Data visualizations
+### Backend (Monolith)
+- **Runtime:** Node.js + Express + TypeScript
+- **ORM:** Prisma (PostgreSQL)
+- **Cache:** Redis 7 (ioredis)
+- **Filas:** BullMQ (backed by Redis)
+- **IA:** OpenAI GPT-4 + LangChain
+- **Validação:** Zod + Joi
+- **Autenticação:** JWT + bcrypt
+- **Logging:** Winston + Morgan
+- **Métricas:** prom-client (Prometheus)
 
-#### **Backend & Processing**
-- 🟢 **Node.js + Express + TypeScript** - High-performance APIs
-- 🐍 **Python + FastAPI** - ML/AI services
-- ☕ **Java + Spring Boot** - Enterprise integrations
-- 🔄 **Apache Kafka** - Event streaming
-- 🔧 **Camunda 8** - Process orchestration
-- 🔌 **Socket.io** - Real-time communications
+### Frontend
+- **Framework:** React 18 + TypeScript
+- **Build:** Vite 5
+- **Estilo:** TailwindCSS
+- **Estado:** Zustand + React Query
+- **Roteamento:** React Router DOM v6
+- **Componentes:** Radix UI + Lucide Icons
+- **Gráficos:** Recharts
 
-#### **Artificial Intelligence**
-- 🤖 **GPT-4 (OpenAI)** - Natural language processing
-- 📊 **XGBoost + TensorFlow** - Predictive models
-- 🧠 **spaCy + NLTK** - Medical text analysis
-- 👁️ **AWS Textract + Google Vision** - Document AI
-- ⚡ **Apache Spark** - Distributed processing
+### Banco de Dados
+- **Primário:** PostgreSQL 15
+- **Criptografia:** pgcrypto (envelope encryption para PHI)
+- **Migrations:** Prisma Migrate
 
-#### **Data & Storage**
-- 🐘 **PostgreSQL** - Transactional data
-- 🍃 **MongoDB** - Unstructured data
-- 🚀 **Redis Cluster** - Distributed cache
-- 📊 **Delta Lake** - Analytics data lake
-- 🔍 **Elasticsearch** - Full-text search
+### Infraestrutura
+- **Container:** Docker + Docker Compose
+- **Observabilidade:** Prometheus + Grafana (local)
+- **CI/CD:** Em configuração (GitHub Actions planejado)
 
-#### **DevOps & Infrastructure**
-- 🐳 **Docker + Kubernetes** - Container orchestration
-- ☁️ **AWS (Primary) + GCP (DR)** - Multi-cloud
-- 🔀 **GitHub Actions + ArgoCD** - CI/CD GitOps
-- 📊 **Prometheus + Grafana** - Monitoring
-- 🔐 **Istio + OPA** - Service mesh & policies
-- 🛡️ **HashiCorp Vault** - Secrets management
+## 🚀 Quick Start (Desenvolvimento)
 
-## 📊 Performance & Quality Metrics
+### Pré-requisitos
+- Node.js 18+
+- Docker e Docker Compose
+- Conta Z-API (WhatsApp)
+- Chave API OpenAI
 
-### Performance
-- **WhatsApp Response**: <3 seconds (P95)
-- **API Latency**: <200ms (P99)
-- **Throughput**: 1000+ messages/second
-- **Availability**: 99.9% uptime SLA
-- **Authorization Processing**: <30 seconds
-- **Concurrent Users**: 100,000+
+### Setup
 
-### Quality
-- **Test Coverage**: 85% (exceeds 80% target)
-- **Code Review**: 100% automated + manual
-- **Security Scan**: 0 critical, 0 high vulnerabilities
-- **Documentation**: 100% API coverage
-- **Technical Debt**: <5% (very low)
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js** v18+ and npm/yarn
-- **Docker** and Docker Compose
-- **Git** for version control
-- **WhatsApp Business API** account
-- **OpenAI API** key (GPT-4)
-- **AWS** account (for production)
-
-### 🔧 Quick Start (Development)
-
-1. **Clone the repository**
 ```bash
+# 1. Clone
 git clone https://github.com/austa-health/austa-care-platform.git
 cd austa-care-platform
-```
 
-2. **Setup environment**
-```bash
+# 2. Configure variáveis de ambiente
 cp .env.example .env
-# Edit .env with your credentials
-```
+# Edite .env com suas credenciais (Z-API, OpenAI, etc.)
 
-3. **Start with Docker Compose**
-```bash
-docker-compose up -d
-```
+# 3. Inicie infraestrutura
+docker-compose up -d postgres redis
 
-4. **Verify installation**
-```bash
-# Check health
-curl http://localhost:3000/health
-
-# View logs
-docker-compose logs -f
-```
-
-### 🛠️ Development Setup
-
-1. **Install dependencies**
-```bash
-# Root directory
-npm install
-
-# Backend
-cd backend && npm install
-
-# Frontend
+# 4. Instale dependências
+cd austa-care-platform/backend && npm install
 cd ../frontend && npm install
-```
 
-2. **Database setup**
-```bash
-cd backend
+# 5. Execute migrations
+cd ../austa-care-platform/backend
 npm run db:migrate
 npm run db:seed
-```
 
-3. **Start development servers**
-```bash
+# 6. Inicie servidores
 # Terminal 1 - Backend
-cd backend && npm run dev
-
+cd austa-care-platform/backend && npm run dev
 # Terminal 2 - Frontend
-cd frontend && npm run dev
+cd austa-care-platform/frontend && npm run dev
 
-# Terminal 3 - ML Services
-cd ml-services && python -m uvicorn main:app --reload
+# 7. Verifique
+curl http://localhost:3000/health
 ```
 
-4. **Run tests**
-```bash
-# All tests
-npm test
-
-# With coverage
-npm run test:coverage
-
-# Specific suites
-npm run test:unit
-npm run test:integration
-npm run test:e2e
-```
-
-## 📂 Project Structure
+## 📂 Estrutura do Projeto
 
 ```
-austa-care-platform/
-├── 📁 backend/                  # Node.js API server
-│   ├── src/
-│   │   ├── controllers/        # API endpoints
-│   │   ├── services/          # Business logic
-│   │   ├── infrastructure/    # External integrations
-│   │   ├── types/            # TypeScript types
-│   │   └── utils/            # Utilities
-│   └── tests/                # Test suites
-├── 📁 frontend/                # React dashboard
-│   ├── src/
-│   │   ├── components/       # UI components
-│   │   ├── pages/           # Page components
-│   │   ├── hooks/           # Custom hooks
-│   │   └── services/        # API clients
-│   └── tests/               # Frontend tests
-├── 📁 ml-services/            # Python ML services
-│   ├── models/              # Trained models
-│   ├── pipelines/           # ML pipelines
-│   └── notebooks/           # Jupyter notebooks
-├── 📁 infrastructure/         # IaC and DevOps
-│   ├── terraform/           # AWS infrastructure
-│   ├── k8s/                # Kubernetes manifests
-│   ├── scripts/            # Deployment scripts
-│   └── monitoring/         # Observability configs
-├── 📁 docs/                  # Documentation
-└── 📁 prisma/               # Database schema
+Coordenacao-Cuidado-Enterprise/
+├── austa-care-platform/
+│   ├── backend/                  # Monolith TypeScript/Express
+│   │   ├── src/
+│   │   │   ├── routes/          # 14+ route groups
+│   │   │   ├── services/        # Business logic modules
+│   │   │   ├── controllers/     # Legacy controllers
+│   │   │   ├── middleware/      # Auth, validation, error handling
+│   │   │   ├── types/           # TypeScript type definitions
+│   │   │   ├── utils/           # Helpers, logger, webhook utils
+│   │   │   ├── validation/      # Zod/Joi schemas
+│   │   │   ├── infrastructure/  # Kafka, Redis, MongoDB clients
+│   │   │   └── config/          # Environment config
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma    # 1259 linhas, 45+ tabelas
+│   │   │   └── migrations/      # Migration SQL
+│   │   └── tests/
+│   │       ├── unit/
+│   │       ├── integration/
+│   │       └── e2e/
+│   ├── frontend/                 # React 18 + Vite 5 SPA
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   ├── services/
+│   │   │   ├── store/           # Zustand stores
+│   │   │   └── types/
+│   │   └── vite.config.ts
+│   ├── k8s/                      # Kubernetes manifests (aspiracionais)
+│   ├── infrastructure/           # Terraform, Kong config (planejado)
+│   └── monitoring/               # Prometheus + Grafana configs
+├── docs/
+│   ├── architecture_diagrams.md  # Diagramas C4 honestos
+│   ├── architecture/
+│   │   └── adr/                  # 6 ADRs formais
+│   ├── _analysis/                # Análise da plataforma
+│   └── *.md                      # Documentação complementar
+├── docker-compose.yml            # Serviços de runtime reais
+├── docker-compose.infrastructure.yml  # Serviços opcionais/planejados
+└── README.md                     # Este arquivo
 ```
 
-## 📅 Roadmap
+## 📋 Roadmap
 
-### ✅ Completed Phases (Weeks 1-9)
-- ✔️ Requirements analysis and architecture design
-- ✔️ Infrastructure setup with multi-region support
-- ✔️ Core backend services implementation
-- ✔️ WhatsApp integration with advanced features
-- ✔️ AI/ML model development and deployment
-- ✔️ Frontend dashboard development
-- ✔️ Integration testing and security audits
+### ✅ Completado (Waves 0-3)
+- ✔️ Backend TypeScript monolith funcional
+- ✔️ Integração WhatsApp via Z-API
+- ✔️ Integração OpenAI GPT-4
+- ✔️ Schema PostgreSQL completo (45+ tabelas)
+- ✔️ Sistema de autenticação JWT + RBAC
+- ✔️ Frontend React dashboard
+- ✔️ Testes unitários, integração e E2E
+- ✔️ Docker Compose desenvolvimento
+- ✔️ Documentação de arquitetura corrigida (honesta)
+- ✔️ 6 ADRs formais documentados
 
-### 🚧 Current Phase (Week 10)
-- Final production optimizations
-- Load testing at scale
-- Security hardening
-- Team training
+### 🔄 Em Progresso
+- 🔄 Preparação para classificação ANVISA SaMD
+- 🔄 Substituição completa HIPAA → LGPD/ANS/ANVISA
+- 🔄 CI/CD pipeline (GitHub Actions)
+- 🔄 Testes de carga
 
-### 📍 Next Phases (Weeks 11-12)
-- **Week 11**: Production deployment
-- **Week 12**: Go-live and monitoring
+### 📍 Próximos Passos (Wave 4+)
+- **Imediato:** Finalizar migration HIPAA→LGPD, implementar pgcrypto
+- **Curto prazo:** Deploy staging, testes de carga, ajustes de performance
+- **Médio prazo:** Registro ANVISA, extração de microserviços sob demanda
+- **Longo prazo:** Kubernetes, multi-region, certificações (ISO 27001, SBIS/CFM)
 
-### 🔮 Post-Launch (Q2 2025)
-- Voice AI enhancement
-- International expansion features
-- Advanced analytics dashboard
-- Mobile native apps
+## 🔒 Compliance & Regulatório
 
-## 👥 Team Structure
+A plataforma segue o framework regulatório brasileiro:
 
-### Core Development Team
-- **Backend Engineers**: 3 developers
-- **Frontend Engineers**: 2 developers
-- **ML/AI Engineers**: 2 specialists
-- **DevOps Engineers**: 2 engineers
-- **QA Engineers**: 2 testers
-- **Product Owner**: 1 lead
-- **Tech Lead**: 1 architect
+- **LGPD** (Lei 13.709/2018) — proteção de dados pessoais e sensíveis
+- **ANS** (RN 277/2011, RN 305/2012) — regulação de operadoras de saúde
+- **ANVISA** (RDC 657/2022) — classificação SaMD em andamento
 
-### Support Teams
-- **UI/UX Design**: 1 designer
-- **Healthcare Consultants**: 2 experts
-- **Security Specialist**: 1 expert
-- **Project Manager**: 1 coordinator
+> **Nota:** Documentação anterior referia-se a "HIPAA compliance". Isso foi corrigido — HIPAA é regulação dos EUA e não se aplica ao mercado brasileiro. Ver ADR-001.
 
-## 🤝 Contributing
+## 📚 Documentação de Arquitetura
 
-This is a proprietary project. Team members should:
+- **Diagramas:** `docs/architecture_diagrams.md` — C4Context, C4Container, Data Flow, Security, Deployment (atuais + futuros)
+- **ADRs:** `docs/architecture/adr/` — 6 decisões arquiteturais formais
+- **Análise:** `docs/_analysis/` — Análise detalhada da plataforma
 
-1. Follow the established Git workflow
-2. Ensure all tests pass before PRs
-3. Maintain >80% test coverage
-4. Update documentation for new features
-5. Follow TypeScript strict mode
-6. Use conventional commits
+## 📝 Licença
 
-## 📊 Project Metrics
-
-### Development Velocity
-- **Sprint Velocity**: 24 points/sprint (2x initial estimate)
-- **Features Delivered**: 156 of 180 planned (87%)
-- **Bug Rate**: <2% of story points
-- **PR Turnaround**: <4 hours average
-
-### Investment Status
-- **Development Hours**: 1,440 hours
-- **Infrastructure Costs**: $16,200
-- **Total Investment**: $165,000
-- **Status**: 8.5% under budget
-
-## 🔒 Security & Compliance
-
-- **LGPD Compliant**: Full Brazilian data protection (Lei 13.709/2018)
-- **ANS/ANVISA Aligned**: Brazilian healthcare regulatory framework
-- **ISO 27001**: In progress
-- **SOC 2**: Planned for Q2 2025
-- **End-to-end Encryption**: All data channels
-- **Zero-trust Architecture**: Complete isolation
-
-## 📝 License
-
-This project is proprietary software owned by AUSTA Health. All rights reserved.
+Este projeto é software proprietário da AUSTA Health. Todos os direitos reservados.
 
 ---
 
-**🚀 Revolutionizing healthcare, one message at a time.**
+**🏥 Transformando coordenação de cuidado, uma mensagem por vez.**
 
-Built with ❤️ by the AUSTA Development Team
-
-*Platform Status: 85% Complete | Week 10 of 12 | Production Launch: February 2025*
+*Stack real: TypeScript monolith + PostgreSQL + Redis | Alpha/Pre-Production | Junho 2026*

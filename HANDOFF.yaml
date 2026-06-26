@@ -1,7 +1,17 @@
 # HANDOFF.yaml — Bloqueios Críticos
 # Coordenação-Cuidado Enterprise / AUSTA Care Platform
 # Gerado por: Parreira (Orquestrador DevOps)
-# Data: 2026-06-26
+# Data: 2026-06-26 | Última verificação: 2026-06-26
+
+_verified_at: "2026-06-26T00:00:00-03:00"
+_verified_by: "parreira (compliance review — Wave 3 final)"
+_checks:
+  HIPAA_references: 0
+  pgcrypto_functional: true
+  audit_trail_persistent: true
+  algorithm_versioning: true
+  whatsapp_idempotency: true
+  secrets_not_hardcoded: true
 
 blocked:
   - id: "BLK-001"

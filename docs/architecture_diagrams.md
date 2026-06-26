@@ -1,503 +1,377 @@
 # 🎨 System Architecture Diagrams: AUSTA Care Platform
 
-**Version:** 1.0  
-**Date:** July 14, 2025  
-**Purpose:** Visual representations of system architecture components
+**Version:** 2.0
+**Date:** June 26, 2026
+**Purpose:** Honest architectural representation — current state + future aspirations
+
+> ⚠️ **IMPORTANT NOTE:** The diagrams below are split into **CURRENT** (what actually exists in the codebase right now) and **FUTURE** (target architecture for later phases). The previous version of this document (v1.0, July 2025) described a 12-container microservices architecture that did NOT exist. This v2.0 corrects that.
 
 ---
 
-## 📊 High-Level System Overview
+## 📋 Current vs Target Architecture Summary
+
+| Aspect | Current (MVP — June 2026) | Target (Fase 3+) |
+|--------|---------------------------|-------------------|
+| **Runtime services** | 3 containers | 6-8 containers |
+| **Backend** | 1 TypeScript monolith (Express) | 4-5 microservices extraídos |
+| **Database** | PostgreSQL 15 | PostgreSQL 15 (permanece) |
+| **Cache** | Redis 7 | Redis 7 (permanece) |
+| **Message broker** | In-process EventEmitter | Apache Kafka (quando necessário) |
+| **WhatsApp** | Z-API (z-api.io) | Z-API + potencial multi-provedor |
+| **Deploy** | Docker Compose (single VM) | Kubernetes (EKS) |
+| **Frontend** | React 18 + Vite 5 | React 18 + Vite 5 (permanece) |
+| **ADR Reference** | ADR-003 | ADR-003 § Plano de Evolução |
+
+---
+
+## 📊 C4 Context Diagram (CURRENT)
 
 ```mermaid
 C4Context
-    title System Context Diagram - AUSTA Care Platform
+    title System Context Diagram - AUSTA Care Platform (Current)
 
-    Person(patient, "Patient/Beneficiary", "Healthcare plan member using WhatsApp")
-    Person(nurse, "Care Coordinator", "Healthcare professional managing care")
-    Person(admin, "Platform Admin", "System administrator")
+    Person(patient, "Paciente/Beneficiário", "Usuário do plano de saúde via WhatsApp")
+    Person(nurse, "Coordenador de Cuidado", "Profissional de saúde gerenciando cuidado")
+    Person(admin, "Admin da Plataforma", "Administrador do sistema")
 
-    System(austa, "AUSTA Care Platform", "AI-powered healthcare coordination platform")
+    System(austa, "AUSTA Care Platform", "Plataforma de coordenação de cuidado com IA")
 
-    System_Ext(whatsapp, "WhatsApp Business API", "Primary communication channel")
-    System_Ext(tasy, "ERP Tasy", "Healthcare management system")
-    System_Ext(openai, "OpenAI GPT-4", "AI language model")
-    System_Ext(fhir, "FHIR Gateway", "Healthcare interoperability")
+    System_Ext(zapi, "Z-API (z-api.io)", "Gateway WhatsApp brasileiro")
+    System_Ext(tasy, "ERP Tasy (Philips)", "Sistema de gestão hospitalar")
+    System_Ext(openai, "OpenAI GPT-4", "Modelo de linguagem para IA conversacional")
 
-    Rel(patient, whatsapp, "Sends messages")
-    Rel(whatsapp, austa, "Message events")
-    Rel(nurse, austa, "Manages care coordination")
-    Rel(admin, austa, "System administration")
-    
-    Rel(austa, tasy, "Patient data, authorizations")
-    Rel(austa, openai, "AI processing requests")
-    Rel(austa, fhir, "Healthcare data exchange")
+    Rel(patient, zapi, "Envia mensagens via", "WhatsApp")
+    Rel(zapi, austa, "Webhook de eventos", "HTTPS/REST")
+    Rel(nurse, austa, "Dashboard de cuidado", "HTTPS")
+    Rel(admin, austa, "Administração", "HTTPS")
+
+    Rel(austa, tasy, "Dados de pacientes, autorizações", "REST/SOAP")
+    Rel(austa, openai, "Processamento de IA", "HTTPS/API")
 ```
 
-## 🏗️ Container Architecture
+**Nota:** Z-API substitui WhatsApp Business API (Meta). Ver ADR-003 para detalhes da decisão de provedor.
+
+---
+
+## 🏗️ Container Diagram (CURRENT — Modular Monolith)
 
 ```mermaid
 C4Container
-    title Container Diagram - AUSTA Care Platform
+    title Container Diagram - AUSTA Care Platform (Current Architecture)
 
-    Container(gateway, "API Gateway", "Kong", "Request routing, authentication, rate limiting")
-    
-    Container(chat, "Chat Service", "Node.js", "WhatsApp message handling")
-    Container(ai, "AI/NLP Service", "Python/FastAPI", "Symptom analysis, NLP processing")
-    Container(auth, "Authorization Service", "Java/Spring", "Healthcare authorization processing")
-    Container(user, "User Service", "Node.js", "User management, profiles")
-    Container(risk, "Risk Engine", "Python", "Health risk assessment")
-    Container(notification, "Notification Service", "Node.js", "Multi-channel notifications")
-    Container(integration, "Integration Hub", "Java", "External system integrations")
+    Container(backend, "Backend API", "TypeScript/Express + Prisma", "Monolith: toda lógica de negócio em módulos com boundaries explícitas")
 
-    ContainerDb(postgres, "PostgreSQL", "Relational DB", "Transactional data")
-    ContainerDb(mongo, "MongoDB", "Document DB", "Conversations, documents")
-    ContainerDb(redis, "Redis Cluster", "Cache", "Sessions, real-time data")
-    ContainerDb(datalake, "Data Lake", "Delta Lake", "Analytics, ML data")
+    ContainerDb(postgres, "PostgreSQL 15", "Relational Database", "Fonte da verdade: dados transacionais, pacientes, saúde")
+    ContainerDb(redis, "Redis 7", "In-Memory Cache", "Sessões, rate limiting, filas (BullMQ), cache de queries")
 
-    Container(kafka, "Apache Kafka", "Event Streaming", "Event backbone")
+    Container(web, "Frontend Dashboard", "React 18 + Vite 5 + TailwindCSS", "Dashboard administrativo SPA")
 
-    Rel(gateway, chat, "Routes messages")
-    Rel(gateway, ai, "AI requests")
-    Rel(gateway, auth, "Authorization requests")
-    Rel(gateway, user, "User operations")
+    System_Ext(zapi, "Z-API", "WhatsApp Gateway")
+    System_Ext(tasy, "ERP Tasy", "Sistema hospitalar")
+    System_Ext(openai, "OpenAI GPT-4", "LLM")
 
-    Rel(chat, kafka, "Message events")
-    Rel(ai, kafka, "Analysis events")
-    Rel(auth, kafka, "Auth events")
-    Rel(risk, kafka, "Risk events")
-
-    Rel(chat, mongo, "Store conversations")
-    Rel(user, postgres, "User data")
-    Rel(auth, postgres, "Authorization data")
-    Rel(risk, datalake, "Analytics data")
-
-    Rel_Back(redis, chat, "Session cache")
-    Rel_Back(redis, ai, "Model cache")
+    Rel(zapi, backend, "Webhook (mensagens)", "HTTPS/REST")
+    Rel(web, backend, "API calls", "HTTPS/REST")
+    Rel(backend, postgres, "Leitura/Escrita", "TCP/Prisma")
+    Rel(backend, redis, "Cache/Sessões", "TCP/ioredis")
+    Rel(backend, tasy, "Integração", "REST/SOAP")
+    Rel(backend, openai, "Processamento IA", "HTTPS/API")
 ```
 
-## 🔄 Data Flow Architecture
+**Nota:** A arquitetura atual é um **modular monolith** — todos os 14+ módulos (auth, conversations, health-data, risk-assessment, ai, ocr, authorization, gamification, etc.) rodam em um único processo Express. Microserviços serão extraídos sob demanda (ver ADR-003).
+
+---
+
+## 🏗️ Container Diagram (FUTURE — Target Fase 3+)
+
+```mermaid
+C4Container
+    title Container Diagram - AUSTA Care Platform (Future Target)
+
+    Container(web, "Frontend Dashboard", "React 18 + Vite 5", "SPA administrativa")
+
+    Container(gateway, "API Gateway", "Nginx/Kong", "Roteamento, rate limiting, TLS")
+    Container(chat, "Chat Service", "TypeScript/Express", "Processamento WhatsApp")
+    Container(care, "Care Coordination", "TypeScript/Express", "Coordenação de cuidado, autorizações")
+    Container(ai, "AI/ML Service", "TypeScript/Express", "Análise de risco, NLP, ML")
+    Container(integration, "Integration Hub", "TypeScript/Express", "Tasy, FHIR, externals")
+
+    ContainerDb(postgres, "PostgreSQL 15", "Relational DB", "Dados transacionais")
+    ContainerDb(redis, "Redis 7", "Cache", "Sessões, filas, cache")
+
+    Rel(web, gateway, "API calls", "HTTPS")
+    Rel(gateway, chat, "Routes", "HTTPS")
+    Rel(gateway, care, "Routes", "HTTPS")
+    Rel(gateway, ai, "Routes", "HTTPS")
+    Rel(gateway, integration, "Routes", "HTTPS")
+
+    Rel(chat, postgres, "Read/Write", "TCP")
+    Rel(care, postgres, "Read/Write", "TCP")
+    Rel(ai, postgres, "Read/Write", "TCP")
+
+    Rel(chat, redis, "Cache", "TCP")
+    Rel(care, redis, "Cache", "TCP")
+
+    UpdateLayoutConfig($C4_SHAPE, "aspiracional")
+```
+
+---
+
+## 🔄 Data Flow Architecture (CURRENT)
 
 ```mermaid
 graph TB
-    subgraph "Data Sources"
-        A[WhatsApp Messages]
-        B[User Interactions]
-        C[ERP Tasy Data]
-        D[External APIs]
+    subgraph "Input Channels"
+        A[WhatsApp via Z-API]
+        B[Web Dashboard]
+        C[ERP Tasy Integration]
     end
 
-    subgraph "Event Streaming Layer"
-        E[Apache Kafka]
-        F[Event Sourcing]
-        G[Real-time Streams]
-    end
-
-    subgraph "Processing Layer"
-        H[Stream Processing]
-        I[Batch Processing]
-        J[AI/ML Pipeline]
+    subgraph "Backend Monolith (Express + Prisma)"
+        D[API Routes<br/>14+ route groups]
+        E[Business Logic<br/>Services Layer]
+        F[Prisma ORM]
     end
 
     subgraph "Storage Layer"
-        K[Operational DB]
-        L[Document Store]
-        M[Cache Layer]
-        N[Data Lake]
+        G[PostgreSQL 15<br/>Transactional Data]
+        H[Redis 7<br/>Cache / Sessions / Queues]
     end
 
-    subgraph "Analytics & ML"
-        O[Feature Store]
-        P[Model Training]
-        Q[Real-time Inference]
-        R[Business Intelligence]
+    subgraph "External Services"
+        I[OpenAI GPT-4<br/>NLP & AI]
+        J[Tasy ERP<br/>Patient Data]
+        K[Z-API Webhook<br/>WhatsApp Events]
     end
 
-    A --> E
-    B --> E
+    A -->|Webhook| K
+    K --> D
+    B --> D
     C --> E
+
     D --> E
-
-    E --> H
-    E --> I
-    E --> J
-
-    H --> K
-    H --> L
-    H --> M
-    I --> N
-    J --> O
-
-    N --> P
-    O --> Q
-    P --> Q
-    Q --> R
-
-    style E fill:#e1f5fe
-    style J fill:#f3e5f5
-    style N fill:#e8f5e8
-```
-
-## 🤖 AI/ML Pipeline Architecture
-
-```mermaid
-graph LR
-    subgraph "Data Ingestion"
-        A[User Messages]
-        B[Medical Records]
-        C[System Events]
-        D[External Data]
-    end
-
-    subgraph "Feature Engineering"
-        E[Data Validation]
-        F[Feature Extraction]
-        G[Feature Store]
-    end
-
-    subgraph "Model Development"
-        H[Experiment Tracking]
-        I[Model Training]
-        J[Model Validation]
-        K[Model Registry]
-    end
-
-    subgraph "Model Deployment"
-        L[Model Serving]
-        M[A/B Testing]
-        N[Monitoring]
-        O[Feedback Loop]
-    end
-
-    A --> E
-    B --> E
-    C --> E
-    D --> E
-
     E --> F
     F --> G
+    E --> H
 
-    G --> H
-    H --> I
-    I --> J
-    J --> K
+    E -->|API Call| I
+    E -->|REST/SOAP| J
 
-    K --> L
-    L --> M
-    M --> N
-    N --> O
-    O --> F
-
-    style G fill:#fff3e0
-    style K fill:#e8f5e8
-    style N fill:#fce4ec
+    style D fill:#e1f5fe
+    style G fill:#e8f5e8
+    style H fill:#fff3e0
 ```
 
-## 🔐 Security Architecture
+**Nota:** Kafka, MongoDB, Data Lake, e outros componentes do diagrama v1.0 foram removidos por não estarem em uso. Ver ADR-003 para justificativa. O processamento de eventos é in-process (EventEmitter) nesta fase.
+
+---
+
+## 🔐 Security Architecture (CURRENT)
 
 ```mermaid
 graph TB
-    subgraph "Perimeter Defense"
-        A[WAF/DDoS Protection]
-        B[Network Firewall]
-        C[VPN Access]
+    subgraph "Network Layer"
+        A[Helmet.js<br/>Security Headers]
+        B[CORS<br/>Origin Control]
+        C[Rate Limiting<br/>express-rate-limit]
     end
 
-    subgraph "Identity & Access"
-        D[OAuth 2.0/OIDC]
-        E[Multi-Factor Auth]
-        F[RBAC/ABAC]
-        G[PAM]
-    end
-
-    subgraph "Application Security"
-        H[API Gateway Security]
-        I[Input Validation]
-        J[OWASP Controls]
-        K[Secret Management]
+    subgraph "Authentication & Authorization"
+        D[JWT Tokens<br/>jsonwebtoken]
+        E[bcrypt<br/>Password Hashing]
+        F[RBAC<br/>Role-based Access]
     end
 
     subgraph "Data Protection"
-        L[Encryption at Rest]
-        M[Encryption in Transit]
-        N[Key Management]
-        O[DLP Controls]
+        G[pgcrypto Extension<br/>PostgreSQL Encryption]
+        H[TLS/SSL<br/>Encryption in Transit]
+        I[Input Validation<br/>Zod + Joi Schemas]
     end
 
-    subgraph "Runtime Security"
-        P[Container Security]
-        Q[Runtime Monitoring]
-        R[SIEM/SOC]
-        S[Incident Response]
+    subgraph "Compliance Framework"
+        J[LGPD<br/>Lei 13.709/2018]
+        K[ANS<br/>RN 277/2011]
+        L[ANVISA<br/>RDC 657/2022]
     end
 
     A --> D
     B --> D
     C --> D
 
-    D --> H
-    E --> H
-    F --> H
-    G --> H
+    D --> G
+    E --> G
+    F --> G
 
-    H --> L
-    I --> L
-    J --> L
+    G --> J
+    H --> J
+    I --> J
+
+    J --> K
     K --> L
 
-    L --> P
-    M --> P
-    N --> P
-    O --> P
-
-    P --> R
-    Q --> R
-    R --> S
-
     style D fill:#e3f2fd
-    style L fill:#f1f8e9
-    style R fill:#fff3e0
+    style G fill:#f1f8e9
+    style J fill:#fff3e0
 ```
 
-## 📡 Integration Architecture
+**Nota:** HIPAA foi substituído por LGPD/ANS/ANVISA (ver ADR-001). pgcrypto para envelope encryption de PHI (ver ADR-004). RBAC implementado via middleware de roles em TypeScript.
+
+---
+
+## 📡 Integration Architecture (CURRENT)
 
 ```mermaid
 graph TB
-    subgraph "AUSTA Platform"
-        A[Integration Hub]
-        B[Message Queue]
-        C[Data Transformation]
-        D[API Gateway]
+    subgraph "AUSTA Backend (Monolith)"
+        A[Integration Services<br/>TypeScript Modules]
+        B[Webhook Handlers]
+        C[API Clients]
+    end
+
+    subgraph "WhatsApp"
+        D[Z-API (z-api.io)<br/>Gateway Brasileiro]
     end
 
     subgraph "Healthcare Systems"
-        E[ERP Tasy]
-        F[FHIR Gateway]
-        G[Lab Systems]
-        H[Hospital EMRs]
+        E[ERP Tasy<br/>Philips]
+        F[HAPI FHIR Server<br/>Planejado]
     end
 
-    subgraph "Communication Platforms"
-        I[WhatsApp Business]
-        J[SMS Gateway]
-        K[Email Service]
-        L[Push Notifications]
+    subgraph "AI Services"
+        G[OpenAI GPT-4<br/>Chat Completions]
+        H[LangChain<br/>Orquestração IA]
     end
 
-    subgraph "AI/ML Services"
-        M[OpenAI GPT-4]
-        N[AWS Comprehend Medical]
-        O[Custom ML Models]
-        P[OCR Services]
+    subgraph "Storage"
+        I[AWS S3<br/>Documentos]
+        J[AWS Textract<br/>OCR]
     end
 
-    subgraph "External APIs"
-        Q[Payment Gateways]
-        R[Government APIs]
-        S[Insurance Networks]
-        T[Pharmacy Systems]
-    end
-
-    A --> B
-    B --> C
-    C --> D
-
-    D --> E
-    D --> F
-    D --> G
-    D --> H
-
-    D --> I
-    D --> J
-    D --> K
-    D --> L
-
-    D --> M
-    D --> N
-    D --> O
-    D --> P
-
-    D --> Q
-    D --> R
-    D --> S
-    D --> T
+    B --> D
+    C --> E
+    C --> F
+    C --> G
+    A --> H
+    A --> I
+    C --> J
 
     style A fill:#e1f5fe
     style D fill:#f3e5f5
 ```
 
-## 🚀 Deployment Architecture
+**Nota:** A integração é feita por módulos TypeScript dentro do monolith, não por um Integration Hub separado. O HAPI FHIR Server está no `docker-compose.infrastructure.yml` mas não é ativamente utilizado pelo código.
+
+---
+
+## 🚀 Deployment Architecture (CURRENT)
 
 ```mermaid
 graph TB
-    subgraph "Multi-Cloud Strategy"
-        subgraph "AWS Primary Region"
-            A[EKS Cluster]
-            B[RDS PostgreSQL]
-            C[DocumentDB]
-            D[ElastiCache]
-            E[S3 Data Lake]
+    subgraph "Single VM / Docker Host"
+        subgraph "Docker Compose"
+            A[Backend Container<br/>Node.js/Express:3000]
+            B[PostgreSQL Container<br/>Postgres:5432]
+            C[Redis Container<br/>Redis:6379]
         end
-
-        subgraph "GCP DR Region"
-            F[GKE Cluster]
-            G[Cloud SQL]
-            H[Firestore]
-            I[Memorystore]
-            J[Cloud Storage]
-        end
+        D[Frontend<br/>Vite Dev Server:5173]
     end
 
-    subgraph "Edge/CDN"
-        K[CloudFront]
-        L[Global Load Balancer]
+    subgraph "External (SaaS)"
+        E[Z-API<br/>WhatsApp Gateway]
+        F[OpenAI API<br/>GPT-4]
+        G[AWS S3 + Textract<br/>Document Storage]
     end
-
-    subgraph "Monitoring & Ops"
-        M[Prometheus]
-        N[Grafana]
-        O[Jaeger]
-        P[ELK Stack]
-    end
-
-    K --> L
-    L --> A
-    L --> F
 
     A --> B
     A --> C
-    A --> D
+    D --> A
     A --> E
+    A --> F
+    A --> G
 
-    F --> G
-    F --> H
-    F --> I
-    F --> J
-
-    A --> M
-    F --> M
-    M --> N
-    M --> O
-    M --> P
-
-    style A fill:#ff9800
-    style F fill:#4caf50
-    style K fill:#2196f3
+    style A fill:#4caf50
+    style B fill:#2196f3
+    style C fill:#ff9800
 ```
 
-## 🔄 Event-Driven Architecture
+**Nota:** O deploy atual é via Docker Compose em VM única. Kubernetes manifests existem em `k8s/` mas são aspiracionais (Fase 3+). Não há multi-cloud nem multi-region atualmente.
 
-```mermaid
-sequenceDiagram
-    participant U as User (WhatsApp)
-    participant G as API Gateway
-    participant C as Chat Service
-    participant K as Kafka
-    participant A as AI Service
-    participant Auth as Auth Service
-    participant N as Notification Service
-    participant T as Tasy ERP
+---
 
-    U->>G: Send symptom message
-    G->>C: Route message
-    C->>K: Publish MessageReceived event
-    C->>U: Acknowledge receipt
-
-    K->>A: Consume MessageReceived
-    A->>A: Analyze symptoms
-    A->>K: Publish SymptomAnalyzed event
-
-    K->>Auth: Consume SymptomAnalyzed
-    Auth->>T: Check eligibility
-    T-->>Auth: Return eligibility
-    Auth->>K: Publish AuthorizationNeeded event
-
-    K->>N: Consume AuthorizationNeeded
-    N->>U: Send authorization request
-    
-    U->>G: Submit documents
-    G->>Auth: Process authorization
-    Auth->>K: Publish AuthorizationApproved event
-    
-    K->>N: Consume AuthorizationApproved
-    N->>U: Send approval notification
-```
-
-## 📊 Monitoring & Observability
+## 📊 Monitoring & Observability (CURRENT)
 
 ```mermaid
 graph TB
     subgraph "Data Collection"
-        A[Application Metrics]
-        B[Infrastructure Metrics]
-        C[Business Metrics]
-        D[Log Data]
-        E[Trace Data]
+        A[Winston Logger<br/>Structured Logs]
+        B[Prometheus Metrics<br/>prom-client]
+        C[Morgan<br/>HTTP Request Logging]
     end
 
-    subgraph "Storage & Processing"
-        F[Prometheus]
-        G[Elasticsearch]
-        H[Jaeger]
-        I[InfluxDB]
+    subgraph "Visualization (Docker Compose)"
+        D[Prometheus<br/>:9090]
+        E[Grafana<br/>:3001]
     end
 
-    subgraph "Visualization"
-        J[Grafana Dashboards]
-        K[Kibana]
-        L[Business Intelligence]
-    end
+    A --> D
+    B --> D
+    C --> D
 
-    subgraph "Alerting"
-        M[AlertManager]
-        N[PagerDuty]
-        O[Slack/Teams]
-    end
+    D --> E
 
-    A --> F
-    B --> F
-    C --> I
-    D --> G
-    E --> H
-
-    F --> J
-    G --> K
-    I --> L
-
-    F --> M
-    M --> N
-    M --> O
-
-    style F fill:#ff5722
-    style J fill:#4caf50
-    style M fill:#f44336
+    style D fill:#ff5722
+    style E fill:#4caf50
 ```
+
+**Nota:** Stack de observabilidade atual é Winston (logs) + Prometheus (métricas) + Grafana (dashboards). Jaeger, Elasticsearch, e Kibana estão no `docker-compose.infrastructure.yml` como infraestrutura opcional, mas não são integrados ao código.
 
 ---
 
 ## 🎯 Diagram Usage Guidelines
 
 ### For Development Teams
-- Use **Container Diagram** for understanding service boundaries
-- Reference **Data Flow** for event handling patterns
-- Follow **Security Architecture** for implementation standards
+- Use **Container Diagram (CURRENT)** para entender boundaries reais dos módulos
+- Reference **Data Flow (CURRENT)** para padrões de processamento
+- Consulte os **ADRs** em `docs/architecture/adr/` para decisões arquiteturais documentadas
 
 ### For Operations Teams
-- Monitor using **Monitoring Architecture** components
-- Deploy following **Deployment Architecture** patterns
-- Integrate systems per **Integration Architecture**
+- Deploy seguindo `docker-compose.yml` (runtime real)
+- `docker-compose.infrastructure.yml` contém serviços opcionais/planejados
+- Monitore via Prometheus + Grafana em `:3001`
 
 ### For Business Stakeholders
-- Understand capabilities via **System Overview**
-- Track value delivery through **AI/ML Pipeline**
-- Assess security posture via **Security Architecture**
+- **C4Context** mostra o panorama real de sistemas
+- A plataforma opera como **modular monolith** — simples, eficaz, pronta para evoluir
+- Microserviços serão extraídos quando houver demanda real de escala
 
 ### For Compliance Teams
-- Validate data flows for LGPD/ANS/ANVISA compliance
-- Review security controls implementation
-- Audit integration patterns for regulatory requirements
+- Framework regulatório: **LGPD/ANS/ANVISA** (não HIPAA) — ver ADR-001
+- Criptografia PHI: pgcrypto envelope encryption — ver ADR-004
+- Algoritmos clínicos versionados — ver ADR-005
+- Idempotência de mensagens para integridade de dados — ver ADR-006
 
 ---
 
-**Document Maintained By:** System Architecture Agent  
-**Last Updated:** July 14, 2025  
-**Related Documents:** SYSTEM_ARCHITECTURE_DESIGN.md
+## 📚 Architecture Decision Records (ADRs)
+
+Decisões arquiteturais formais estão documentadas em `docs/architecture/adr/`:
+
+| ADR | Título | Status |
+|-----|--------|--------|
+| ADR-001 | Substituição HIPAA → LGPD/ANS/ANVISA | Accepted |
+| ADR-002 | Classificação ANVISA SaMD (RDC 657/2022) | Accepted |
+| ADR-003 | Arquitetura Monolith-First para MVP | Accepted |
+| ADR-004 | Envelope Encryption com pgcrypto para PHI | Accepted |
+| ADR-005 | Versionamento de Algoritmos Clínicos | Accepted |
+| ADR-006 | Idempotência para Mensagens WhatsApp/FHIR/Tasy | Accepted |
+
+---
+
+## 🔮 Roadmap Arquitetural
+
+| Fase | Arquitetura | Gatilho |
+|------|-------------|---------|
+| **Fase 1 (MVP — Atual)** | Monolith + PostgreSQL + Redis | Agora |
+| **Fase 2 (Growth)** | Monolith + BullMQ filas assíncronas | > 1.000 usuários ativos |
+| **Fase 3 (Scale)** | Extrair AI/ML service se CPU > 2x baseline | > 10.000 usuários ativos |
+| **Fase 4 (Enterprise)** | Microserviços por domínio | Múltiplos times independentes |
