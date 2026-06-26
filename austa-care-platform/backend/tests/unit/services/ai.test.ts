@@ -1,11 +1,11 @@
 import request from 'supertest';
-import { OpenAIService } from '../services/openaiService';
-import { HealthPromptService } from '../services/healthPromptService';
-import { PersonaType } from '../types/ai';
+import { OpenAIService } from '@/services/openaiService';
+import { HealthPromptService } from '@/services/healthPromptService';
+import { PersonaType } from '@/types/ai';
 
 // Mock OpenAI to avoid real API calls in tests
 jest.mock('openai');
-jest.mock('../services/redisService');
+jest.mock('@/services/redisService');
 
 describe('AI Integration', () => {
   let openaiService: OpenAIService;

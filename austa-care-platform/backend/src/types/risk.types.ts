@@ -326,11 +326,10 @@ export interface SuccessMetric {
 }
 
 // Note: QuestionnaireResponse is defined in questionnaire.types.ts
-// Import from there to avoid duplication
+// Import from there to avoid duplication. Use QuestionResponse for individual items.
 // export interface QuestionnaireResponse { ... } // Moved to questionnaire.types.ts
 
-// Type alias for compatibility
-export type QuestionnaireResponse = QuestionResponse;
+export type { QuestionnaireResponse } from './questionnaire.types';
 
 export interface QuestionResponse {
   questionId: string;

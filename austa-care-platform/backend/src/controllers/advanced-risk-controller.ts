@@ -443,7 +443,7 @@ export class AdvancedRiskController {
     return this.identifyEmergencyFlags(responses as any);
   }
 
-  private extractSymptomsFromResponses(responses: QuestionnaireResponse[]): any[] {
+  private extractSymptomsFromResponses(responses: QuestionResponse[]): any[] {
     const symptoms: any[] = [];
     
     // Pattern matching for key symptoms
@@ -479,7 +479,7 @@ export class AdvancedRiskController {
   /**
    * Extract risk factors from responses
    */
-  private extractRiskFactorsFromResponses(responses: QuestionnaireResponse[]): any[] {
+  private extractRiskFactorsFromResponses(responses: QuestionResponse[]): any[] {
     const riskFactors: any[] = [];
     
     const riskPatterns = {
@@ -512,7 +512,7 @@ export class AdvancedRiskController {
   /**
    * Identify emergency flags in responses
    */
-  private identifyEmergencyFlags(responses: QuestionnaireResponse[]): any[] {
+  private identifyEmergencyFlags(responses: QuestionResponse[]): any[] {
     const emergencyFlags: any[] = [];
     
     const emergencyPatterns = {
@@ -556,7 +556,7 @@ export class AdvancedRiskController {
   }
 
   // Helper methods for symptom and risk factor assessment
-  private assessSymptomSeverity(response: QuestionnaireResponse): 'mild' | 'moderate' | 'severe' {
+  private assessSymptomSeverity(response: QuestionResponse): 'mild' | 'moderate' | 'severe' {
     if (response.type === 'scale') {
       const score = Number(response.answer);
       if (score >= 8) return 'severe';

@@ -39,7 +39,8 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    '/coverage/'
+    '/coverage/',
+    '/src/tests/'
   ],
   verbose: true,
   detectOpenHandles: true,

@@ -21,7 +21,8 @@ import {
   ProcessedQuestionnaire,
   ExtractedSymptom,
   ExtractedRiskFactor,
-  EmergencyFlag
+  EmergencyFlag,
+  QuestionResponse
 } from '../types/risk.types';
 import { logger } from '../utils/logger';
 
@@ -1561,5 +1562,5 @@ interface ExtractedMedicalData {
   symptoms: ExtractedSymptom[];
   riskFactors: ExtractedRiskFactor[];
   emergencyFlags: EmergencyFlag[];
-  responses: QuestionnaireResponse[];
+  responses: QuestionResponse[];
 }
