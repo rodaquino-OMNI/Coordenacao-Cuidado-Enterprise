@@ -46,22 +46,22 @@ export async function awardAchievement(
       where: { userId },
       create: {
         userId,
-        currentPoints: points,
+        availablePoints: points,
         lifetimePoints: points,
-        level: calculateUserLevel(points)
+        currentLevel: calculateUserLevel(points)
       },
       update: {
-        currentPoints: { increment: points },
+        availablePoints: { increment: points },
         lifetimePoints: { increment: points }
       }
     });
 
     // Calculate new level based on updated lifetime points
     const newLevel = calculateUserLevel(healthPoints.lifetimePoints + points);
-    if (newLevel !== healthPoints.level) {
+    if (newLevel !== healthPoints.currentLevel) {
       await tx.healthPoints.update({
         where: { userId },
-        data: { level: newLevel }
+        data: { currentLevel: newLevel }
       });
     }
 
@@ -166,9 +166,9 @@ export async function getUserGamificationStats(userId: string) {
 
   if (!healthPoints) {
     return {
-      currentPoints: 0,
+      availablePoints: 0,
       lifetimePoints: 0,
-      level: 1,
+      currentLevel: 1,
       achievementsCount: 0,
       activeMissionsCount: activeMissions,
       pointsToNextLevel: 100,
@@ -176,16 +176,16 @@ export async function getUserGamificationStats(userId: string) {
     };
   }
 
-  const pointsToNextLevel = getPointsForNextLevel(healthPoints.level);
-  const currentLevelPoints = (healthPoints.level - 1) * 100;
+  const pointsToNextLevel = getPointsForNextLevel(healthPoints.currentLevel);
+  const currentLevelPoints = (healthPoints.currentLevel - 1) * 100;
   const progress = Math.round(
     ((healthPoints.lifetimePoints - currentLevelPoints) / 100) * 100
   );
 
   return {
-    currentPoints: healthPoints.currentPoints,
+    availablePoints: healthPoints.availablePoints,
     lifetimePoints: healthPoints.lifetimePoints,
-    level: healthPoints.level,
+    currentLevel: healthPoints.currentLevel,
     achievementsCount: achievements,
     activeMissionsCount: activeMissions,
     pointsToNextLevel,
@@ -274,22 +274,22 @@ export async function completeMission(userId: string, missionId: string) {
       where: { userId },
       create: {
         userId,
-        currentPoints: mission.points,
+        availablePoints: mission.points,
         lifetimePoints: mission.points,
-        level: calculateUserLevel(mission.points)
+        currentLevel: calculateUserLevel(mission.points)
       },
       update: {
-        currentPoints: { increment: mission.points },
+        availablePoints: { increment: mission.points },
         lifetimePoints: { increment: mission.points }
       }
     });
 
     // Calculate new level based on updated lifetime points
     const newLevel = calculateUserLevel(healthPoints.lifetimePoints + mission.points);
-    if (newLevel !== healthPoints.level) {
+    if (newLevel !== healthPoints.currentLevel) {
       await tx.healthPoints.update({
         where: { userId },
-        data: { level: newLevel }
+        data: { currentLevel: newLevel }
       });
     }
 
@@ -334,9 +334,9 @@ export async function getLeaderboard(limit: number = 10) {
     rank: index + 1,
     userId: hp.userId,
     userName: `${hp.user.firstName} ${hp.user.lastName}`,
-    level: hp.level,
+    currentLevel: hp.currentLevel,
     lifetimePoints: hp.lifetimePoints,
-    currentPoints: hp.currentPoints
+    availablePoints: hp.availablePoints
   }));
 }
 

@@ -54,11 +54,10 @@ router.post('/missions', async (req: Request, res: Response) => {
       data: {
         title: validated.name,
         description: validated.description,
-        type: 'DAILY' as any, // TODO: Map to MissionType enum
         category: validated.type as any, // TODO: Map to MissionCategory enum
         difficulty: 'EASY' as any, // TODO: Calculate based on requirements
         points: validated.points,
-        requirements: validated.requiredActions,
+        requiredActions: validated.requiredActions,
         endDate: validated.expiresAt ? new Date(validated.expiresAt) : null,
         isActive: true,
       }
@@ -94,7 +93,7 @@ router.get('/missions', async (req: Request, res: Response) => {
     const skip = (query.page - 1) * query.limit;
 
     const where: any = {};
-    if (query.type) where.type = query.type;
+    if (query.type) where.category = query.type;
     if (query.active !== undefined) where.isActive = query.active;
 
     const [missions, total] = await Promise.all([
@@ -174,7 +173,7 @@ router.put('/missions/:id', async (req: Request, res: Response) => {
     const mission = await prisma.mission.update({
       where: { id },
       data: {
-        ...(name && { name }),
+        ...(name && { title: name }),
         ...(description && { description }),
         ...(points !== undefined && { points }),
         ...(isActive !== undefined && { isActive }),
@@ -396,8 +395,8 @@ router.get('/users/:userId/progress', async (req: Request, res: Response) => {
       completedMissions: stats.achievementsCount, // Using achievementsCount as proxy for completed missions
       totalActiveMissions,
       completionRate: totalActiveMissions > 0 ? (stats.achievementsCount / totalActiveMissions) * 100 : 0,
-      totalPoints: stats.currentPoints,
-      level: stats.level
+      totalPoints: stats.availablePoints,
+      currentLevel: stats.currentLevel
     };
 
     res.status(200).json({

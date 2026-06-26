@@ -12,6 +12,9 @@ import {
   MessageStatus,
 } from '@/types/whatsapp';
 import { EventEmitter } from 'events';
+import { prisma } from '../config/database';
+import { ConversationFlowEngine } from './conversationFlowEngine';
+import { PersonaType } from '../types/ai';
 
 /**
  * Webhook Processor Service
@@ -19,9 +22,11 @@ import { EventEmitter } from 'events';
 export class WebhookProcessorService extends EventEmitter {
   private messageHandlers: Map<string, (payload: ZAPIWebhookPayload) => Promise<void>> = new Map();
   private statusHandlers: Map<string, (payload: ZAPIWebhookPayload) => Promise<void>> = new Map();
+  private conversationFlow: ConversationFlowEngine;
 
   constructor() {
     super();
+    this.conversationFlow = new ConversationFlowEngine();
     this.setupDefaultHandlers();
   }
 
@@ -171,13 +176,13 @@ export class WebhookProcessorService extends EventEmitter {
     }
 
     logger.info('Received text message', {
-      phone: payload.phone,
+      phone: payload.phone.substring(0, 5) + '***',
       senderName: payload.senderName,
       messageLength: message.length,
       messagePreview: message.substring(0, 100),
     });
 
-    // Emit text message event
+    // Emit text message event (for external listeners)
     this.emit('message.text', {
       phone: payload.phone,
       senderName: payload.senderName,
@@ -186,8 +191,20 @@ export class WebhookProcessorService extends EventEmitter {
       timestamp: payload.momment,
     });
 
-    // Auto-reply logic can go here
-    await this.processAutoReply(payload, message);
+    // Persist conversation + message, then auto-reply
+    try {
+      const { userId, organizationId } = await this.findOrCreateUserByPhone(payload.phone, payload.senderName);
+      const conversationId = await this.findOrCreateConversation(payload.phone, userId, organizationId);
+      await this.persistInboundMessage(payload, conversationId, userId);
+      await this.processAIReply(payload, message, conversationId, userId);
+    } catch (error) {
+      logger.error('Failed to persist message or send auto-reply', {
+        phone: payload.phone.substring(0, 5) + '***',
+        error: (error as Error).message,
+      });
+      // Fallback to simple greeting auto-reply
+      await this.processAutoReply(payload, message);
+    }
   }
 
   /**
@@ -202,7 +219,7 @@ export class WebhookProcessorService extends EventEmitter {
     }
 
     logger.info('Received image message', {
-      phone: payload.phone,
+      phone: payload.phone.substring(0, 5) + '***',
       senderName: payload.senderName,
       imageUrl: image.imageUrl,
       caption: image.caption,
@@ -219,6 +236,18 @@ export class WebhookProcessorService extends EventEmitter {
       messageId: payload.messageId,
       timestamp: payload.momment,
     });
+
+    // Persist message
+    try {
+      const { userId, organizationId } = await this.findOrCreateUserByPhone(payload.phone, payload.senderName);
+      const conversationId = await this.findOrCreateConversation(payload.phone, userId, organizationId);
+      await this.persistInboundMessage(payload, conversationId, userId);
+    } catch (error) {
+      logger.error('Failed to persist image message', {
+        phone: payload.phone.substring(0, 5) + '***',
+        error: (error as Error).message,
+      });
+    }
   }
 
   /**
@@ -233,7 +262,7 @@ export class WebhookProcessorService extends EventEmitter {
     }
 
     logger.info('Received document message', {
-      phone: payload.phone,
+      phone: payload.phone.substring(0, 5) + '***',
       senderName: payload.senderName,
       fileName: document.fileName,
       documentUrl: document.documentUrl,
@@ -250,6 +279,18 @@ export class WebhookProcessorService extends EventEmitter {
       messageId: payload.messageId,
       timestamp: payload.momment,
     });
+
+    // Persist message
+    try {
+      const { userId, organizationId } = await this.findOrCreateUserByPhone(payload.phone, payload.senderName);
+      const conversationId = await this.findOrCreateConversation(payload.phone, userId, organizationId);
+      await this.persistInboundMessage(payload, conversationId, userId);
+    } catch (error) {
+      logger.error('Failed to persist document message', {
+        phone: payload.phone.substring(0, 5) + '***',
+        error: (error as Error).message,
+      });
+    }
   }
 
   /**
@@ -493,7 +534,283 @@ export class WebhookProcessorService extends EventEmitter {
   }
 
   /**
-   * Process auto-reply logic
+   * Find or create a user by phone number (WhatsApp primary identifier).
+   * If user does not exist, creates a minimal user assigned to the first active organization.
+   */
+  private async findOrCreateUserByPhone(
+    phone: string,
+    senderName?: string,
+  ): Promise<{ userId: string; organizationId: string }> {
+    // Find existing user by phone
+    let user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, organizationId: true },
+    });
+
+    if (user) {
+      return { userId: user.id, organizationId: user.organizationId };
+    }
+
+    // Find or create a default organization for WhatsApp users
+    let organization = await prisma.organization.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    if (!organization) {
+      // Create a default organization if none exists
+      organization = await prisma.organization.create({
+        data: {
+          name: 'AUSTA Care - WhatsApp Users',
+          type: 'HEALTH_CENTER',
+          isActive: true,
+          lgpdCompliant: true,
+          dataRetentionYears: 7,
+        },
+        select: { id: true },
+      });
+      logger.info('Created default organization for WhatsApp users', { orgId: organization.id });
+    }
+
+    // Parse sender name into first/last name
+    const nameParts = (senderName || 'WhatsApp User').split(' ');
+    const firstName = nameParts[0] || 'WhatsApp';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    // Create new user
+    const newUser = await prisma.user.create({
+      data: {
+        phone,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`.trim(),
+        organizationId: organization.id,
+        preferredLanguage: 'pt-BR',
+        timezone: 'America/Sao_Paulo',
+        isActive: true,
+        isVerified: false,
+        onboardingComplete: false,
+      },
+      select: { id: true, organizationId: true },
+    });
+
+    logger.info('Created new user from WhatsApp message', {
+      userId: newUser.id,
+      phone: phone.substring(0, 5) + '***',
+      orgId: newUser.organizationId,
+    });
+
+    return { userId: newUser.id, organizationId: newUser.organizationId };
+  }
+
+  /**
+   * Find or create a Conversation for a WhatsApp chat.
+   * Uses whatsappChatId (phone number) as the unique identifier.
+   */
+  private async findOrCreateConversation(
+    phone: string,
+    userId: string,
+    organizationId: string,
+  ): Promise<string> {
+    // Try to find existing active conversation
+    const existing = await prisma.conversation.findUnique({
+      where: { whatsappChatId: phone },
+      select: { id: true, status: true },
+    });
+
+    if (existing) {
+      // If conversation exists but is not active, reactivate it
+      if (existing.status !== 'ACTIVE') {
+        await prisma.conversation.update({
+          where: { id: existing.id },
+          data: { status: 'ACTIVE', lastMessageAt: new Date() },
+        });
+      }
+      return existing.id;
+    }
+
+    // Create new conversation
+    const conversation = await prisma.conversation.create({
+      data: {
+        whatsappChatId: phone,
+        userId,
+        organizationId,
+        channel: 'whatsapp',
+        status: 'ACTIVE',
+        type: 'SUPPORT',
+        priority: 'NORMAL',
+        botEnabled: true,
+        startedAt: new Date(),
+        lastMessageAt: new Date(),
+      },
+      select: { id: true },
+    });
+
+    logger.info('Created new WhatsApp conversation', {
+      conversationId: conversation.id,
+      phone: phone.substring(0, 5) + '***',
+      userId,
+    });
+
+    return conversation.id;
+  }
+
+  /**
+   * Persist an inbound WhatsApp message to the database.
+   * Uses upsert to ensure idempotency based on whatsappMessageId.
+   */
+  private async persistInboundMessage(
+    payload: ZAPIWebhookPayload,
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    const content = payload.text?.message
+      || payload.image?.caption
+      || payload.document?.fileName
+      || JSON.stringify(payload);
+
+    const contentType = this.getMessageType(payload).toUpperCase();
+
+    await prisma.message.upsert({
+      where: { whatsappMessageId: payload.messageId },
+      create: {
+        whatsappMessageId: payload.messageId,
+        conversationId,
+        userId,
+        direction: 'INBOUND',
+        type: contentType as any,
+        content,
+        metadata: { raw: payload },
+        status: 'DELIVERED',
+        sentAt: new Date(payload.momment || Date.now()),
+      },
+      update: {
+        // If already exists, update status (e.g., delivered confirmation)
+        status: 'DELIVERED',
+      },
+    });
+
+    // Update conversation's lastMessageAt and messageCount
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        lastMessageAt: new Date(),
+        messageCount: { increment: 1 },
+      },
+    });
+
+    logger.info('Persisted inbound WhatsApp message', {
+      conversationId,
+      messageId: payload.messageId,
+      contentType,
+    });
+  }
+
+  /**
+   * Process message through AI conversation flow and send reply.
+   * Falls back to a simple auto-reply if AI processing fails.
+   */
+  private async processAIReply(
+    payload: ZAPIWebhookPayload,
+    message: string,
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    let responseText: string;
+
+    try {
+      // Determine persona based on sender name (simplistic — can be improved)
+      const persona: PersonaType = 'ana';
+
+      // Process through conversation flow engine
+      const flowResult = await this.conversationFlow.processMessage(
+        userId,
+        message,
+        persona,
+        conversationId,
+      );
+
+      responseText = flowResult.response;
+
+      logger.info('AI response generated', {
+        conversationId,
+        nextNode: flowResult.nextNode.id,
+        depth: flowResult.nextNode.depth,
+        riskLevel: flowResult.state.riskAssessment.urgencyLevel,
+      });
+    } catch (aiError) {
+      logger.warn('AI processing failed, using fallback', {
+        conversationId,
+        error: (aiError as Error).message,
+      });
+      // Fallback: simple greeting detection
+      responseText = this.getFallbackResponse(message, payload.senderName);
+    }
+
+    // Send reply via WhatsApp
+    try {
+      await whatsappService.sendTextMessage({
+        phone: payload.phone,
+        message: responseText,
+      });
+
+      // Persist outbound message
+      await prisma.message.create({
+        data: {
+          conversationId,
+          userId,
+          direction: 'OUTBOUND',
+          type: 'TEXT',
+          content: responseText,
+          isBot: true,
+          botResponseTime: 0,
+          status: 'DELIVERED',
+          sentAt: new Date(),
+        },
+      });
+
+      // Update conversation lastMessageAt
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastMessageAt: new Date(),
+          messageCount: { increment: 1 },
+          lastBotResponse: new Date(),
+        },
+      });
+
+      logger.info('Auto-reply sent and persisted', {
+        conversationId,
+        responseLength: responseText.length,
+      });
+    } catch (sendError) {
+      logger.error('Failed to send auto-reply via WhatsApp', {
+        conversationId,
+        phone: payload.phone.substring(0, 5) + '***',
+        error: (sendError as Error).message,
+      });
+    }
+  }
+
+  /**
+   * Simple fallback response when AI is unavailable.
+   */
+  private getFallbackResponse(message: string, senderName?: string): string {
+    const lowerMessage = message.toLowerCase().trim();
+
+    if (lowerMessage.includes('oi') || lowerMessage.includes('olá') || lowerMessage.includes('ola')) {
+      return `Olá ${senderName || ''}! 👋\n\nSou a assistente virtual da AUSTA Care. Como posso ajudá-lo hoje?\n\n🩺 Consultas\n📅 Agendamentos\n💊 Medicamentos\n🏥 Emergência\n\nEnvie uma das opções acima ou descreva sua necessidade.`;
+    }
+
+    if (lowerMessage.includes('emergência') || lowerMessage.includes('socorro') || lowerMessage.includes('urgente')) {
+      return '🚨 Se esta é uma emergência médica, ligue imediatamente para 192 (SAMU) ou dirija-se ao pronto-socorro mais próximo.\n\nSe precisar de ajuda não urgente, estou aqui para ajudar.';
+    }
+
+    return `Olá ${senderName || ''}! Recebi sua mensagem. Um de nossos atendentes analisará seu caso em breve. Enquanto isso, você pode me dizer mais sobre o que precisa?`;
+  }
+
+  /**
+   * Process auto-reply logic (legacy fallback)
    */
   private async processAutoReply(payload: ZAPIWebhookPayload, message: string): Promise<void> {
     // Simple auto-reply logic - can be expanded

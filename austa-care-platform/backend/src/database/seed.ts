@@ -515,9 +515,9 @@ async function main() {
     prisma.onboardingProgress.create({
       data: {
         userId: users[0].id,
-        currentStep: 'step_3',
-        completedSteps: ['step_1', 'step_2', 'step_3'],
-        isCompleted: true,
+        currentStep: 3,
+        totalSteps: 3,
+        status: 'COMPLETED',
         completedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
         metadata: {
           missionId: missions[0].id,
@@ -536,9 +536,9 @@ async function main() {
     prisma.onboardingProgress.create({
       data: {
         userId: users[1].id,
-        currentStep: 'step_3',
-        completedSteps: ['step_1', 'step_2', 'step_3'],
-        isCompleted: true,
+        currentStep: 3,
+        totalSteps: 3,
+        status: 'COMPLETED',
         completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
         metadata: {
           missionId: missions[0].id,
@@ -563,9 +563,9 @@ async function main() {
     prisma.healthPoints.create({
       data: {
         userId: users[0].id,
-        currentPoints: 350,
-        lifetimePoints: 350,
-        level: 2,
+        availablePoints: 350,
+        totalPoints: 350,
+        currentLevel: 2,
         streak: 5,
         longestStreak: 7,
         lastActivityAt: new Date(),
@@ -595,9 +595,9 @@ async function main() {
     prisma.healthPoints.create({
       data: {
         userId: users[1].id,
-        currentPoints: 100,
-        lifetimePoints: 100,
-        level: 1,
+        availablePoints: 100,
+        totalPoints: 100,
+        currentLevel: 1,
         streak: 2,
         longestStreak: 3,
         lastActivityAt: new Date(),
@@ -781,7 +781,7 @@ async function main() {
         conversationId: conversations[0].id,
         userId: users[0].id,
         content: 'Olá! Tenho dúvida sobre meu remédio de pressão',
-        contentType: 'TEXT',
+        type: 'TEXT',
         direction: 'INBOUND',
         status: 'READ',
         readAt: new Date(),
@@ -806,7 +806,7 @@ async function main() {
         conversationId: conversations[0].id,
         userId: users[0].id,
         content: 'Olá! Claro, estou aqui para ajudar. Qual é sua dúvida sobre a Losartana?',
-        contentType: 'TEXT',
+        type: 'TEXT',
         direction: 'OUTBOUND',
         status: 'READ',
         readAt: new Date(),
@@ -825,7 +825,7 @@ async function main() {
         conversationId: conversations[1].id,
         userId: users[1].id,
         content: 'Minha glicemia hoje está em 180 mg/dL em jejum',
-        contentType: 'TEXT',
+        type: 'TEXT',
         direction: 'INBOUND',
         status: 'READ',
         readAt: new Date(),
@@ -897,8 +897,8 @@ async function main() {
       data: {
         userId: users[0].id,
         action: 'CREATE',
-        resource: 'User',
-        resourceId: users[0].id,
+        entity: 'User',
+        entityId: users[0].id,
         changes: {
           description: 'Usuário criado no sistema',
         },
@@ -915,8 +915,8 @@ async function main() {
       data: {
         userId: users[0].id,
         action: 'CREATE',
-        resource: 'Authorization',
-        resourceId: authorizations[0].id,
+        entity: 'Authorization',
+        entityId: authorizations[0].id,
         changes: {
           description: 'Autorização de procedimento criada',
         },
@@ -934,8 +934,8 @@ async function main() {
       data: {
         userId: users[0].id,
         action: 'READ',
-        resource: 'HealthData',
-        resourceId: healthData[0].id,
+        entity: 'HealthData',
+        entityId: healthData[0].id,
         changes: {
           description: 'Usuário acessou seus dados de saúde',
         },

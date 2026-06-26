@@ -9,6 +9,7 @@ import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateRequest, validateQuery, validateParams } from '../middleware/validation';
 import { defaultRateLimiter, strictRateLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import prisma from '../config/database';
 
 const router = Router();
 
@@ -51,6 +52,78 @@ const HealthDataQuerySchema = z.object({
 router.use(authenticateToken);
 
 /**
+ * Map route dataType (lowercase) to Prisma HealthDataType enum
+ */
+const routeTypeToPrisma: Record<string, string> = {
+  vitals: 'VITAL_SIGN',
+  medication: 'MEDICATION',
+  allergy: 'ALLERGY',
+  condition: 'CONDITION',
+  lab_result: 'LAB_RESULT',
+  vaccination: 'IMMUNIZATION',
+};
+
+/**
+ * Map dataType to the correct JSON field name in HealthData model
+ */
+const dataTypeToField: Record<string, string> = {
+  VITAL_SIGN: 'vitalSigns',
+  MEDICATION: 'medications',
+  ALLERGY: 'allergies',
+  CONDITION: 'conditions',
+  LAB_RESULT: 'labResults',
+  IMMUNIZATION: 'labResults',
+};
+
+/**
+ * Extract the "data" payload from the appropriate typed JSON field
+ */
+function extractData(record: any): any {
+  if (record.vitalSigns) return record.vitalSigns;
+  if (record.conditions) return record.conditions;
+  if (record.medications) return record.medications;
+  if (record.allergies) return record.allergies;
+  if (record.labResults) return record.labResults;
+  if (record.symptoms) return record.symptoms;
+  return {};
+}
+
+/**
+ * Format a HealthData record to the API response shape
+ */
+function formatRecord(record: any): any {
+  return {
+    id: record.id,
+    userId: record.userId,
+    dataType: record.type,
+    data: extractData(record),
+    recordedAt: record.recordedAt,
+    source: record.source,
+    verified: record.isVerified,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+// Common select for HealthData queries
+const healthDataSelect = {
+  id: true,
+  userId: true,
+  type: true,
+  conditions: true,
+  medications: true,
+  allergies: true,
+  symptoms: true,
+  vitalSigns: true,
+  labResults: true,
+  recordedAt: true,
+  source: true,
+  isVerified: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+/**
  * @route   POST /api/v1/health-data
  * @desc    Create new health data record
  * @access  Private
@@ -67,22 +140,41 @@ router.post('/',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const healthData = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
+      // Get user's organizationId
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const prismaType = routeTypeToPrisma[dataType] || 'CONDITION';
+      const dataField = dataTypeToField[prismaType] || 'vitalSigns';
+
+      // Merge metadata into the data object if provided
+      const mergedData = metadata ? { ...data, _metadata: metadata } : data;
+
+      // Build the create data
+      const createData: any = {
         userId,
-        dataType,
-        data,
-        recordedAt: recordedAt || new Date(),
-        source: source || 'user',
-        metadata,
-        verified: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        organizationId: user.organizationId,
+        type: prismaType,
+        recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
+        source: (source || 'USER_REPORTED').toUpperCase().replace(/\s+/g, '_'),
       };
 
+      // Store the merged data in the appropriate JSON field
+      createData[dataField] = mergedData;
+
+      const healthData = await prisma.healthData.create({
+        data: createData,
+        select: healthDataSelect,
+      });
+
       logger.info('Health data created', { dataId: healthData.id, userId, dataType });
-      res.status(201).json(healthData);
+      res.status(201).json(formatRecord(healthData));
     } catch (error) {
       logger.error('Failed to create health data', { error });
       res.status(500).json({ error: 'Failed to create health data' });
@@ -109,32 +201,42 @@ router.get('/user/:userId',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const healthRecords = [
-        {
-          id: 'data-1',
-          userId,
-          dataType: 'vitals',
-          data: {
-            bloodPressure: '120/80',
-            heartRate: 72,
-            temperature: 36.5,
-            weight: 70.5
-          },
-          recordedAt: new Date(),
-          source: 'user',
-          verified: true,
-          createdAt: new Date()
-        }
-      ];
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const where: any = { userId };
+
+      if (dataType) {
+        where.type = routeTypeToPrisma[dataType] || dataType;
+      }
+
+      if (verified !== undefined) {
+        where.isVerified = verified;
+      }
+
+      if (startDate || endDate) {
+        where.recordedAt = {};
+        if (startDate) where.recordedAt.gte = new Date(startDate);
+        if (endDate) where.recordedAt.lte = new Date(endDate);
+      }
+
+      const [records, total] = await Promise.all([
+        prisma.healthData.findMany({
+          where,
+          skip,
+          take: Number(limit),
+          orderBy: { [sortBy]: sortOrder },
+          select: healthDataSelect,
+        }),
+        prisma.healthData.count({ where }),
+      ]);
 
       res.json({
-        healthData: healthRecords,
+        healthData: records.map(formatRecord),
         pagination: {
           page: Number(page),
           limit: Number(limit),
-          total: healthRecords.length,
-          totalPages: Math.ceil(healthRecords.length / Number(limit))
+          total,
+          totalPages: Math.ceil(total / Number(limit))
         }
       });
     } catch (error) {
@@ -156,33 +258,21 @@ router.get('/:dataId',
     try {
       const { dataId } = req.params;
 
-      // Mock implementation
-      const healthData = {
-        id: dataId,
-        userId: req.user!.id,
-        dataType: 'medication',
-        data: {
-          name: 'Paracetamol',
-          dosage: '500mg',
-          frequency: 'Every 8 hours',
-          startDate: new Date(),
-          endDate: null,
-          prescribedBy: 'Dr. Smith'
-        },
-        recordedAt: new Date(),
-        source: 'medical_record',
-        verified: true,
-        metadata: {},
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const healthData = await prisma.healthData.findUnique({
+        where: { id: dataId },
+        select: healthDataSelect,
+      });
+
+      if (!healthData) {
+        return res.status(404).json({ error: 'Health data not found' });
+      }
 
       // Check access
       if (healthData.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      res.json(healthData);
+      res.json(formatRecord(healthData));
     } catch (error) {
       logger.error('Failed to get health data', { error, dataId: req.params.dataId });
       res.status(500).json({ error: 'Failed to retrieve health data' });
@@ -204,15 +294,45 @@ router.put('/:dataId',
       const { dataId } = req.params;
       const updates = req.body;
 
-      // Mock implementation
-      const updatedData = {
-        id: dataId,
-        ...updates,
-        updatedAt: new Date()
-      };
+      const existing = await prisma.healthData.findUnique({
+        where: { id: dataId },
+        select: { id: true, userId: true, type: true }
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: 'Health data not found' });
+      }
+
+      // Check access
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const updateData: any = {};
+
+      if (updates.data !== undefined) {
+        // Merge metadata into data if both provided
+        const mergedData = updates.metadata ? { ...updates.data, _metadata: updates.metadata } : updates.data;
+        const field = dataTypeToField[existing.type] || 'vitalSigns';
+        updateData[field] = mergedData;
+      }
+
+      if (updates.verified !== undefined) {
+        updateData.isVerified = updates.verified;
+        if (updates.verified) {
+          updateData.verifiedBy = req.user!.id;
+          updateData.verifiedAt = new Date();
+        }
+      }
+
+      const updatedData = await prisma.healthData.update({
+        where: { id: dataId },
+        data: updateData,
+        select: healthDataSelect,
+      });
 
       logger.info('Health data updated', { dataId });
-      res.json(updatedData);
+      res.json(formatRecord(updatedData));
     } catch (error) {
       logger.error('Failed to update health data', { error, dataId: req.params.dataId });
       res.status(500).json({ error: 'Failed to update health data' });
@@ -232,7 +352,30 @@ router.delete('/:dataId',
     try {
       const { dataId } = req.params;
 
-      logger.info('Health data deletion requested', { dataId, userId: req.user!.id });
+      const existing = await prisma.healthData.findUnique({
+        where: { id: dataId },
+        select: { id: true, userId: true }
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: 'Health data not found' });
+      }
+
+      // Check access
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Soft delete: set deletedAt and isActive = false (LGPD compliant)
+      await prisma.healthData.update({
+        where: { id: dataId },
+        data: {
+          isActive: false,
+          deletedAt: new Date(),
+        }
+      });
+
+      logger.info('Health data deleted', { dataId, userId: req.user!.id });
 
       res.json({
         message: 'Health data archived',
@@ -263,31 +406,78 @@ router.get('/user/:userId/summary',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const summary = {
+      // Get counts by type
+      const countsByType = await prisma.healthData.groupBy({
+        by: ['type'],
+        where: { userId, isActive: true },
+        _count: { id: true },
+      });
+
+      const recordsByType: Record<string, number> = {};
+      countsByType.forEach(item => {
+        recordsByType[item.type.toLowerCase()] = item._count.id;
+      });
+
+      const totalRecords = countsByType.reduce((sum, item) => sum + item._count.id, 0);
+
+      // Get latest vitals
+      const latestVitals = await prisma.healthData.findFirst({
+        where: { userId, type: 'VITAL_SIGN', isActive: true },
+        orderBy: { recordedAt: 'desc' },
+        select: { vitalSigns: true, recordedAt: true },
+      });
+
+      // Get active medications count
+      const activeMedicationsCount = await prisma.healthData.count({
+        where: { userId, type: 'MEDICATION', isActive: true },
+      });
+
+      // Get known allergies
+      const allergies = await prisma.healthData.findMany({
+        where: { userId, type: 'ALLERGY', isActive: true },
+        select: { allergies: true },
+      });
+
+      const knownAllergies = allergies
+        .filter(a => a.allergies)
+        .flatMap(a => {
+          const data = a.allergies as any;
+          return Array.isArray(data) ? data : data?.name ? [data.name] : [];
+        });
+
+      // Get chronic conditions
+      const conditions = await prisma.healthData.findMany({
+        where: { userId, type: 'CONDITION', isActive: true },
+        select: { conditions: true },
+      });
+
+      const chronicConditions = conditions
+        .filter(c => c.conditions)
+        .flatMap(c => {
+          const data = c.conditions as any;
+          return Array.isArray(data) ? data : data?.name ? [data.name] : [];
+        });
+
+      res.json({
         userId,
-        totalRecords: 45,
+        totalRecords,
         lastUpdated: new Date(),
         recordsByType: {
-          vitals: 15,
-          medication: 8,
-          allergy: 3,
-          condition: 5,
-          lab_result: 10,
-          vaccination: 4
+          vitals: recordsByType['vital_sign'] || 0,
+          medication: recordsByType['medication'] || 0,
+          allergy: recordsByType['allergy'] || 0,
+          condition: recordsByType['condition'] || 0,
+          lab_result: recordsByType['lab_result'] || 0,
+          vaccination: recordsByType['immunization'] || 0,
         },
-        recentVitals: {
-          bloodPressure: '120/80',
-          heartRate: 72,
-          weight: 70.5,
-          recordedAt: new Date()
-        },
-        activeMedications: 2,
-        knownAllergies: ['Penicillin'],
-        chronicConditions: ['Hypertension']
-      };
-
-      res.json(summary);
+        recentVitals: latestVitals ? {
+          ...(latestVitals.vitalSigns as any),
+          recordedAt: latestVitals.recordedAt,
+        } : null,
+        activeMedications: activeMedicationsCount,
+        knownAllergies,
+        chronicConditions,
+      });
     } catch (error) {
       logger.error('Failed to get health summary', { error, userId: req.params.userId });
       res.status(500).json({ error: 'Failed to retrieve health summary' });
@@ -311,31 +501,64 @@ router.get('/user/:userId/timeline',
   async (req, res) => {
     try {
       const { userId } = req.params;
-      const { startDate, endDate, dataTypes } = req.query;
+      const { startDate, endDate, dataTypes } = req.query as any;
 
       // Check access
       if (userId !== req.user!.id && !req.user!.roles.includes('admin')) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const timeline = [
-        {
-          date: new Date(),
-          events: [
-            {
-              type: 'vitals',
-              description: 'Blood pressure recorded: 120/80',
-              id: 'event-1'
-            },
-            {
-              type: 'medication',
-              description: 'Started Paracetamol 500mg',
-              id: 'event-2'
-            }
-          ]
+      const where: any = { userId, isActive: true };
+
+      if (startDate || endDate) {
+        where.recordedAt = {};
+        if (startDate) where.recordedAt.gte = new Date(startDate);
+        if (endDate) where.recordedAt.lte = new Date(endDate);
+      }
+
+      if (dataTypes) {
+        const types = dataTypes.split(',').map((t: string) => routeTypeToPrisma[t.trim()] || t.trim().toUpperCase());
+        where.type = { in: types };
+      }
+
+      const records = await prisma.healthData.findMany({
+        where,
+        orderBy: { recordedAt: 'asc' },
+        select: {
+          id: true,
+          type: true,
+          vitalSigns: true,
+          conditions: true,
+          medications: true,
+          allergies: true,
+          labResults: true,
+          recordedAt: true,
+        },
+      });
+
+      // Group by date
+      const groupedByDate: Record<string, any[]> = {};
+      records.forEach(record => {
+        const dateStr = record.recordedAt.toISOString().split('T')[0];
+        if (!groupedByDate[dateStr]) {
+          groupedByDate[dateStr] = [];
         }
-      ];
+
+        const data = extractData(record);
+        const description = typeof data === 'object'
+          ? (data.name || data.title || JSON.stringify(data).substring(0, 100))
+          : String(data);
+
+        groupedByDate[dateStr].push({
+          type: record.type.toLowerCase(),
+          description,
+          id: record.id,
+        });
+      });
+
+      const timeline = Object.entries(groupedByDate)
+        .map(([date, events]) => ({ date: new Date(date), events }))
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
 
       res.json({ timeline });
     } catch (error) {
@@ -357,15 +580,46 @@ router.post('/:dataId/verify',
   async (req, res) => {
     try {
       const { dataId } = req.params;
-      const { notes } = req.body;
+      const { notes } = req.body || {};
 
-      // Mock implementation
-      const verifiedData = {
-        id: dataId,
-        verified: true,
+      const existing = await prisma.healthData.findUnique({
+        where: { id: dataId },
+        select: { id: true, isVerified: true }
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: 'Health data not found' });
+      }
+
+      const updateData: any = {
+        isVerified: true,
         verifiedBy: req.user!.id,
         verifiedAt: new Date(),
-        verificationNotes: notes
+      };
+
+      // Store verification notes in the riskScore field as metadata
+      if (notes) {
+        updateData.riskScore = { verificationNotes: notes };
+      }
+
+      const updatedData = await prisma.healthData.update({
+        where: { id: dataId },
+        data: updateData,
+        select: {
+          id: true,
+          isVerified: true,
+          verifiedBy: true,
+          verifiedAt: true,
+          riskScore: true,
+        }
+      });
+
+      const verifiedData = {
+        id: updatedData.id,
+        verified: updatedData.isVerified,
+        verifiedBy: updatedData.verifiedBy,
+        verifiedAt: updatedData.verifiedAt,
+        verificationNotes: notes || null,
       };
 
       logger.info('Health data verified', { dataId, verifiedBy: req.user!.id });
@@ -387,30 +641,76 @@ router.get('/stats/overview',
   defaultRateLimiter,
   async (req, res) => {
     try {
-      // Mock implementation
-      const stats = {
-        totalRecords: 15680,
-        verifiedRecords: 12450,
+      const [
+        totalRecords,
+        verifiedRecords,
+        recordsByType,
+        recordsBySource,
+      ] = await Promise.all([
+        prisma.healthData.count({ where: { isActive: true } }),
+        prisma.healthData.count({ where: { isActive: true, isVerified: true } }),
+        prisma.healthData.groupBy({
+          by: ['type'],
+          where: { isActive: true },
+          _count: { id: true },
+        }),
+        prisma.healthData.groupBy({
+          by: ['source'],
+          where: { isActive: true },
+          _count: { id: true },
+        }),
+      ]);
+
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const [last24hNew, last24hUpdated] = await Promise.all([
+        prisma.healthData.count({
+          where: {
+            isActive: true,
+            createdAt: { gte: last24h },
+          },
+        }),
+        prisma.healthData.count({
+          where: {
+            isActive: true,
+            updatedAt: { gte: last24h },
+            createdAt: { lt: last24h },
+          },
+        }),
+      ]);
+
+      const byType: Record<string, number> = {};
+      recordsByType.forEach(item => {
+        byType[item.type.toLowerCase()] = item._count.id;
+      });
+
+      const bySource: Record<string, number> = {};
+      recordsBySource.forEach(item => {
+        bySource[item.source.toLowerCase()] = item._count.id;
+      });
+
+      res.json({
+        totalRecords,
+        verifiedRecords,
         recordsByType: {
-          vitals: 5600,
-          medication: 3200,
-          allergy: 1500,
-          condition: 2100,
-          lab_result: 2800,
-          vaccination: 480
+          vitals: byType['vital_sign'] || 0,
+          medication: byType['medication'] || 0,
+          allergy: byType['allergy'] || 0,
+          condition: byType['condition'] || 0,
+          lab_result: byType['lab_result'] || 0,
+          vaccination: byType['immunization'] || 0,
         },
         recordsBySource: {
-          user: 8900,
-          medical_record: 5200,
-          integration: 1580
+          user: bySource['user_reported'] || 0,
+          medical_record: bySource['provider_entered'] || 0,
+          integration: (bySource['tasy_sync'] || 0) + (bySource['ai_extracted'] || 0),
         },
         last24Hours: {
-          newRecords: 156,
-          updatedRecords: 45
+          newRecords: last24hNew,
+          updatedRecords: last24hUpdated,
         }
-      };
-
-      res.json(stats);
+      });
     } catch (error) {
       logger.error('Failed to get health data stats', { error });
       res.status(500).json({ error: 'Failed to retrieve statistics' });

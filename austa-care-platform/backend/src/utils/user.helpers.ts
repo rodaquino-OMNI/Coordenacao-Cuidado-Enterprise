@@ -19,9 +19,9 @@ export function getFullName(user: Pick<User, 'firstName' | 'lastName'>): string 
 export async function getUserHealthScore(userId: string): Promise<number> {
   const healthPoints = await prisma.healthPoints.findUnique({
     where: { userId },
-    select: { currentPoints: true }
+    select: { availablePoints: true }
   });
-  return healthPoints?.currentPoints ?? 0;
+  return healthPoints?.availablePoints ?? 0;
 }
 
 /**
@@ -39,12 +39,12 @@ export function isUserActive(user: Pick<User, 'status'>): boolean {
  * @returns Onboarding progress data or null if not found
  */
 export async function getUserOnboardingStatus(userId: string) {
-  const onboarding = await prisma.onboardingProgress.findUnique({
+  const onboarding = await prisma.onboardingProgress.findFirst({
     where: { userId },
     select: {
-      isCompleted: true,
+      status: true,
       currentStep: true,
-      completedSteps: true,
+      totalSteps: true,
       completedAt: true
     }
   });
@@ -53,17 +53,16 @@ export async function getUserOnboardingStatus(userId: string) {
     return null;
   }
 
-  // Calculate progress based on completed steps (assume 5 total steps)
-  const totalSteps = 5;
-  const stepsCompleted = onboarding.completedSteps.length;
+  // Calculate progress based on current step
+  const totalSteps = onboarding.totalSteps || 5;
+  const stepsCompleted = onboarding.currentStep;
   const completionPercentage = totalSteps > 0
     ? Math.round((stepsCompleted / totalSteps) * 100)
     : 0;
 
   return {
-    isComplete: onboarding.isCompleted,
-    currentStep: parseInt(onboarding.currentStep) || 1,
-    completedSteps: onboarding.completedSteps,
+    isComplete: onboarding.status === 'COMPLETED',
+    currentStep: onboarding.currentStep,
     stepsCompleted,
     totalSteps,
     completionPercentage,

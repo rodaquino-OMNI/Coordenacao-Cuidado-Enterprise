@@ -132,13 +132,13 @@ function mapToAuditAction(eventType: string, action: string): AuditAction {
   // ---- Security events ----
   if (eventType === 'security_event') {
     const a = action.toLowerCase();
-    if (a.includes('login_failure')) return AuditAction.DENY;
-    if (a.includes('unauthorized')) return AuditAction.DENY;
-    if (a.includes('privilege_escalation')) return AuditAction.DENY;
+    if (a.includes('login_failure')) return AuditAction.ACCESS_DENIED;
+    if (a.includes('unauthorized')) return AuditAction.ACCESS_DENIED;
+    if (a.includes('privilege_escalation')) return AuditAction.ACCESS_DENIED;
     if (a.includes('login')) return AuditAction.LOGIN;
     if (a.includes('logout')) return AuditAction.LOGOUT;
     if (a.includes('export')) return AuditAction.EXPORT;
-    return AuditAction.DENY;
+    return AuditAction.ACCESS_DENIED;
   }
 
   // ---- Data access ----
@@ -146,8 +146,8 @@ function mapToAuditAction(eventType: string, action: string): AuditAction {
 
   // ---- Workflow / state transitions ----
   if (action === WorkflowAction.INITIATE) return AuditAction.CREATE;
-  if (action === WorkflowAction.APPROVE) return AuditAction.APPROVE;
-  if (action === WorkflowAction.REJECT) return AuditAction.DENY;
+  if (action === WorkflowAction.APPROVE) return AuditAction.UPDATE;
+  if (action === WorkflowAction.REJECT) return AuditAction.ACCESS_DENIED;
   if (action === WorkflowAction.CANCEL) return AuditAction.DELETE;
   if (action === WorkflowAction.APPEAL) return AuditAction.UPDATE;
   if (action === WorkflowAction.ESCALATE) return AuditAction.UPDATE;
@@ -625,7 +625,7 @@ export class AuditService extends EventEmitter {
     };
 
     const auditAction = mapToAuditAction(entry.eventType, entry.action);
-    const resource = mapResource(entry.eventType, entry.authorizationId);
+    const entity = mapResource(entry.eventType, entry.authorizationId);
     const userId =
       entry.performedBy && entry.performedBy !== 'system'
         ? entry.performedBy
@@ -638,8 +638,8 @@ export class AuditService extends EventEmitter {
           id: entry.id,
           userId,
           action: auditAction,
-          resource,
-          resourceId: entry.authorizationId || null,
+          entity,
+          entityId: entry.authorizationId || null,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
           metadata: metadataPayload,
@@ -690,7 +690,7 @@ export class AuditService extends EventEmitter {
     }
 
     if (criteria.authorizationIds?.length) {
-      where.resourceId = { in: criteria.authorizationIds };
+      where.entityId = { in: criteria.authorizationIds };
     }
 
     if (criteria.performedBy) {
@@ -709,7 +709,7 @@ export class AuditService extends EventEmitter {
     if (criteria.complianceFlags?.includes('LGPD')) {
       // For LGPD filtering, we rely on resource or action type
       where.OR = [
-        { resource: 'HealthData' },
+        { entity: 'HealthData' },
         { action: AuditAction.READ },
       ];
     }
@@ -726,8 +726,8 @@ export class AuditService extends EventEmitter {
       return {
         id: log.id,
         timestamp: log.createdAt,
-        authorizationId: log.resourceId,
-        eventType: meta._eventType || log.resource.toLowerCase(),
+        authorizationId: log.entityId,
+        eventType: meta._eventType || log.entity.toLowerCase(),
         action: meta._internalAction || log.action.toLowerCase(),
         performedBy: log.userId || 'system',
         metadata: meta,
@@ -768,7 +768,7 @@ export class AuditService extends EventEmitter {
       const created = await Promise.allSettled(
         entriesToFlush.map((entry) => {
           const auditAction = mapToAuditAction(entry.eventType, entry.action);
-          const resource = mapResource(entry.eventType, entry.authorizationId);
+          const entity = mapResource(entry.eventType, entry.authorizationId);
           const userId =
             entry.performedBy && entry.performedBy !== 'system'
               ? entry.performedBy
@@ -789,8 +789,8 @@ export class AuditService extends EventEmitter {
               id: entry.id,
               userId,
               action: auditAction,
-              resource,
-              resourceId: entry.authorizationId || null,
+              entity,
+              entityId: entry.authorizationId || null,
               ipAddress: entry.ipAddress,
               userAgent: entry.userAgent,
               metadata: metadataPayload,

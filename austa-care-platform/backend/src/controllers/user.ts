@@ -88,9 +88,10 @@ router.post('/', async (req: Request, res: Response) => {
     await prisma.healthPoints.create({
       data: {
         userId: user.id,
-        currentPoints: 0,
-        lifetimePoints: 0,
-        level: 1
+        availablePoints: 0,
+        totalPoints: 0,
+        currentLevel: 1,
+        organizationId: user.organizationId
       }
     });
 
@@ -415,7 +416,6 @@ router.get('/:id/onboarding', async (req: Request, res: Response) => {
       completionPercentage: onboardingStatus?.completionPercentage ?? 0,
       healthPoints: healthScore,
       completedMissions,
-      completedSteps: onboardingStatus?.completedSteps ?? []
     };
 
     res.status(200).json({
@@ -451,14 +451,14 @@ router.post('/:id/onboarding/progress', async (req: Request, res: Response) => {
     });
 
     if (healthPoints) {
-      const newCurrentPoints = healthPoints.currentPoints + (pointsEarned || 0);
-      const newLifetimePoints = healthPoints.lifetimePoints + (pointsEarned || 0);
+      const newAvailablePoints = healthPoints.availablePoints + (pointsEarned || 0);
+      const newTotalPoints = healthPoints.totalPoints + (pointsEarned || 0);
 
       await prisma.healthPoints.update({
         where: { userId: id },
         data: {
-          currentPoints: newCurrentPoints,
-          lifetimePoints: newLifetimePoints,
+          availablePoints: newAvailablePoints,
+          totalPoints: newTotalPoints,
           lastActivityAt: new Date()
         }
       });

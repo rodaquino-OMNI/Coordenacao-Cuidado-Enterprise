@@ -276,7 +276,7 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
         userId: conversation.userId,
         content: validated.content,
         direction: validated.direction,
-        contentType: validated.contentType,
+        type: validated.contentType,
         metadata: validated.metadata || {},
       }
     });

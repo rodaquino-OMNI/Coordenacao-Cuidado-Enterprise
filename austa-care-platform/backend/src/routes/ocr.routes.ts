@@ -10,6 +10,8 @@ import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateRequest, validateParams, validateQuery } from '../middleware/validation';
 import { defaultRateLimiter, strictRateLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
+import { DocumentType, DocumentStatus, DocumentCategory } from '@prisma/client';
 
 const router = Router();
 
@@ -39,6 +41,15 @@ const upload = multer({
   }
 });
 
+// Map API documentType to Prisma DocumentType
+const API_DOC_TYPE_MAP: Record<string, DocumentType> = {
+  'prescription': DocumentType.PRESCRIPTION,
+  'lab_result': DocumentType.LAB_RESULT,
+  'medical_record': DocumentType.MEDICAL_RECORD,
+  'insurance': DocumentType.INSURANCE_CARD,
+  'general': DocumentType.OTHER,
+};
+
 // Validation schemas
 const ProcessOCRSchema = z.object({
   documentType: z.enum(['prescription', 'lab_result', 'medical_record', 'insurance', 'general']).default('general'),
@@ -57,6 +68,49 @@ const JobQuerySchema = z.object({
   status: z.enum(['pending', 'processing', 'completed', 'failed']).optional(),
   documentType: z.enum(['prescription', 'lab_result', 'medical_record', 'insurance', 'general']).optional()
 });
+
+// Map API status to Prisma DocumentStatus
+function mapStatusToPrisma(status?: string): DocumentStatus | undefined {
+  if (!status) return undefined;
+  const map: Record<string, DocumentStatus> = {
+    'pending': DocumentStatus.PENDING,
+    'processing': DocumentStatus.PROCESSING,
+    'completed': DocumentStatus.COMPLETED,
+    'failed': DocumentStatus.FAILED,
+  };
+  return map[status];
+}
+
+// Format OCR job for API response
+function formatOCRJob(doc: any) {
+  return {
+    id: doc.id,
+    userId: doc.userId,
+    documentType: doc.type?.toLowerCase() || 'general',
+    language: 'pt-BR', // Stored in extractedData, default for now
+    fileName: doc.fileName || doc.filename,
+    fileSize: doc.fileSize || doc.size,
+    mimeType: doc.mimeType,
+    status: doc.status?.toLowerCase() || 'pending',
+    createdAt: doc.createdAt,
+    completedAt: doc.processedAt || null,
+    processingTime: doc.processedAt && doc.createdAt
+      ? `${Math.round((doc.processedAt.getTime() - doc.createdAt.getTime()) / 1000)}s`
+      : null,
+    confidence: doc.ocrConfidence || null,
+    result: doc.hasOcr ? {
+      text: doc.ocrText || null,
+      confidence: doc.ocrConfidence || null,
+      entities: doc.extractedData?.entities || [],
+      metadata: {
+        pageCount: doc.extractedData?.pages || 1,
+        detectedLanguage: doc.extractedData?.language || 'pt-BR',
+        imageQuality: 'unknown',
+        textOrientation: 'horizontal',
+      }
+    } : null,
+  };
+}
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -83,29 +137,57 @@ router.post('/process',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation - in production, this would trigger actual OCR processing
-      const job = {
-        id: `ocr-job-${Date.now()}`,
-        userId: targetUserId,
-        documentType: documentType || 'general',
+      const prismaDocType = API_DOC_TYPE_MAP[documentType] || DocumentType.OTHER;
+
+      // Create the document record in Prisma
+      const document = await prisma.document.create({
+        data: {
+          userId: targetUserId,
+          type: prismaDocType,
+          category: DocumentCategory.MEDICAL,
+          fileName: req.file.originalname,
+          filename: req.file.originalname,
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+          fileSize: req.file.size,
+          storagePath: `memory://${req.file.originalname}`,
+          storageProvider: 'LOCAL',
+          status: DocumentStatus.PROCESSING,
+          title: `OCR: ${req.file.originalname}`,
+          organizationId: req.user!.id,
+        },
+      });
+
+      // Trigger OCR processing asynchronously
+      triggerOCRJob(document.id, req.file.buffer, req.file.originalname, {
+        documentType: prismaDocType,
         language: language || 'pt-BR',
-        fileName: req.file.originalname,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-        status: 'processing',
-        createdAt: new Date(),
-        estimatedCompletionTime: new Date(Date.now() + 30000) // 30 seconds
-      };
+        extractEntities: extractEntities !== false,
+      }).catch(err => {
+        logger.error('Background OCR job failed', { documentId: document.id, error: err });
+      });
 
       logger.info('OCR job created', {
-        jobId: job.id,
+        jobId: document.id,
         userId: targetUserId,
-        documentType: job.documentType
+        documentType: prismaDocType
       });
 
       res.status(202).json({
         message: 'OCR processing started',
-        job
+        job: {
+          id: document.id,
+          userId: targetUserId,
+          documentType: documentType || 'general',
+          language: language || 'pt-BR',
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype,
+          status: 'processing',
+          createdAt: document.createdAt,
+          estimatedCompletionTime: new Date(Date.now() + 30000),
+        }
       });
     } catch (error) {
       logger.error('Failed to start OCR processing', { error });
@@ -126,61 +208,20 @@ router.get('/job/:jobId',
     try {
       const { jobId } = req.params;
 
-      // Mock implementation
-      const job = {
-        id: jobId,
-        userId: req.user!.id,
-        documentType: 'prescription',
-        language: 'pt-BR',
-        fileName: 'prescription.jpg',
-        status: 'completed',
-        createdAt: new Date(Date.now() - 60000),
-        completedAt: new Date(Date.now() - 30000),
-        processingTime: '28.5s',
-        result: {
-          text: 'PRESCRIÇÃO MÉDICA\n\nPaciente: João Silva\nMedicamento: Paracetamol 500mg\nPosologia: 1 comprimido a cada 8 horas\nDuração: 7 dias',
-          confidence: 0.95,
-          entities: [
-            {
-              type: 'medication',
-              value: 'Paracetamol 500mg',
-              confidence: 0.98,
-              position: { start: 65, end: 82 }
-            },
-            {
-              type: 'dosage',
-              value: '1 comprimido a cada 8 horas',
-              confidence: 0.96,
-              position: { start: 95, end: 122 }
-            },
-            {
-              type: 'duration',
-              value: '7 dias',
-              confidence: 0.94,
-              position: { start: 134, end: 140 }
-            },
-            {
-              type: 'patient_name',
-              value: 'João Silva',
-              confidence: 0.92,
-              position: { start: 34, end: 44 }
-            }
-          ],
-          metadata: {
-            pageCount: 1,
-            detectedLanguage: 'pt-BR',
-            imageQuality: 'high',
-            textOrientation: 'horizontal'
-          }
-        }
-      };
+      const document = await prisma.document.findUnique({
+        where: { id: jobId },
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'OCR job not found' });
+      }
 
       // Check access
-      if (job.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+      if (document.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      res.json(job);
+      res.json(formatOCRJob(document));
     } catch (error) {
       logger.error('Failed to get OCR job', { error, jobId: req.params.jobId });
       res.status(500).json({ error: 'Failed to retrieve OCR job' });
@@ -200,36 +241,39 @@ router.get('/jobs',
     try {
       const { page, limit, status, documentType } = req.query as any;
 
-      // Mock implementation
-      const jobs = [
-        {
-          id: 'ocr-job-1',
-          userId: req.user!.id,
-          documentType: 'prescription',
-          fileName: 'prescription.jpg',
-          status: 'completed',
-          createdAt: new Date(),
-          completedAt: new Date(),
-          confidence: 0.95
-        },
-        {
-          id: 'ocr-job-2',
-          userId: req.user!.id,
-          documentType: 'lab_result',
-          fileName: 'lab_results.pdf',
-          status: 'processing',
-          createdAt: new Date(),
-          confidence: null
-        }
-      ];
+      // Build where clause - only show documents with OCR processing
+      const where: any = {
+        userId: req.user!.id,
+        isActive: true,
+      };
+
+      if (status) {
+        where.status = mapStatusToPrisma(status);
+      }
+
+      if (documentType) {
+        where.type = API_DOC_TYPE_MAP[documentType] || DocumentType.OTHER;
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const [documents, total] = await Promise.all([
+        prisma.document.findMany({
+          where,
+          skip,
+          take: Number(limit),
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.document.count({ where }),
+      ]);
 
       res.json({
-        jobs,
+        jobs: documents.map(formatOCRJob),
         pagination: {
           page: Number(page),
           limit: Number(limit),
-          total: jobs.length,
-          totalPages: Math.ceil(jobs.length / Number(limit))
+          total,
+          totalPages: Math.ceil(total / Number(limit))
         }
       });
     } catch (error) {
@@ -251,18 +295,46 @@ router.post('/job/:jobId/retry',
     try {
       const { jobId } = req.params;
 
-      // Mock implementation
-      const retriedJob = {
-        id: `ocr-job-${Date.now()}`,
+      const existing = await prisma.document.findUnique({ where: { id: jobId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'OCR job not found' });
+      }
+
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Update status to PROCESSING and retry
+      await prisma.document.update({
+        where: { id: jobId },
+        data: {
+          status: DocumentStatus.PROCESSING,
+          hasOcr: false,
+          ocrText: null,
+          ocrConfidence: null,
+          processedAt: null,
+        },
+      });
+
+      // Trigger OCR processing asynchronously
+      triggerOCRJob(jobId, null, existing.fileName || existing.filename || 'unknown', {
+        documentType: existing.type,
+        language: 'pt-BR',
+        extractEntities: true,
+      }).catch(err => {
+        logger.error('Background OCR retry failed', { documentId: jobId, error: err });
+      });
+
+      logger.info('OCR job retried', { originalJobId: jobId });
+
+      res.status(202).json({
+        id: jobId,
         originalJobId: jobId,
         userId: req.user!.id,
         status: 'processing',
         createdAt: new Date(),
-        estimatedCompletionTime: new Date(Date.now() + 30000)
-      };
-
-      logger.info('OCR job retried', { originalJobId: jobId, newJobId: retriedJob.id });
-      res.status(202).json(retriedJob);
+        estimatedCompletionTime: new Date(Date.now() + 30000),
+      });
     } catch (error) {
       logger.error('Failed to retry OCR job', { error, jobId: req.params.jobId });
       res.status(500).json({ error: 'Failed to retry OCR job' });
@@ -272,7 +344,7 @@ router.post('/job/:jobId/retry',
 
 /**
  * @route   DELETE /api/v1/ocr/job/:jobId
- * @desc    Delete OCR job and results
+ * @desc    Delete OCR job and results (soft delete)
  * @access  Private
  */
 router.delete('/job/:jobId',
@@ -282,11 +354,29 @@ router.delete('/job/:jobId',
     try {
       const { jobId } = req.params;
 
-      logger.info('OCR job deletion requested', { jobId, userId: req.user!.id });
+      const existing = await prisma.document.findUnique({ where: { id: jobId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'OCR job not found' });
+      }
+
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Soft delete: archive the document
+      await prisma.document.update({
+        where: { id: jobId },
+        data: {
+          isActive: false,
+          archivedAt: new Date(),
+        },
+      });
+
+      logger.info('OCR job archived', { jobId, userId: req.user!.id });
 
       res.json({
-        message: 'OCR job deleted',
-        jobId
+        message: 'OCR job archived',
+        jobId,
       });
     } catch (error) {
       logger.error('Failed to delete OCR job', { error, jobId: req.params.jobId });
@@ -311,34 +401,68 @@ router.post('/batch',
 
       const files = req.files as Express.Multer.File[];
       const { documentType, language } = req.body;
+      const prismaDocType = API_DOC_TYPE_MAP[documentType] || DocumentType.OTHER;
 
-      // Mock implementation
-      const batchJob = {
-        id: `ocr-batch-${Date.now()}`,
-        userId: req.user!.id,
-        totalFiles: files.length,
-        documentType: documentType || 'general',
+      // Create document records for all files in batch
+      const createdDocs = await Promise.all(
+        files.map(file =>
+          prisma.document.create({
+            data: {
+              userId: req.user!.id,
+              type: prismaDocType,
+              category: DocumentCategory.MEDICAL,
+              fileName: file.originalname,
+              filename: file.originalname,
+              originalName: file.originalname,
+              mimeType: file.mimetype,
+              size: file.size,
+              fileSize: file.size,
+              storagePath: `memory://${file.originalname}`,
+              storageProvider: 'LOCAL',
+              status: DocumentStatus.PENDING,
+              title: `Batch OCR: ${file.originalname}`,
+              organizationId: req.user!.id,
+            },
+          })
+        )
+      );
+
+      // Trigger batch OCR processing asynchronously
+      triggerBatchOCRJobs(createdDocs.map(d => ({
+        id: d.id,
+        buffer: files.find(f => f.originalname === d.originalName)?.buffer || null,
+        fileName: d.originalName,
+      })), {
+        documentType: prismaDocType,
         language: language || 'pt-BR',
-        status: 'processing',
-        jobs: files.map((file, index) => ({
-          id: `ocr-job-${Date.now()}-${index}`,
-          fileName: file.originalname,
-          fileSize: file.size,
-          status: 'pending'
-        })),
-        createdAt: new Date(),
-        estimatedCompletionTime: new Date(Date.now() + files.length * 30000)
-      };
+      }).catch(err => {
+        logger.error('Background batch OCR failed', { error: err });
+      });
 
       logger.info('OCR batch job created', {
-        batchId: batchJob.id,
+        batchId: `batch-${createdDocs[0]?.id}`,
         userId: req.user!.id,
         fileCount: files.length
       });
 
       res.status(202).json({
         message: 'Batch OCR processing started',
-        batch: batchJob
+        batch: {
+          id: `batch-${Date.now()}`,
+          userId: req.user!.id,
+          totalFiles: files.length,
+          documentType: documentType || 'general',
+          language: language || 'pt-BR',
+          status: 'processing',
+          jobs: createdDocs.map((doc, index) => ({
+            id: doc.id,
+            fileName: doc.originalName,
+            fileSize: doc.fileSize || doc.size,
+            status: 'pending',
+          })),
+          createdAt: new Date(),
+          estimatedCompletionTime: new Date(Date.now() + files.length * 30000),
+        }
       });
     } catch (error) {
       logger.error('Failed to start batch OCR processing', { error });
@@ -357,28 +481,79 @@ router.get('/stats',
   defaultRateLimiter,
   async (req, res) => {
     try {
-      // Mock implementation
+      const [
+        totalDocs,
+        completed,
+        processing,
+        failed,
+        pending,
+        typeBreakdown,
+        docsLast24h,
+        completedLast24h,
+        failedLast24h,
+        avgConfidence,
+      ] = await Promise.all([
+        prisma.document.count({ where: { isActive: true } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.COMPLETED } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PROCESSING } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.FAILED } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PENDING } }),
+        prisma.document.groupBy({
+          by: ['type'],
+          where: { isActive: true },
+          _count: true,
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            status: DocumentStatus.COMPLETED,
+            processedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            status: DocumentStatus.FAILED,
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.document.aggregate({
+          where: { isActive: true, hasOcr: true, ocrConfidence: { not: null } },
+          _avg: { ocrConfidence: true },
+        }),
+      ]);
+
+      const jobsByType: Record<string, number> = {};
+      for (const item of typeBreakdown) {
+        const key = item.type?.toLowerCase() || 'general';
+        jobsByType[key] = (jobsByType[key] || 0) + item._count;
+      }
+
+      const successRate = totalDocs > 0
+        ? (completed / totalDocs)
+        : 0;
+
       const stats = {
-        totalJobs: 5670,
-        completed: 5200,
-        processing: 45,
-        failed: 425,
-        pending: 0,
-        jobsByType: {
-          prescription: 2100,
-          lab_result: 1800,
-          medical_record: 1200,
-          insurance: 470,
-          general: 100
-        },
-        averageProcessingTime: '28.5s',
-        averageConfidence: 0.94,
+        totalJobs: totalDocs,
+        completed,
+        processing,
+        failed,
+        pending,
+        jobsByType,
+        averageProcessingTime: 'N/A', // Would need to track processing duration
+        averageConfidence: avgConfidence._avg?.ocrConfidence || 0,
         last24Hours: {
-          total: 156,
-          completed: 145,
-          failed: 11
+          total: docsLast24h,
+          completed: completedLast24h,
+          failed: failedLast24h,
         },
-        successRate: 0.925
+        successRate: Math.round(successRate * 1000) / 1000,
       };
 
       res.json(stats);
@@ -397,40 +572,36 @@ router.get('/stats',
 router.get('/supported-formats',
   defaultRateLimiter,
   async (req, res) => {
-    try {
-      const supportedFormats = {
-        fileTypes: [
-          { type: 'image/jpeg', extension: '.jpg/.jpeg', maxSize: '10MB' },
-          { type: 'image/png', extension: '.png', maxSize: '10MB' },
-          { type: 'image/tiff', extension: '.tiff', maxSize: '10MB' },
-          { type: 'application/pdf', extension: '.pdf', maxSize: '10MB' }
-        ],
-        languages: [
-          { code: 'pt-BR', name: 'Portuguese (Brazil)' },
-          { code: 'en-US', name: 'English (US)' },
-          { code: 'es-ES', name: 'Spanish (Spain)' }
-        ],
-        documentTypes: [
-          { type: 'prescription', name: 'Medical Prescription' },
-          { type: 'lab_result', name: 'Laboratory Result' },
-          { type: 'medical_record', name: 'Medical Record' },
-          { type: 'insurance', name: 'Insurance Document' },
-          { type: 'general', name: 'General Document' }
-        ],
-        features: [
-          'Entity extraction',
-          'Confidence scoring',
-          'Multi-page support',
-          'Language detection',
-          'Table extraction'
-        ]
-      };
+    // Static configuration - no database needed
+    const supportedFormats = {
+      fileTypes: [
+        { type: 'image/jpeg', extension: '.jpg/.jpeg', maxSize: '10MB' },
+        { type: 'image/png', extension: '.png', maxSize: '10MB' },
+        { type: 'image/tiff', extension: '.tiff', maxSize: '10MB' },
+        { type: 'application/pdf', extension: '.pdf', maxSize: '10MB' }
+      ],
+      languages: [
+        { code: 'pt-BR', name: 'Portuguese (Brazil)' },
+        { code: 'en-US', name: 'English (US)' },
+        { code: 'es-ES', name: 'Spanish (Spain)' }
+      ],
+      documentTypes: [
+        { type: 'prescription', name: 'Medical Prescription' },
+        { type: 'lab_result', name: 'Laboratory Result' },
+        { type: 'medical_record', name: 'Medical Record' },
+        { type: 'insurance', name: 'Insurance Document' },
+        { type: 'general', name: 'General Document' }
+      ],
+      features: [
+        'Entity extraction',
+        'Confidence scoring',
+        'Multi-page support',
+        'Language detection',
+        'Table extraction'
+      ]
+    };
 
-      res.json(supportedFormats);
-    } catch (error) {
-      logger.error('Failed to get supported formats', { error });
-      res.status(500).json({ error: 'Failed to retrieve supported formats' });
-    }
+    res.json(supportedFormats);
   }
 );
 
@@ -449,5 +620,139 @@ router.use((error: any, req: any, res: any, next: any) => {
 
   next(error);
 });
+
+// ============================================
+// Background OCR Processing Helpers
+// ============================================
+
+interface OCRJobOptions {
+  documentType: DocumentType;
+  language: string;
+  extractEntities: boolean;
+}
+
+/**
+ * Trigger OCR processing for a single document asynchronously.
+ * Uses the OCROrchestrator service for the full pipeline.
+ */
+async function triggerOCRJob(
+  documentId: string,
+  fileBuffer: Buffer | null,
+  fileName: string,
+  options: OCRJobOptions
+): Promise<void> {
+  try {
+    // Update status to PROCESSING
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { status: DocumentStatus.PROCESSING },
+    });
+
+    // In a production environment, the file would already be in S3.
+    // For now, we store the buffer to disk temporarily so the orchestrator can read it.
+    let storagePath = '';
+    if (fileBuffer) {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const os = await import('os');
+      const tmpDir = os.tmpdir();
+      const tmpFile = path.join(tmpDir, `ocr-${documentId}-${fileName}`);
+      await fs.writeFile(tmpFile, fileBuffer);
+      storagePath = tmpFile;
+    } else {
+      // Retry case: use the existing storage path from the document
+      const doc = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: { storagePath: true },
+      });
+      storagePath = doc?.storagePath || '';
+    }
+
+    if (!storagePath) {
+      throw new Error('No file available for OCR processing');
+    }
+
+    // Run the OCR orchestrator
+    const { OCROrchestrator } = await import('../services/ocr/ocr-orchestrator.service');
+    const orchestrator = new OCROrchestrator();
+
+    const result = await orchestrator.processDocument(storagePath, {
+      language: options.language,
+      extractEntities: options.extractEntities,
+    });
+
+    // Update document with OCR results
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        status: DocumentStatus.COMPLETED,
+        hasOcr: true,
+        ocrText: result.document.blocks?.map((b: any) => b.text).join('\n') || null,
+        ocrConfidence: result.document.overallConfidence || result.processingMetrics.confidence,
+        extractedData: {
+          entities: result.document.medicalEntities || [],
+          pages: result.document.pages || 1,
+          language: options.language,
+          fhirResources: result.fhirResources,
+          validationResults: result.validationResults,
+        },
+        processedAt: new Date(),
+      },
+    });
+
+    logger.info('OCR job completed successfully', {
+      documentId,
+      confidence: result.processingMetrics.confidence,
+      processingTime: result.processingMetrics.totalTime,
+    });
+
+    // Clean up temp file if we created one
+    if (fileBuffer && storagePath) {
+      const fs = await import('fs/promises');
+      await fs.unlink(storagePath).catch(() => {});
+    }
+  } catch (error) {
+    logger.error('OCR job failed', { documentId, error });
+
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { status: DocumentStatus.FAILED },
+    }).catch(err => logger.error('Failed to update document status after OCR failure', { documentId, error: err }));
+  }
+}
+
+/**
+ * Trigger batch OCR processing for multiple documents.
+ */
+async function triggerBatchOCRJobs(
+  jobs: Array<{ id: string; buffer: Buffer | null; fileName: string }>,
+  options: OCRJobOptions
+): Promise<void> {
+  // Update all documents to PROCESSING
+  await Promise.all(
+    jobs.map(job =>
+      prisma.document.update({
+        where: { id: job.id },
+        data: { status: DocumentStatus.PROCESSING },
+      }).catch(err => logger.error('Failed to update batch document status', { documentId: job.id, error: err }))
+    )
+  );
+
+  // Process each document (in production, this would be a queue-based approach)
+  const results = await Promise.allSettled(
+    jobs.map(job =>
+      triggerOCRJob(job.id, job.buffer, job.fileName, options)
+    )
+  );
+
+  const succeeded = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
+
+  logger.info('Batch OCR processing completed', {
+    total: jobs.length,
+    succeeded,
+    failed,
+  });
+}
 
 export default router;

@@ -56,7 +56,6 @@ export interface UserResponse {
 export interface OnboardingStatusData {
   isComplete: boolean;
   currentStep: number;
-  completedSteps: string[];
   stepsCompleted: number;
   totalSteps: number;
   completionPercentage: number;

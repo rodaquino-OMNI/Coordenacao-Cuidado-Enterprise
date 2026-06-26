@@ -25,9 +25,12 @@ import {
 } from '../services/ocr/errors/textract.errors';
 import { OCROrchestrator } from '../services/ocr/ocr-orchestrator.service';
 import { MedicalDocumentType } from '../services/ocr/types/medical-document.types';
+import { TEXTRACT_CONFIG } from '../services/ocr/config/textract.config';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 // Configure multer for file uploads
 const upload = multer({
@@ -48,9 +51,17 @@ const upload = multer({
 
 export class OCRController {
   private ocrService: OCROrchestrator;
+  private s3Client: S3Client;
 
   constructor() {
     this.ocrService = createMedicalOCRService();
+    this.s3Client = new S3Client({
+      region: TEXTRACT_CONFIG.region,
+      credentials: {
+        accessKeyId: TEXTRACT_CONFIG.accessKeyId,
+        secretAccessKey: TEXTRACT_CONFIG.secretAccessKey,
+      },
+    });
   }
 
   /**
@@ -305,21 +316,54 @@ export class OCRController {
     try {
       const { documentId } = req.params;
       
-      // In a real implementation, this would retrieve the document from database
-      // For now, return a mock response
+      // Retrieve the document from the database
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          fileName: true,
+          fileSize: true,
+          mimeType: true,
+          extractedText: true,
+          metadata: true,
+          ocrProcessed: true,
+          createdAt: true,
+        },
+      });
+
+      if (!document) {
+        res.status(404).json({
+          success: false,
+          error: 'Document not found',
+        });
+        return;
+      }
+
+      // Get medical summary from extracted text or metadata
+      const summary = formatMedicalSummary({
+        documentId: document.id,
+        documentType: document.type,
+        fileName: document.fileName,
+        extractedText: document.extractedText || '',
+        metadata: document.metadata as any,
+        ocrProcessed: document.ocrProcessed,
+        createdAt: document.createdAt,
+      });
+
       res.status(200).json({
         success: true,
         documentId,
-        message: 'Medical summary retrieval would be implemented with document storage'
+        summary,
       });
-
     } catch (error) {
       const ocrError = TextractErrorHandler.handle(error);
       
       res.status(404).json({
         success: false,
         error: ocrError.message,
-        code: ocrError.code
+        code: ocrError.code,
       });
     }
   };
@@ -400,26 +444,69 @@ export class OCRController {
     try {
       const { documentId } = req.params;
       
-      // In a real implementation, this would retrieve the document and FHIR resources
+      // Retrieve the document from database
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          fileName: true,
+          extractedText: true,
+          metadata: true,
+          ocrProcessed: true,
+        },
+      });
+
+      if (!document) {
+        res.status(404).json({
+          success: false,
+          error: 'Document not found',
+        });
+        return;
+      }
+
+      if (!document.ocrProcessed) {
+        res.status(400).json({
+          success: false,
+          error: 'Document has not been OCR processed yet',
+        });
+        return;
+      }
+
+      // Generate FHIR bundle from document data
+      const fhirBundle = formatForFHIRExport({
+        documentId: document.id,
+        userId: document.userId,
+        documentType: document.type,
+        fileName: document.fileName,
+        extractedText: document.extractedText || '',
+        metadata: (document.metadata as any) || {},
+      });
+
+      // Store FHIR export event in audit log
+      await prisma.auditLog.create({
+        data: {
+          userId: document.userId,
+          action: 'EXPORT',
+          entity: 'fhir_export',
+          entityId: documentId,
+        },
+      });
+
       res.status(200).json({
         success: true,
         documentId,
-        message: 'FHIR export would be implemented with document storage',
-        fhirBundle: {
-          resourceType: 'Bundle',
-          id: `bundle-${documentId}`,
-          type: 'document',
-          entry: []
-        }
+        fhirBundle,
+        exportedAt: new Date().toISOString(),
       });
-
     } catch (error) {
       const ocrError = TextractErrorHandler.handle(error);
       
       res.status(404).json({
         success: false,
         error: ocrError.message,
-        code: ocrError.code
+        code: ocrError.code,
       });
     }
   };
@@ -471,34 +558,68 @@ export class OCRController {
    */
   getHealthStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-      // This would check service health, AWS connectivity, etc.
+      // Check various service health statuses
+      let textractStatus = 'unavailable';
+      let s3Status = 'unavailable';
+      let dbStatus = 'unavailable';
+
+      // Check S3 connectivity
+      try {
+        await this.s3Client.config.credentials();
+        s3Status = TEXTRACT_CONFIG.accessKeyId ? 'operational' : 'unconfigured';
+      } catch {
+        s3Status = 'degraded';
+      }
+
+      // Check Textract (same credentials as S3)
+      textractStatus = TEXTRACT_CONFIG.accessKeyId ? 'operational' : 'unconfigured';
+
+      // Check database
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        dbStatus = 'operational';
+      } catch {
+        dbStatus = 'degraded';
+      }
+
+      // Get processing statistics from database
+      const totalDocuments = await prisma.document.count();
+      const processedDocuments = await prisma.document.count({ where: { ocrProcessed: true } });
+
       const healthStatus = {
-        status: 'healthy',
+        status: dbStatus === 'operational' ? 'healthy' : 'degraded',
         timestamp: new Date().toISOString(),
         services: {
-          textract: 'operational',
-          s3: 'operational',
-          fhir: 'operational'
+          textract: textractStatus,
+          s3: s3Status,
+          fhir: 'operational',
+          database: dbStatus,
         },
         performance: {
-          averageProcessingTime: '15.2s',
-          successRate: '97.8%',
-          errorRate: '2.2%'
-        }
+          averageProcessingTime: 'N/A',
+          successRate: totalDocuments > 0 
+            ? `${((processedDocuments / totalDocuments) * 100).toFixed(1)}%`
+            : 'N/A',
+          errorRate: 'N/A',
+        },
+        statistics: {
+          totalDocuments,
+          processedDocuments,
+          pendingDocuments: totalDocuments - processedDocuments,
+        },
       };
 
       res.status(200).json({
         success: true,
-        health: healthStatus
+        health: healthStatus,
       });
-
     } catch (error) {
       const ocrError = TextractErrorHandler.handle(error);
       
       res.status(503).json({
         success: false,
         error: ocrError.message,
-        code: ocrError.code
+        code: ocrError.code,
       });
     }
   };
@@ -507,20 +628,37 @@ export class OCRController {
    * Helper methods
    */
   private async uploadToS3(file: Express.Multer.File, requestId: string): Promise<string> {
-    // Mock S3 upload implementation
-    // In production, this would use AWS S3 SDK
     const s3Key = `ocr-documents/${requestId}/${Date.now()}-${file.originalname}`;
     
-    logger.info('Mock S3 upload', {
-      s3Key,
-      fileSize: file.size,
-      contentType: file.mimetype
-    });
+    try {
+      await this.s3Client.send(new PutObjectCommand({
+        Bucket: TEXTRACT_CONFIG.bucketName,
+        Key: s3Key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        Metadata: {
+          originalFilename: file.originalname,
+          uploadedAt: new Date().toISOString(),
+          requestId,
+        },
+      }));
 
-    // Simulate upload delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    return s3Key;
+      logger.info('Document uploaded to S3', {
+        s3Key,
+        bucket: TEXTRACT_CONFIG.bucketName,
+        fileSize: file.size,
+        contentType: file.mimetype,
+      });
+
+      return s3Key;
+    } catch (error) {
+      logger.error('S3 upload failed', { s3Key, error });
+      throw new TextractError(
+        'Failed to upload document to S3',
+        'S3_UPLOAD_ERROR',
+        'CRITICAL'
+      );
+    }
   }
 
   private getStatusCodeForError(error: TextractError): number {

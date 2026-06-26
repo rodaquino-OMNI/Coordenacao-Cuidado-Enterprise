@@ -258,7 +258,7 @@ export class MissionService {
           where: { userId },
         });
         if (healthPoints) {
-          progress.healthPoints = healthPoints.currentPoints;
+          progress.healthPoints = healthPoints.availablePoints;
         }
         
         return progress;
@@ -549,17 +549,17 @@ export class MissionService {
         where: { userId },
         create: {
           userId,
-          currentPoints: points,
+          availablePoints: points,
           lifetimePoints: points,
-          level: Math.floor(points / 100) + 1,
+          currentLevel: Math.floor(points / 100) + 1,
           streak: 1,
           longestStreak: 1,
           lastActivityAt: new Date(),
         },
         update: {
-          currentPoints: { increment: points },
+          availablePoints: { increment: points },
           lifetimePoints: { increment: points },
-          level: { increment: Math.floor(points / 100) },
+          currentLevel: { increment: Math.floor(points / 100) },
           lastActivityAt: new Date(),
         },
       });
@@ -581,7 +581,7 @@ export class MissionService {
         userId,
         points,
         missionId,
-        totalPoints: healthPoints.currentPoints + points,
+        totalPoints: healthPoints.availablePoints + points,
         badge,
       });
     } catch (error) {

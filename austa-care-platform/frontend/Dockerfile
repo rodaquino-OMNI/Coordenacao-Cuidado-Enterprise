@@ -1,7 +1,7 @@
 # Multi-stage build for production-ready React frontend
 
 # Stage 1: Development
-FROM node:18-alpine AS development
+FROM node:20-alpine AS development
 WORKDIR /app
 
 # Copy package files
@@ -20,14 +20,14 @@ EXPOSE 3000
 CMD ["npm", "start"]
 
 # Stage 2: Build
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -42,7 +42,7 @@ FROM nginx:alpine AS production
 RUN apk add --no-cache curl
 
 # Copy built application
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf

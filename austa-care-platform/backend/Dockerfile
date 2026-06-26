@@ -5,14 +5,14 @@ FROM node:18-alpine AS dependencies
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev openssl
 
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies
-RUN npm ci --only=production && \
+RUN npm ci --only=production --legacy-peer-deps && \
     npm cache clean --force
 
 # Generate Prisma client
@@ -31,7 +31,7 @@ COPY tsconfig*.json ./
 
 # Install all dependencies (including dev)
 # Using npm install due to lock file sync issues
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY src ./src
@@ -45,7 +45,7 @@ FROM node:18-alpine AS development
 WORKDIR /app
 
 # Install development dependencies
-RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev openssl
 
 # Copy package files
 COPY package*.json ./
@@ -53,7 +53,7 @@ COPY tsconfig*.json ./
 
 # Install all dependencies (including dev)
 # Using npm install due to lock file sync issues
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY src ./src

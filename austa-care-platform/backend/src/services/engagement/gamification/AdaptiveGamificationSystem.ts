@@ -64,8 +64,8 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       if (healthPoints) {
         progress = {
           userId,
-          level: healthPoints.level,
-          points: healthPoints.currentPoints,
+          currentLevel: healthPoints.currentLevel,
+          points: healthPoints.availablePoints,
           badges: [],
           achievements: [],
           lastActivity: healthPoints.lastActivityAt || new Date(),
@@ -104,17 +104,17 @@ export class AdaptiveGamificationSystem extends BaseEngagementService {
       where: { userId },
       create: {
         userId,
-        currentPoints: points,
+        availablePoints: points,
         lifetimePoints: points,
-        level: newLevel,
+        currentLevel: newLevel,
         streak: 1,
         longestStreak: 1,
         lastActivityAt: new Date(),
       },
       update: {
-        currentPoints: { increment: points },
+        availablePoints: { increment: points },
         lifetimePoints: { increment: points },
-        level: newLevel,
+        currentLevel: newLevel,
         lastActivityAt: new Date(),
       },
     });

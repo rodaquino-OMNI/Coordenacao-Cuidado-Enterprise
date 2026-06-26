@@ -614,8 +614,8 @@ export class EmergencyDetectionService {
           data: {
             userId,
             action: 'CREATE',
-            resource: 'HealthData',
-            resourceId: alert.id,
+            entity: 'HealthData',
+            entityId: alert.id,
             metadata: {
               alertId: alert.id,
               condition: alert.condition,
@@ -655,8 +655,8 @@ export class EmergencyDetectionService {
         data: {
           userId: updatedBy,
           action: 'UPDATE',
-          resource: 'HealthData',
-          resourceId: alertId,
+          entity: 'HealthData',
+          entityId: alertId,
           metadata: {
             alertId,
             newStatus,

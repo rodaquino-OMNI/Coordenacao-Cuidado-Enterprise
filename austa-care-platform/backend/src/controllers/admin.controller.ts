@@ -121,7 +121,7 @@ router.get('/analytics/users', async (req: Request, res: Response) => {
       // Calculate average health score from HealthPoints table
       prisma.healthPoints.aggregate({
         _avg: {
-          currentPoints: true
+          availablePoints: true
         }
       })
     ]);
@@ -132,7 +132,7 @@ router.get('/analytics/users', async (req: Request, res: Response) => {
         totalUsers,
         newUsers,
         activeUsers,
-        averageHealthScore: Math.round(averageHealthScore._avg.currentPoints || 0),
+        averageHealthScore: Math.round(averageHealthScore._avg.availablePoints || 0),
         growthRate: totalUsers > 0 ? ((newUsers / totalUsers) * 100).toFixed(2) : '0',
       }
     });
@@ -284,9 +284,9 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
         select: {
           id: true,
           userId: true,
-          currentPoints: true,
+          availablePoints: true,
           lifetimePoints: true,
-          level: true
+          currentLevel: true
         }
       }),
       prisma.pointTransaction.groupBy({
@@ -310,7 +310,7 @@ router.get('/analytics/gamification', async (req: Request, res: Response) => {
         return {
           id: hp.userId,
           name: user ? getFullName(user) : 'Unknown User',
-          healthScore: hp.currentPoints,
+          healthScore: hp.availablePoints,
           _count: {
             achievements
           }

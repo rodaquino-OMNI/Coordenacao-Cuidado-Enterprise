@@ -10,8 +10,41 @@ import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateRequest, validateQuery, validateParams } from '../middleware/validation';
 import { defaultRateLimiter, strictRateLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
+import { DocumentType, DocumentStatus, DocumentCategory } from '@prisma/client';
 
 const router = Router();
+
+// Map API documentType values to Prisma DocumentType enum
+const API_TO_PRISMA_DOC_TYPE: Record<string, DocumentType> = {
+  'medical_record': DocumentType.MEDICAL_RECORD,
+  'prescription': DocumentType.PRESCRIPTION,
+  'lab_result': DocumentType.LAB_RESULT,
+  'insurance': DocumentType.INSURANCE_CARD,
+  'authorization': DocumentType.OTHER,
+  'other': DocumentType.OTHER,
+};
+
+// Reverse map for API responses
+const PRISMA_TO_API_DOC_TYPE: Record<string, string> = {
+  'MEDICAL_RECORD': 'medical_record',
+  'PRESCRIPTION': 'prescription',
+  'LAB_RESULT': 'lab_result',
+  'INSURANCE_CARD': 'insurance',
+  'ID_DOCUMENT': 'other',
+  'CONSENT_FORM': 'other',
+  'DISCHARGE_SUMMARY': 'medical_record',
+  'IMAGING_RESULT': 'lab_result',
+  'VACCINATION_RECORD': 'medical_record',
+  'OTHER': 'other',
+};
+
+// Map API sortBy values to Prisma field names
+const SORT_FIELD_MAP: Record<string, string> = {
+  'uploadedAt': 'uploadedAt',
+  'createdAt': 'createdAt',
+  'title': 'title',
+};
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -78,6 +111,34 @@ const DocumentQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc')
 });
 
+// Helper to format document for API response
+function formatDocumentResponse(doc: any) {
+  const extracted = (doc.extractedData as Record<string, any> | null) || {};
+  return {
+    id: doc.id,
+    userId: doc.userId,
+    documentType: PRISMA_TO_API_DOC_TYPE[doc.type] || 'other',
+    title: doc.title,
+    description: doc.description,
+    fileName: doc.fileName || doc.filename,
+    originalName: doc.originalName,
+    mimeType: doc.mimeType,
+    size: doc.size || doc.fileSize,
+    uploadedAt: doc.uploadedAt,
+    processed: doc.hasOcr || doc.status === 'COMPLETED',
+    ocrStatus: doc.status?.toLowerCase() || 'pending',
+    ocrData: doc.hasOcr ? {
+      text: doc.ocrText,
+      confidence: doc.ocrConfidence,
+      entities: extracted.entities || [],
+    } : undefined,
+    tags: doc.tags || [],
+    metadata: extracted,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
 // Apply authentication to all routes
 router.use(authenticateToken);
 
@@ -103,33 +164,45 @@ router.post('/upload',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const uploadedDocuments = files.map((file, index) => ({
-        id: `doc-${Date.now()}-${index}`,
-        userId,
-        documentType: documentType || 'other',
-        title: title || file.originalname,
-        description,
-        tags: tags ? JSON.parse(tags) : [],
-        fileName: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
-        uploadedAt: new Date(),
-        processed: false,
-        ocrStatus: 'pending',
-        metadata: {}
-      }));
+      const prismaDocType = API_TO_PRISMA_DOC_TYPE[documentType] || DocumentType.OTHER;
+      const parsedTags: string[] = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
+      const category = mapDocumentTypeToCategory(prismaDocType);
+
+      // Create document records in Prisma
+      const createdDocs = await Promise.all(
+        files.map(file =>
+          prisma.document.create({
+            data: {
+              userId,
+              type: prismaDocType,
+              category,
+              title: title || file.originalname,
+              description: description || undefined,
+              tags: parsedTags,
+              fileName: file.filename,
+              filename: file.filename,
+              originalName: file.originalname,
+              mimeType: file.mimetype,
+              size: file.size,
+              fileSize: file.size,
+              storagePath: file.path,
+              storageProvider: 'LOCAL',
+              status: DocumentStatus.PENDING,
+              organizationId: req.user!.id, // Default to user's org; adjust if multi-tenant
+            },
+          })
+        )
+      );
 
       logger.info('Documents uploaded', {
-        count: uploadedDocuments.length,
+        count: createdDocs.length,
         userId,
-        documentIds: uploadedDocuments.map(d => d.id)
+        documentIds: createdDocs.map(d => d.id)
       });
 
       res.status(201).json({
         message: 'Documents uploaded successfully',
-        documents: uploadedDocuments
+        documents: createdDocs.map(formatDocumentResponse)
       });
     } catch (error) {
       logger.error('Failed to upload documents', { error });
@@ -157,33 +230,131 @@ router.get('/user/:userId',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Mock implementation
-      const documents = [
-        {
-          id: 'doc-1',
-          userId,
-          documentType: 'prescription',
-          title: 'Prescription - Dr. Smith',
-          fileName: 'prescription-2024.pdf',
-          uploadedAt: new Date(),
-          processed: true,
-          ocrStatus: 'completed',
-          size: 245678
+      // Build where clause
+      const where: any = { userId, isActive: true };
+
+      if (documentType) {
+        where.type = API_TO_PRISMA_DOC_TYPE[documentType] || DocumentType.OTHER;
+      }
+
+      if (uploadedAfter) {
+        where.uploadedAt = { ...(where.uploadedAt || {}), gte: new Date(uploadedAfter) };
+      }
+
+      if (uploadedBefore) {
+        where.uploadedAt = { ...(where.uploadedAt || {}), lte: new Date(uploadedBefore) };
+      }
+
+      if (processed !== undefined) {
+        if (processed) {
+          where.status = DocumentStatus.COMPLETED;
+        } else {
+          where.status = { not: DocumentStatus.COMPLETED };
         }
-      ];
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const orderField = SORT_FIELD_MAP[sortBy] || 'uploadedAt';
+
+      const [documents, total] = await Promise.all([
+        prisma.document.findMany({
+          where,
+          skip,
+          take: Number(limit),
+          orderBy: { [orderField]: sortOrder },
+        }),
+        prisma.document.count({ where }),
+      ]);
 
       res.json({
-        documents,
+        documents: documents.map(formatDocumentResponse),
         pagination: {
           page: Number(page),
           limit: Number(limit),
-          total: documents.length,
-          totalPages: Math.ceil(documents.length / Number(limit))
+          total,
+          totalPages: Math.ceil(total / Number(limit))
         }
       });
     } catch (error) {
       logger.error('Failed to get documents', { error, userId: req.params.userId });
       res.status(500).json({ error: 'Failed to retrieve documents' });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/documents/stats/overview
+ * @desc    Get document statistics (admin only)
+ * @access  Private (Admin)
+ */
+router.get('/stats/overview',
+  requireRole('admin'),
+  defaultRateLimiter,
+  async (req, res) => {
+    try {
+      const [
+        totalDocuments,
+        completedDocs,
+        processingDocs,
+        pendingDocs,
+        failedDocs,
+        typeBreakdown,
+        docsLast24h,
+        processedLast24h,
+      ] = await Promise.all([
+        prisma.document.count({ where: { isActive: true } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.COMPLETED } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PROCESSING } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PENDING } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.FAILED } }),
+        prisma.document.groupBy({
+          by: ['type'],
+          where: { isActive: true },
+          _count: true,
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            uploadedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            processedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+      ]);
+
+      const documentsByType: Record<string, number> = {};
+      for (const item of typeBreakdown) {
+        const apiType = PRISMA_TO_API_DOC_TYPE[item.type] || 'other';
+        documentsByType[apiType] = (documentsByType[apiType] || 0) + item._count;
+      }
+
+      const stats = {
+        totalDocuments,
+        processedDocuments: completedDocs,
+        pendingProcessing: pendingDocs,
+        failedProcessing: failedDocs,
+        documentsByType,
+        totalStorage: 'N/A',
+        last24Hours: {
+          uploaded: docsLast24h,
+          processed: processedLast24h,
+        },
+        ocrStatus: {
+          completed: completedDocs,
+          failed: failedDocs,
+          pending: pendingDocs,
+          processing: processingDocs,
+        }
+      };
+
+      res.json(stats);
+    } catch (error) {
+      logger.error('Failed to get document stats', { error });
+      res.status(500).json({ error: 'Failed to retrieve statistics' });
     }
   }
 );
@@ -200,34 +371,20 @@ router.get('/:documentId',
     try {
       const { documentId } = req.params;
 
-      // Mock implementation
-      const document = {
-        id: documentId,
-        userId: req.user!.id,
-        documentType: 'prescription',
-        title: 'Prescription - Dr. Smith',
-        description: 'Monthly prescription',
-        fileName: 'prescription-2024.pdf',
-        originalName: 'prescription.pdf',
-        mimeType: 'application/pdf',
-        size: 245678,
-        uploadedAt: new Date(),
-        processed: true,
-        ocrStatus: 'completed',
-        ocrData: {
-          text: 'Prescription text extracted...',
-          confidence: 0.95
-        },
-        metadata: {},
-        tags: ['prescription', '2024']
-      };
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
 
       // Check access
       if (document.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      res.json(document);
+      res.json(formatDocumentResponse(document));
     } catch (error) {
       logger.error('Failed to get document', { error, documentId: req.params.documentId });
       res.status(500).json({ error: 'Failed to retrieve document' });
@@ -247,11 +404,37 @@ router.get('/:documentId/download',
     try {
       const { documentId } = req.params;
 
-      // Mock implementation - in production, stream file from storage
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Check access
+      if (document.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
       logger.info('Document download requested', { documentId, userId: req.user!.id });
 
-      // Would implement actual file download here
-      res.status(501).json({ error: 'Download not implemented in mock version' });
+      // In production, generate a signed S3 URL
+      // For now, return the stored file URL or path
+      const downloadUrl = document.downloadUrl || document.fileUrl || document.storagePath;
+
+      if (!downloadUrl) {
+        return res.status(404).json({ error: 'File not available for download' });
+      }
+
+      res.json({
+        downloadUrl,
+        fileName: document.fileName || document.filename,
+        originalName: document.originalName,
+        mimeType: document.mimeType,
+        size: document.size || document.fileSize,
+        expiresIn: 3600, // 1 hour for signed URLs
+      });
     } catch (error) {
       logger.error('Failed to download document', { error, documentId: req.params.documentId });
       res.status(500).json({ error: 'Failed to download document' });
@@ -272,18 +455,28 @@ router.put('/:documentId',
       const { documentId } = req.params;
       const { title, description, tags, metadata } = req.body;
 
-      // Mock implementation
-      const updatedDocument = {
-        id: documentId,
-        title,
-        description,
-        tags,
-        metadata,
-        updatedAt: new Date()
-      };
+      const existing = await prisma.document.findUnique({ where: { id: documentId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const updatedDocument = await prisma.document.update({
+        where: { id: documentId },
+        data: {
+          ...(title !== undefined && { title }),
+          ...(description !== undefined && { description }),
+          ...(tags !== undefined && { tags: Array.isArray(tags) ? tags : [] }),
+          ...(metadata !== undefined && { extractedData: metadata }),
+        },
+      });
 
       logger.info('Document metadata updated', { documentId });
-      res.json(updatedDocument);
+
+      res.json(formatDocumentResponse(updatedDocument));
     } catch (error) {
       logger.error('Failed to update document', { error, documentId: req.params.documentId });
       res.status(500).json({ error: 'Failed to update document' });
@@ -293,7 +486,7 @@ router.put('/:documentId',
 
 /**
  * @route   DELETE /api/v1/documents/:documentId
- * @desc    Delete document
+ * @desc    Delete document (soft delete)
  * @access  Private
  */
 router.delete('/:documentId',
@@ -303,12 +496,30 @@ router.delete('/:documentId',
     try {
       const { documentId } = req.params;
 
-      logger.info('Document deletion requested', { documentId, userId: req.user!.id });
+      const existing = await prisma.document.findUnique({ where: { id: documentId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Soft delete: archive the document
+      await prisma.document.update({
+        where: { id: documentId },
+        data: {
+          isActive: false,
+          archivedAt: new Date(),
+        },
+      });
+
+      logger.info('Document archived (soft delete)', { documentId, userId: req.user!.id });
 
       res.json({
-        message: 'Document deleted',
+        message: 'Document archived',
         documentId,
-        note: 'File and metadata removed according to LGPD policies'
+        note: 'Document archived according to LGPD policies. Data will be retained per retention schedule.'
       });
     } catch (error) {
       logger.error('Failed to delete document', { error, documentId: req.params.documentId });
@@ -329,7 +540,27 @@ router.post('/:documentId/process',
     try {
       const { documentId } = req.params;
 
-      // Mock implementation
+      const existing = await prisma.document.findUnique({ where: { id: documentId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (existing.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Update status to PROCESSING
+      await prisma.document.update({
+        where: { id: documentId },
+        data: { status: DocumentStatus.PROCESSING },
+      });
+
+      // Trigger OCR processing asynchronously (fire-and-forget)
+      // In production, this would be a background job via a queue
+      triggerOCRProcessing(documentId, existing.storagePath).catch(err => {
+        logger.error('Background OCR processing failed', { documentId, error: err });
+      });
+
       logger.info('Document processing triggered', { documentId });
 
       res.json({
@@ -357,21 +588,30 @@ router.get('/:documentId/ocr',
     try {
       const { documentId } = req.params;
 
-      // Mock implementation
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (document.userId !== req.user!.id && !req.user!.roles.includes('admin')) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const extracted = (doc.extractedData as Record<string, any> | null) || {};
       const ocrResult = {
-        documentId,
-        status: 'completed',
-        processedAt: new Date(),
+        documentId: document.id,
+        status: document.status?.toLowerCase() || 'pending',
+        processedAt: document.processedAt,
         data: {
-          text: 'Extracted text from document...',
-          confidence: 0.95,
-          entities: [
-            { type: 'medication', value: 'Paracetamol 500mg', confidence: 0.98 },
-            { type: 'date', value: '2024-01-15', confidence: 0.92 }
-          ],
+          text: document.ocrText || null,
+          confidence: document.ocrConfidence || null,
+          entities: extracted.entities || [],
           metadata: {
-            pages: 1,
-            language: 'pt-BR'
+            pages: extracted.pages || 1,
+            language: extracted.language || 'pt-BR',
           }
         }
       };
@@ -394,28 +634,62 @@ router.get('/stats/overview',
   defaultRateLimiter,
   async (req, res) => {
     try {
-      // Mock implementation
+      const [
+        totalDocuments,
+        completedDocs,
+        processingDocs,
+        pendingDocs,
+        failedDocs,
+        typeBreakdown,
+        docsLast24h,
+        processedLast24h,
+      ] = await Promise.all([
+        prisma.document.count({ where: { isActive: true } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.COMPLETED } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PROCESSING } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.PENDING } }),
+        prisma.document.count({ where: { isActive: true, status: DocumentStatus.FAILED } }),
+        prisma.document.groupBy({
+          by: ['type'],
+          where: { isActive: true },
+          _count: true,
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            uploadedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.document.count({
+          where: {
+            isActive: true,
+            processedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+      ]);
+
+      const documentsByType: Record<string, number> = {};
+      for (const item of typeBreakdown) {
+        const apiType = PRISMA_TO_API_DOC_TYPE[item.type] || 'other';
+        documentsByType[apiType] = (documentsByType[apiType] || 0) + item._count;
+      }
+
       const stats = {
-        totalDocuments: 5670,
-        processedDocuments: 5200,
-        pendingProcessing: 470,
-        documentsByType: {
-          medical_record: 1800,
-          prescription: 1500,
-          lab_result: 1200,
-          insurance: 800,
-          authorization: 270,
-          other: 100
-        },
-        totalStorage: '12.5GB',
+        totalDocuments,
+        processedDocuments: completedDocs,
+        pendingProcessing: pendingDocs,
+        failedProcessing: failedDocs,
+        documentsByType,
+        totalStorage: 'N/A', // Would need aggregation of file sizes
         last24Hours: {
-          uploaded: 45,
-          processed: 52
+          uploaded: docsLast24h,
+          processed: processedLast24h,
         },
-        ocrSuccess: {
-          completed: 5100,
-          failed: 100,
-          pending: 470
+        ocrStatus: {
+          completed: completedDocs,
+          failed: failedDocs,
+          pending: pendingDocs,
+          processing: processingDocs,
         }
       };
 
@@ -445,5 +719,74 @@ router.use((error: any, req: any, res: any, next: any) => {
 
   next(error);
 });
+
+// Helper functions
+
+/** Map DocumentType to DocumentCategory */
+function mapDocumentTypeToCategory(docType: DocumentType): DocumentCategory {
+  switch (docType) {
+    case DocumentType.MEDICAL_RECORD:
+    case DocumentType.PRESCRIPTION:
+    case DocumentType.DISCHARGE_SUMMARY:
+    case DocumentType.VACCINATION_RECORD:
+      return DocumentCategory.MEDICAL;
+    case DocumentType.LAB_RESULT:
+    case DocumentType.IMAGING_RESULT:
+      return DocumentCategory.LABORATORY;
+    case DocumentType.INSURANCE_CARD:
+      return DocumentCategory.INSURANCE;
+    case DocumentType.ID_DOCUMENT:
+      return DocumentCategory.IDENTIFICATION;
+    case DocumentType.CONSENT_FORM:
+      return DocumentCategory.LEGAL;
+    default:
+      return DocumentCategory.ADMINISTRATIVE;
+  }
+}
+
+/**
+ * Trigger OCR processing for a document asynchronously.
+ * In production, this would enqueue a job to a worker queue (e.g., Bull, SQS).
+ */
+async function triggerOCRProcessing(documentId: string, storagePath: string): Promise<void> {
+  try {
+    // Dynamically import to avoid circular dependencies
+    const { OCROrchestrator } = await import('../services/ocr/ocr-orchestrator.service');
+    const orchestrator = new OCROrchestrator();
+
+    const result = await orchestrator.processDocument(storagePath);
+
+    // Update document with OCR results
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        status: result.document.status === 'COMPLETED' ? DocumentStatus.COMPLETED : DocumentStatus.FAILED,
+        hasOcr: true,
+        ocrText: result.document.blocks?.map(b => b.text).join('\n') || null,
+        ocrConfidence: result.document.overallConfidence || result.processingMetrics.confidence,
+        extractedData: {
+          entities: result.document.medicalEntities || [],
+          pages: result.document.pages || 1,
+          language: 'pt-BR',
+          fhirResources: result.fhirResources,
+          validationResults: result.validationResults,
+        },
+        processedAt: new Date(),
+      },
+    });
+
+    logger.info('OCR processing completed and saved', { documentId });
+  } catch (error) {
+    logger.error('OCR processing failed', { documentId, error });
+
+    // Update document status to FAILED
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        status: DocumentStatus.FAILED,
+      },
+    }).catch(err => logger.error('Failed to update document status after OCR failure', { documentId, error: err }));
+  }
+}
 
 export default router;

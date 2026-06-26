@@ -5,7 +5,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient, HealthDataType } from '@prisma/client';
+import { PrismaClient, HealthDataType, DataSource } from '@prisma/client';
 import { AdvancedRiskAssessmentService } from '../services/risk-assessment.service';
 import { EmergencyDetectionService } from '../services/emergency-detection.service';
 import { CompoundRiskAnalysisService } from '../services/compound-risk.service';
@@ -157,7 +157,7 @@ export interface EmergencyInstruction {
  * KEY CHANGES FROM LEGACY VERSION:
  *
  * 1. Database Storage:
- *    - Risk assessments stored in HealthData table with type=OTHER, source='risk_assessment'
+ *    - Risk assessments stored in HealthData table with type=OTHER, source=DataSource.RISK_ASSESSMENT
  *    - Historical assessments retrieved via Prisma queries on HealthData
  *    - Complete assessment JSON stored in value field (Json type)
  *    - Metadata includes assessmentId, riskLevel, emergencyFlags for efficient querying
@@ -623,7 +623,7 @@ export class AdvancedRiskController {
         where: {
           userId,
           type: HealthDataType.OTHER,
-          source: 'risk_assessment',
+          source: DataSource.RISK_ASSESSMENT,
           recordedAt: {
             gte: startDate
           }
@@ -664,7 +664,7 @@ export class AdvancedRiskController {
         where: {
           userId,
           type: HealthDataType.OTHER,
-          source: 'risk_assessment'
+          source: DataSource.RISK_ASSESSMENT
         },
         orderBy: {
           recordedAt: 'desc'
@@ -697,7 +697,7 @@ export class AdvancedRiskController {
         data: {
           userId: assessment.userId,
           type: HealthDataType.OTHER,
-          source: 'risk_assessment',
+          source: DataSource.RISK_ASSESSMENT,
           value: JSON.parse(JSON.stringify(assessment)), // Convert to plain JSON object
           unit: 'risk_score',
           recordedAt: assessment.timestamp,
