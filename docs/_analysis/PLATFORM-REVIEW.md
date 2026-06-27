@@ -1,37 +1,40 @@
 # PLATFORM-REVIEW.md — Análise Técnica Consolidada
 ## AUSTA Care Platform / Coordenação-Cuidado Enterprise
 
-**Status:** ✅ COMPLETE — All 4 Waves Concluded  
+**Status:** ✅ COMPLETE — All 5 Waves Concluded  
 **Data da análise original:** 2026-06-26  
-**Data da verificação final (Wave 4):** 2026-06-27  
-**Versão do documento:** v2.0-final (Wave 4 verified)  
+**Data da verificação final (Wave 5):** 2026-06-27  
+**Versão do documento:** v3.0-final (Wave 5 verified)  
 
-### Final Audit Metrics (2026-06-27)
+### Final Audit Metrics (2026-06-27 — Wave 5 Full Verification)
 | Metric | Value | Status |
 |--------|-------|--------|
-| HIPAA references outside `_analysis/` | **0** | ✅ CLEAN |
-| LGPD references in codebase | **205** | ✅ ADOPTED |
-| Hardcoded passwords in docker-compose | **0** | ✅ CLEAN |
+| TypeScript compilation (`tsc --noEmit`) | **0 errors** | ✅ CLEAN |
+| Test suite | **335 total, 287 passed, 48 failed** | ⚠️ 48 failures (TS errors in test files: Prisma model names, enum values, imports) |
+| Backend npm audit (HIGH+) | **10 HIGH, 26 moderate** | ⚠️ 10 HIGH vulnerabilities |
+| Frontend npm audit (CRITICAL) | **2 CRITICAL, 1 HIGH, 3 moderate** | 🔴 2 CRITICAL (vite-plugin-pwa) |
+| HIPAA references outside `_analysis/` | **2** (PROJECT_STATUS.md + HANDOFF.yaml — historical migration docs only) | ⚠️ DOCUMENTATION-ONLY |
+| Hardcoded secrets in source | **0** (1 placeholder in seed.ts: `apiKey: 'encrypted_api_key_here'`) | ✅ CLEAN |
 | `.env` patterns in `.gitignore` | **Yes** (8 patterns) | ✅ SECURED |
 | AWS region `sa-east-1` (Terraform) | **25 .tf files** | ✅ DONE |
 | AWS region `us-east-1` (K8s configmaps) | **2 remaining** | ⚠️ PENDING |
-| Architecture Decision Records | **6** (`docs/architecture/adr/ADR-*.md`) | ✅ DOCUMENTED |
+| Architecture Decision Records | **12** (`docs/architecture/adr/ADR-*.md`) | ✅ DOCUMENTED |
 | CI/CD workflows | **14** (`.github/workflows/*.yml`) | ✅ ACTIVE |
-| TypeScript compilation (root) | 1 config error (path mismatch) | ⚠️ NON-BLOCKING |
 | Healthcare invariants (6/6) | All verified in Wave 3 | ✅ COMPLETE |
 | Gamified consent (LGPD) | Implemented + opt-out | ✅ APPROVED |
 | Audit trail persistence | AuditLog Prisma model | ✅ PERSISTENT |
 | Algorithm versioning | algorithm-registry.ts | ✅ VERSIONED |
 
-### Analista principal: Parreira (Orquestrador DevOps) + 4 agentes especialistas
+### Analista principal: Parreira (Orquestrador DevOps) + 4 agentes especialistas + hermes-agent (Wave 5 final verification)
 **Waves:**
 - **Wave 1 (3 agentes):** Product & Requirements | Architecture & Data | Codebase & Infrastructure
 - **Wave 2 (1 agente):** Compliance & Security
 - **Wave 3:** Healthcare invariants implementation + verification
 - **Wave 4 (final):** Codebase audit, HANDOFF.yaml sync, review-queue.md update, PLATFORM-REVIEW.md finalization
+- **Wave 5 (full verification):** TypeScript compilation (0 errors), test suite (335 tests), npm audit (backend + frontend), HIPAA grep, hardcoded secrets scan — all metrics verified with real tool output
 
 ### Referências rápidas:
-- **ADRs:** `docs/architecture/adr/ADR-*.md` (6 ADRs)
+- **ADRs:** `docs/architecture/adr/ADR-*.md` (12 ADRs)
 - **CI/CD:** `.github/workflows/` (14 workflows)
 - **Dashboards:** Grafana (`system-health`, `api-performance`), Prometheus, Jaeger
 - **Bloqueios:** `HANDOFF.yaml`

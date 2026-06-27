@@ -1,20 +1,24 @@
 # HANDOFF.yaml — Bloqueios Críticos
 # Coordenação-Cuidado Enterprise / AUSTA Care Platform
 # Gerado por: Parreira (Orquestrador DevOps)
-# Data: 2026-06-26 | Última verificação: 2026-06-27 (Wave 4 — final compliance)
+# Data: 2026-06-26 | Última verificação: 2026-06-27 (Wave 5 — Final Full Verification)
 
-_verified_at: "2026-06-27T00:00:00-03:00"
-_verified_by: "parreira (final compliance review — Wave 4 complete)"
+_verified_at: "2026-06-27T12:00:00-03:00"
+_verified_by: "hermes-agent (Wave 5 — full final verification: tsc, tests, audit, HIPAA, secrets)"
 _checks:
-  foreign_regulatory_references: 0                   # HIPAA grep = 0 outside _analysis
+  foreign_regulatory_references: 2                   # HISTORICAL ONLY: PROJECT_STATUS.md + HANDOFF.yaml — both documenting HIPAA→LGPD migration. Zero in production code.
   lgpd_references: 205                               # LGPD properly adopted throughout
+  typescript_compilation: "0 errors (tsc --noEmit)"  # ✅ CLEAN
+  test_suite: "335 total, 287 passed, 48 failed"     # ⚠️ 48 failures are TypeScript errors in test files (Prisma model names, enum values, import mismatches)
+  backend_npm_audit: "10 HIGH, 26 moderate"          # ⚠️ 10 HIGH vulnerabilities
+  frontend_npm_audit: "2 CRITICAL, 1 HIGH, 3 moderate" # 🔴 2 CRITICAL vulnerabilities
   pgcrypto_functional: true
   audit_trail_persistent: true
   algorithm_versioning: true
   whatsapp_idempotency: true
-  secrets_not_hardcoded: true
+  secrets_not_hardcoded: true                        # Only placeholder in seed.ts (apiKey: 'encrypted_api_key_here')
   env_gitignored: true                               # .env + .env.* patterns in .gitignore
-  adrs_exist: 6                                      # docs/architecture/adr/ADR-*.md
+  adrs_exist: 12                                     # docs/architecture/adr/ADR-*.md (6 original + 6 new: ADR-007 through ADR-012)
   ci_workflows: 14                                   # .github/workflows/*.yml
   aws_region: "sa-east-1 (⚠️ K8s configmaps still us-east-1)"
 

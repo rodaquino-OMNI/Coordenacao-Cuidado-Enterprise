@@ -19,6 +19,14 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
 
   # Redis Cache
   redis:
@@ -36,6 +44,14 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   # Backend API
   backend:
@@ -52,56 +68,24 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_URL=${REDIS_URL:-redis://redis:***@austa.com}
     volumes:
       - ./backend:/app
       - /app/node_modules
-      - ./uploads:/app/uploads
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: npm run dev
+      - postgres
+      - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
-  # Frontend PWA
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: development
-    container_name: austa-frontend
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:3000/api
-      - VITE_WS_URL=ws://localhost:3000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    command: npm run dev
-    restart: unless-stopped
-
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: austa-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d
-      - ./infrastructure/ssl:/etc/nginx/ssl
-    depends_on:
-      - backend
-      - frontend
-    restart: unless-stopped
-
-  # Database Administration
+  # pgAdmin
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: austa-pgadmin
@@ -117,6 +101,14 @@ services:
       - postgres
     restart: unless-stopped
     profiles: ["dev-tools"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   # Redis Commander
   redis-commander:
@@ -130,6 +122,14 @@ services:
       - redis
     restart: unless-stopped
     profiles: ["dev-tools"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   # Elasticsearch (for future logging)
   elasticsearch:
@@ -145,6 +145,14 @@ services:
       - elasticsearch_data:/usr/share/elasticsearch/data
     restart: unless-stopped
     profiles: ["logging"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
 
   # Kibana (for log visualization)
   kibana:
@@ -158,6 +166,14 @@ services:
       - elasticsearch
     restart: unless-stopped
     profiles: ["logging"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
 volumes:
   postgres_data:

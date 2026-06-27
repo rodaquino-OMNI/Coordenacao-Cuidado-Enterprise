@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.env
+.env.*
+*.md
+coverage
+tests
+jest.config.*
+.cache
+*.log
+Dockerfile
+.dockerignore
+docker-compose*.yml
+.gitignore
+.eslintrc*
+.prettierrc*
