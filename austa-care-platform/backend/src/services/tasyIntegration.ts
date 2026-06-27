@@ -3,6 +3,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { logger } from '../utils/logger';
 import { config } from '../config/config';
 import { withRetry } from '../lib/retry';
+import { tasyCircuit } from '../lib/circuits';
 import { AuthorizationRequest, TasyIntegration } from '../types/authorization';
 
 /**
@@ -33,9 +34,11 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     try {
       await this.ensureAuthenticated();
 
-      const response = await this.apiClient.get(`/eligibility/${patientId}`, {
-        params: { procedureCode }
-      });
+      const response = await tasyCircuit.execute(() =>
+        this.apiClient.get(`/eligibility/${patientId}`, {
+          params: { procedureCode }
+        })
+      );
 
       return response.data?.eligible || false;
     } catch (error) {
@@ -249,15 +252,17 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
         procedureCode
       });
 
-      const response = await withRetry(
-        () => this.apiClient.get('/eligibility/check', {
-          params: {
-            patientId,
-            procedureCode,
-            includeDetails: true
-          }
-        }),
-        { operationName: 'Tasy-performEligibilityCheck' }
+      const response = await tasyCircuit.execute(() =>
+        withRetry(
+          () => this.apiClient.get('/eligibility/check', {
+            params: {
+              patientId,
+              procedureCode,
+              includeDetails: true
+            }
+          }),
+          { operationName: 'Tasy-performEligibilityCheck' }
+        )
       );
 
       const eligibilityData = response.data;
@@ -288,14 +293,16 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
         procedureCode
       });
 
-      const response = await this.apiClient.get('/coverage/verify', {
-        params: {
-          patientId,
-          procedureCode,
-          includeLimits: true,
-          includeDeductibles: true
-        }
-      });
+      const response = await tasyCircuit.execute(() =>
+        this.apiClient.get('/coverage/verify', {
+          params: {
+            patientId,
+            procedureCode,
+            includeLimits: true,
+            includeDeductibles: true
+          }
+        })
+      );
 
       const coverageData = response.data;
 
@@ -335,9 +342,11 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
 
       const tasyRequest = this.mapAuthorizationToTasy(request);
 
-      const response = await withRetry(
-        () => this.apiClient.post('/authorization/submit', tasyRequest),
-        { operationName: 'Tasy-submitAuthorization' }
+      const response = await tasyCircuit.execute(() =>
+        withRetry(
+          () => this.apiClient.post('/authorization/submit', tasyRequest),
+          { operationName: 'Tasy-submitAuthorization' }
+        )
       );
 
       const authorizationNumber = response.data.authorizationNumber;
@@ -368,13 +377,15 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
         status
       });
 
-      await withRetry(
-        () => this.apiClient.put(`/authorization/${authNumber}/status`, {
-          status: this.mapStatusToTasy(status),
-          updatedAt: new Date().toISOString(),
-          source: 'AUSTA-Care-Platform'
-        }),
-        { operationName: 'Tasy-updateAuthorizationStatus' }
+      await tasyCircuit.execute(() =>
+        withRetry(
+          () => this.apiClient.put(`/authorization/${authNumber}/status`, {
+            status: this.mapStatusToTasy(status),
+            updatedAt: new Date().toISOString(),
+            source: 'AUSTA-Care-Platform'
+          }),
+          { operationName: 'Tasy-updateAuthorizationStatus' }
+        )
       );
 
       this.emit('statusUpdated', {
@@ -399,15 +410,17 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     try {
       logger.info('Syncing patient data from Tasy', { patientId });
 
-      const response = await withRetry(
-        () => this.apiClient.get(`/patient/${patientId}`, {
-          params: {
-            includeInsurance: true,
-            includeHistory: true,
-            includeDemographics: true
-          }
-        }),
-        { operationName: 'Tasy-syncPatientData' }
+      const response = await tasyCircuit.execute(() =>
+        withRetry(
+          () => this.apiClient.get(`/patient/${patientId}`, {
+            params: {
+              includeInsurance: true,
+              includeHistory: true,
+              includeDemographics: true
+            }
+          }),
+          { operationName: 'Tasy-syncPatientData' }
+        )
       );
 
       const patientData = response.data;
@@ -511,11 +524,13 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     try {
       logger.info('Submitting claim to Tasy', { authorizationId });
 
-      const response = await this.apiClient.post('/claims/submit', {
-        ...claimData,
-        authorizationId,
-        submittedAt: new Date().toISOString()
-      });
+      const response = await tasyCircuit.execute(() =>
+        this.apiClient.post('/claims/submit', {
+          ...claimData,
+          authorizationId,
+          submittedAt: new Date().toISOString()
+        })
+      );
 
       const claimNumber = response.data.claimNumber;
 
@@ -546,9 +561,11 @@ export class TasyIntegrationService extends EventEmitter implements TasyIntegrat
     copayAmount: number;
   }> {
     try {
-      const response = await this.apiClient.get('/financial/impact', {
-        params: { authorizationId }
-      });
+      const response = await tasyCircuit.execute(() =>
+        this.apiClient.get('/financial/impact', {
+          params: { authorizationId }
+        })
+      );
 
       return response.data;
     } catch (error) {

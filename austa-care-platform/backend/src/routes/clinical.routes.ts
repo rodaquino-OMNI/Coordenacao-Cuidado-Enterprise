@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AdvancedRiskAssessmentService } from '../services/risk-assessment.service';
 import { EmergencyDetectionService } from '../services/emergency-detection.service';
+import { clinicalScoreQueue } from '../lib/queue';
 import { getAlgorithmVersion, ALGORITHM_VERSIONS } from '../lib/algorithm-registry';
 import { authenticateToken } from '../middleware/auth';
 
@@ -60,16 +61,21 @@ router.get('/algorithm-version/:name', (req: Request, res: Response) => {
 
 /**
  * @route   POST /api/v1/clinical/risk-assessment
- * @desc    Run the advanced risk-assessment pipeline on a processed questionnaire
+ * @desc    Enqueue advanced risk-assessment pipeline (async via BullMQ)
  * @access  Private
  */
 router.post('/risk-assessment', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const service = getRiskService();
-    const result = await service.assessRisk(req.body);
-    return res.json({
+    const job = await clinicalScoreQueue.add('risk-assessment', {
+      type: 'risk-assessment',
+      payload: req.body,
+    });
+
+    return res.status(202).json({
+      status: 'queued',
+      jobId: job.id,
+      estimatedTime: '30s',
       algorithmVersion: getAlgorithmVersion('risk-assessment'),
-      ...result,
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -80,20 +86,22 @@ router.post('/risk-assessment', authenticateToken, async (req: Request, res: Res
 
 /**
  * @route   POST /api/v1/clinical/emergency-detection
- * @desc    Run emergency detection on a completed risk assessment
+ * @desc    Enqueue emergency detection pipeline (async via BullMQ)
  * @access  Private
  */
 router.post('/emergency-detection', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const service = getEmergencyService();
-    const alerts = await service.detectEmergencies(
-      req.body,
-      req.body.organizationId,
-    );
-    return res.json({
+    const job = await clinicalScoreQueue.add('emergency-detection', {
+      type: 'emergency-detection',
+      payload: req.body,
+      organizationId: req.body.organizationId,
+    });
+
+    return res.status(202).json({
+      status: 'queued',
+      jobId: job.id,
+      estimatedTime: '30s',
       algorithmVersion: getAlgorithmVersion('emergency-detection'),
-      alerts,
-      count: alerts.length,
     });
   } catch (error: any) {
     return res.status(500).json({

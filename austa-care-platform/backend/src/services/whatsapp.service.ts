@@ -7,6 +7,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { logger } from '../utils/logger';
 import { config } from '../config/config';
 import { retryWithBackoff, defaultShouldRetry } from '../lib/retry';
+import { zapiCircuit } from '../lib/circuits';
 import {
   ZAPIResponse,
   SendMessageResponse,
@@ -189,31 +190,33 @@ export class WhatsAppService {
     attempts: number = config.zapi.retry.attempts,
     delayMs: number = config.zapi.retry.delayMs
   ): Promise<T> {
-    const { result } = await retryWithBackoff(
-      async () => {
-        await this.waitForRateLimit();
-        const response = await operation();
-        return response.data.value;
-      },
-      {
-        maxAttempts: attempts,
-        initialDelayMs: delayMs,
-        operationName: 'Z-API',
-        shouldRetry: (error, attempt) => {
-          // Don't retry on client errors (4xx except 429)
-          const errorWithResponse = error as any;
-          if (
-            errorWithResponse?.response?.status >= 400 &&
-            errorWithResponse?.response?.status < 500 &&
-            errorWithResponse?.response?.status !== 429
-          ) {
-            return false;
-          }
-          return defaultShouldRetry(error, attempt);
+    return zapiCircuit.execute(async () => {
+      const { result } = await retryWithBackoff(
+        async () => {
+          await this.waitForRateLimit();
+          const response = await operation();
+          return response.data.value;
         },
-      }
-    );
-    return result;
+        {
+          maxAttempts: attempts,
+          initialDelayMs: delayMs,
+          operationName: 'Z-API',
+          shouldRetry: (error, attempt) => {
+            // Don't retry on client errors (4xx except 429)
+            const errorWithResponse = error as any;
+            if (
+              errorWithResponse?.response?.status >= 400 &&
+              errorWithResponse?.response?.status < 500 &&
+              errorWithResponse?.response?.status !== 429
+            ) {
+              return false;
+            }
+            return defaultShouldRetry(error, attempt);
+          },
+        }
+      );
+      return result;
+    });
   }
 
   /**

@@ -3,6 +3,7 @@ import { config } from '../config/config';
 import { logger } from '../utils/logger';
 import { RedisService } from './redisService';
 import { PersonaType, ConversationContext, AIResponse, TokenUsage, PersonaConfig } from '../types/ai';
+import { openaiCircuit } from '../lib/circuits';
 
 export class OpenAIService {
   private client: OpenAI;
@@ -166,14 +167,16 @@ LIMITAÇÕES:
 
       // Generate response
       const startTime = Date.now();
-      const completion = await this.client.chat.completions.create({
-        model: config.openai.model,
-        messages,
-        max_tokens: config.openai.maxTokens,
-        temperature: 0.7,
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1,
-        user: userId,
+      const completion = await openaiCircuit.execute(async () => {
+        return await this.client.chat.completions.create({
+          model: config.openai.model,
+          messages,
+          max_tokens: config.openai.maxTokens,
+          temperature: 0.7,
+          presence_penalty: 0.1,
+          frequency_penalty: 0.1,
+          user: userId,
+        });
       });
 
       const response = completion.choices[0]?.message?.content;
@@ -240,15 +243,17 @@ LIMITAÇÕES:
       const messages = this.buildMessages(personaConfig, conversationContext, message);
 
       const startTime = Date.now();
-      const stream = await this.client.chat.completions.create({
-        model: config.openai.model,
-        messages,
-        max_tokens: config.openai.maxTokens,
-        temperature: 0.7,
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1,
-        user: userId,
-        stream: true,
+      const stream = await openaiCircuit.execute(async () => {
+        return await this.client.chat.completions.create({
+          model: config.openai.model,
+          messages,
+          max_tokens: config.openai.maxTokens,
+          temperature: 0.7,
+          presence_penalty: 0.1,
+          frequency_penalty: 0.1,
+          user: userId,
+          stream: true,
+        });
       });
 
       let fullResponse = '';
@@ -370,8 +375,10 @@ LIMITAÇÕES:
    */
   private async moderateContent(content: string): Promise<{ flagged: boolean; categories: string[] }> {
     try {
-      const moderation = await this.client.moderations.create({
-        input: content,
+      const moderation = await openaiCircuit.execute(async () => {
+        return await this.client.moderations.create({
+          input: content,
+        });
       });
 
       const result = moderation.results[0];

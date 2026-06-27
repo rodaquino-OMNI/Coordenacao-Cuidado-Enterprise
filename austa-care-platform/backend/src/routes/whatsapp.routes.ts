@@ -235,7 +235,7 @@ router.post('/webhook',
 
 /**
  * @route   POST /api/v1/webhooks/whatsapp/send
- * @desc    Send WhatsApp message
+ * @desc    Send WhatsApp message (async via BullMQ; append ?sync=true for blocking)
  * @access  Private
  */
 router.post('/send',
@@ -245,113 +245,137 @@ router.post('/send',
   async (req, res) => {
     try {
       const { to, type, text, template, interactive } = req.body;
+      const syncMode = req.query.sync === 'true';
 
       if (type === 'text' && !text?.body) {
         return res.status(400).json({ error: 'Message body is required for text messages' });
       }
 
-      let result: any;
-
-      if (type === 'text') {
-        result = await whatsappService.sendTextMessage({
-          phone: to,
-          message: text!.body,
-        });
-      } else if (type === 'template') {
-        if (!template?.name) {
-          return res.status(400).json({ error: 'Template name is required' });
+      // ----- Synchronous path (debugging / backward compat) -----
+      if (syncMode) {
+        let result: any;
+        if (type === 'text') {
+          result = await whatsappService.sendTextMessage({
+            phone: to,
+            message: text!.body,
+          });
+        } else if (type === 'template') {
+          if (!template?.name) {
+            return res.status(400).json({ error: 'Template name is required' });
+          }
+          result = await whatsappService.sendTemplateMessage({
+            phone: to,
+            templateName: template.name,
+            language: template.language?.code || 'pt_BR',
+            variables: template.components?.map((c: any) => c.text).filter(Boolean) || [],
+          });
+        } else if (type === 'interactive') {
+          result = await whatsappService.sendTextMessage({
+            phone: to,
+            message: interactive?.body?.text || 'Interactive message',
+          });
+        } else {
+          return res.status(400).json({ error: `Unsupported message type: ${type}` });
         }
-        result = await whatsappService.sendTemplateMessage({
-          phone: to,
-          templateName: template.name,
-          language: template.language?.code || 'pt_BR',
-          variables: template.components?.map((c: any) => c.text).filter(Boolean) || [],
-        });
-      } else if (type === 'interactive') {
-        // For interactive messages, fall back to text since the interactive format varies
-        result = await whatsappService.sendTextMessage({
-          phone: to,
-          message: interactive?.body?.text || 'Interactive message',
-        });
-      } else {
-        return res.status(400).json({ error: `Unsupported message type: ${type}` });
-      }
 
-      // Persist outbound message to database
-      try {
-        const user = await prisma.user.findFirst({
-          where: { phone: to },
-        });
+        // Persist outbound message to database (sync path)
+        try {
+          const user = await prisma.user.findFirst({ where: { phone: to } });
+          let conversation = user
+            ? await prisma.conversation.findFirst({
+                where: { userId: user?.id || '', channel: 'WHATSAPP', status: 'ACTIVE' },
+              })
+            : null;
 
-        let conversation = user
-          ? await prisma.conversation.findFirst({
-              where: {
-                userId: user?.id || "",
+          if (!conversation && user) {
+            conversation = await prisma.conversation.create({
+              data: {
+                userId: user?.id || '',
+                whatsappChatId: `wa_${to}_${Date.now()}`,
+                organizationId: user.organizationId,
                 channel: 'WHATSAPP',
                 status: 'ACTIVE',
-              },
-            })
-          : null;
-
-        if (!conversation && user) {
-          conversation = await prisma.conversation.create({
-            data: {
-              userId: user?.id || "",
-              whatsappChatId: `wa_${to}_${Date.now()}`,
-              organizationId: user.organizationId,
-              channel: 'WHATSAPP',
-              status: 'ACTIVE',
-              lastMessageAt: new Date(),
-            },
-          });
-        }
-
-        if (conversation) {
-          try {
-            await prisma.message.create({
-              data: {
-                conversationId: conversation.id,
-                userId: user?.id || '',
-                whatsappMessageId: result.messageId,
-                content: text?.body || template?.name || 'Message',
-                type: type === 'text' ? 'TEXT' : 'TEXT',
-                direction: 'OUTBOUND',
-                status: 'SENT',
-                sentAt: new Date(),
+                lastMessageAt: new Date(),
               },
             });
-          } catch (createError) {
-            if (
-              createError instanceof PrismaClientKnownRequestError &&
-              createError.code === 'P2002'
-            ) {
-              logger.info('Outbound message already persisted (idempotent)', {
-                whatsappMessageId: result.messageId,
-              });
-            } else {
-              throw createError;
-            }
           }
 
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { lastMessageAt: new Date() },
-          });
+          if (conversation) {
+            try {
+              await prisma.message.create({
+                data: {
+                  conversationId: conversation.id,
+                  userId: user?.id || '',
+                  whatsappMessageId: result.messageId,
+                  content: text?.body || template?.name || 'Message',
+                  type: type === 'text' ? 'TEXT' : 'TEXT',
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  sentAt: new Date(),
+                },
+              });
+            } catch (createError) {
+              if (
+                createError instanceof PrismaClientKnownRequestError &&
+                createError.code === 'P2002'
+              ) {
+                logger.info('Outbound message already persisted (idempotent)', {
+                  whatsappMessageId: result.messageId,
+                });
+              } else {
+                throw createError;
+              }
+            }
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: { lastMessageAt: new Date() },
+            });
+          }
+        } catch (dbError) {
+          logger.error('Failed to persist outbound message', { error: dbError });
         }
-      } catch (dbError) {
-        logger.error('Failed to persist outbound message', { error: dbError });
-        // Don't fail the response — the message was sent via Z-API
+
+        logger.info('WhatsApp message sent (sync)', { messageId: result.messageId, to, type });
+        return res.status(201).json({
+          id: result.messageId,
+          to,
+          type,
+          status: 'sent',
+          timestamp: new Date(),
+          sentBy: req.user!.id,
+          zapiResponse: result,
+        });
       }
 
-      logger.info('WhatsApp message sent', { messageId: result.messageId, to, type });
-      res.status(201).json({
-        id: result.messageId,
+      // ----- Async path (default) -----
+      const { whatsappQueue } = await import('../lib/queue');
+
+      const messageBody = type === 'text'
+        ? text!.body
+        : type === 'template'
+          ? template?.name || 'Template message'
+          : interactive?.body?.text || 'Interactive message';
+
+      const job = await whatsappQueue.add('send-message', {
+        to,
+        message: messageBody,
+        type: type === 'template' ? 'template' : 'text',
+        templateName: type === 'template' ? template?.name : undefined,
+        language: type === 'template' ? template?.language?.code || 'pt_BR' : undefined,
+        variables: type === 'template'
+          ? template?.components?.map((c: any) => c.text).filter(Boolean) || []
+          : undefined,
+        userId: req.user!.id,
+      });
+
+      logger.info('WhatsApp message queued', { jobId: job.id, to, type });
+      res.status(202).json({
+        status: 'queued',
+        jobId: job.id,
         to,
         type,
-        status: 'sent',
+        message: messageBody.slice(0, 80),
         timestamp: new Date(),
-        sentBy: req.user!.id,
-        zapiResponse: result,
       });
     } catch (error: any) {
       logger.error('Failed to send WhatsApp message', { error: error.message });
@@ -725,7 +749,7 @@ router.get('/stats',
 
 /**
  * @route   POST /api/v1/webhooks/whatsapp/send-template
- * @desc    Send WhatsApp template message
+ * @desc    Send WhatsApp template message (async via BullMQ; append ?sync=true for blocking)
  * @access  Private
  */
 router.post('/send-template',
@@ -734,103 +758,116 @@ router.post('/send-template',
   async (req, res) => {
     try {
       const { to, templateName, language, parameters } = req.body;
+      const syncMode = req.query.sync === 'true';
 
       if (!to || !templateName) {
         return res.status(400).json({ error: 'Phone number and template name are required' });
       }
 
-      // Send template via Z-API
-      const result = await whatsappService.sendTemplateMessage({
-        phone: to,
+      // ----- Synchronous path -----
+      if (syncMode) {
+        const result = await whatsappService.sendTemplateMessage({
+          phone: to,
+          templateName,
+          language: language || 'pt_BR',
+          variables: parameters || [],
+        });
+
+        // Persist outbound message to database (sync path)
+        try {
+          const user = await prisma.user.findFirst({ where: { phone: to } });
+          let conversation = user
+            ? await prisma.conversation.findFirst({
+                where: { userId: user?.id || '', channel: 'WHATSAPP', status: 'ACTIVE' },
+              })
+            : null;
+
+          if (!conversation && user) {
+            conversation = await prisma.conversation.create({
+              data: {
+                userId: user?.id || '',
+                whatsappChatId: `wa_${to}_${Date.now()}`,
+                organizationId: user.organizationId,
+                channel: 'WHATSAPP',
+                status: 'ACTIVE',
+                lastMessageAt: new Date(),
+              },
+            });
+          }
+
+          if (conversation) {
+            try {
+              await prisma.message.create({
+                data: {
+                  conversationId: conversation.id,
+                  userId: user?.id || '',
+                  whatsappMessageId: result.messageId,
+                  content: `Template: ${templateName}`,
+                  type: 'TEXT',
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  sentAt: new Date(),
+                  metadata: { templateName, language, parameters } as any,
+                },
+              });
+            } catch (createError) {
+              if (
+                createError instanceof PrismaClientKnownRequestError &&
+                createError.code === 'P2002'
+              ) {
+                logger.info('Template message already persisted (idempotent)', {
+                  whatsappMessageId: result.messageId,
+                });
+              } else {
+                throw createError;
+              }
+            }
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: { lastMessageAt: new Date() },
+            });
+          }
+        } catch (dbError) {
+          logger.error('Failed to persist template message', { error: dbError });
+        }
+
+        logger.info('WhatsApp template message sent (sync)', {
+          messageId: result.messageId,
+          to,
+          templateName,
+        });
+        return res.status(201).json({
+          id: result.messageId,
+          to,
+          type: 'template',
+          template: { name: templateName, language: language || 'pt_BR', parameters },
+          status: 'sent',
+          timestamp: new Date(),
+          zapiResponse: result,
+        });
+      }
+
+      // ----- Async path (default) -----
+      const { whatsappQueue } = await import('../lib/queue');
+
+      const job = await whatsappQueue.add('send-template', {
+        to,
+        message: `Template: ${templateName}`,
+        type: 'template',
         templateName,
         language: language || 'pt_BR',
         variables: parameters || [],
+        userId: req.user!.id,
       });
 
-      // Persist outbound message to database
-      try {
-        const user = await prisma.user.findFirst({
-          where: { phone: to },
-        });
-
-        let conversation = user
-          ? await prisma.conversation.findFirst({
-              where: {
-                userId: user?.id || "",
-                channel: 'WHATSAPP',
-                status: 'ACTIVE',
-              },
-            })
-          : null;
-
-        if (!conversation && user) {
-          conversation = await prisma.conversation.create({
-            data: {
-              userId: user?.id || "",
-              whatsappChatId: `wa_${to}_${Date.now()}`,
-              organizationId: user.organizationId,
-              channel: 'WHATSAPP',
-              status: 'ACTIVE',
-              lastMessageAt: new Date(),
-            },
-          });
-        }
-
-        if (conversation) {
-          try {
-            await prisma.message.create({
-              data: {
-                conversationId: conversation.id,
-                userId: user?.id || '',
-                whatsappMessageId: result.messageId,
-                content: `Template: ${templateName}`,
-                type: 'TEXT',
-                direction: 'OUTBOUND',
-                status: 'SENT',
-                sentAt: new Date(),
-                metadata: { templateName, language, parameters } as any,
-              },
-            });
-          } catch (createError) {
-            if (
-              createError instanceof PrismaClientKnownRequestError &&
-              createError.code === 'P2002'
-            ) {
-              logger.info('Template message already persisted (idempotent)', {
-                whatsappMessageId: result.messageId,
-              });
-            } else {
-              throw createError;
-            }
-          }
-
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { lastMessageAt: new Date() },
-          });
-        }
-      } catch (dbError) {
-        logger.error('Failed to persist template message', { error: dbError });
-      }
-
-      logger.info('WhatsApp template message sent', {
-        messageId: result.messageId,
-        to,
-        templateName,
-      });
-
-      res.status(201).json({
-        id: result.messageId,
+      logger.info('WhatsApp template message queued', { jobId: job.id, to, templateName });
+      res.status(202).json({
+        status: 'queued',
+        jobId: job.id,
         to,
         type: 'template',
-        template: {
-          name: templateName,
-          language: language || 'pt_BR',
-          parameters,
-        },
-        status: 'sent',
+        template: { name: templateName, language: language || 'pt_BR', parameters },
         timestamp: new Date(),
-        zapiResponse: result,
       });
     } catch (error: any) {
       logger.error('Failed to send template message', { error: error.message });

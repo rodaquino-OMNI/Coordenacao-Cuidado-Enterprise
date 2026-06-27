@@ -21,7 +21,9 @@
     "format": "prettier --write src/**/*.ts",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
-    "db:seed": "tsx src/database/seed.ts"
+    "db:seed": "tsx src/database/seed.ts",
+    "workers": "tsx src/workers/index.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run workers\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.478.0",
