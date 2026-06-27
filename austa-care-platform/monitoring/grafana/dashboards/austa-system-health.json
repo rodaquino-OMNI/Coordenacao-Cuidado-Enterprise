@@ -1,0 +1,388 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - System Health",
+    "tags": ["austa", "system", "health", "infrastructure"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "PostgreSQL Active Connections",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(pg_stat_database_numbackends)",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "sum(pg_stat_activity_count)",
+            "legendFormat": "Total Activity"
+          },
+          {
+            "expr": "sum(pg_stat_activity_count{state=\"idle\"})",
+            "legendFormat": "Idle Connections"
+          },
+          {
+            "expr": "sum(pg_stat_activity_count{state=\"active\"})",
+            "legendFormat": "Active Queries"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [80], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High DB Connection Count",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "PostgreSQL Query Time",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blk_read_time[5m])",
+            "legendFormat": "Block Read Time"
+          },
+          {
+            "expr": "rate(pg_stat_database_blk_write_time[5m])",
+            "legendFormat": "Block Write Time"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(pg_query_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "Query P95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(pg_query_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "Query P50"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Query Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Redis Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / 1024 / 1024",
+            "legendFormat": "Memory Used (MB)"
+          },
+          {
+            "expr": "redis_memory_max_bytes / 1024 / 1024",
+            "legendFormat": "Memory Max (MB)"
+          },
+          {
+            "expr": "(redis_memory_used_bytes / redis_memory_max_bytes) * 100",
+            "legendFormat": "Memory Usage %"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Memory"},
+          {"format": "short", "label": "Usage %"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [85], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["C", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Redis Memory Usage",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "Redis Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(redis_keyspace_hits_total) / (sum(redis_keyspace_hits_total) + sum(redis_keyspace_misses_total)) * 100",
+            "legendFormat": "Hit Rate %"
+          },
+          {
+            "expr": "sum(rate(redis_keyspace_hits_total[5m]))",
+            "legendFormat": "Hits/sec"
+          },
+          {
+            "expr": "sum(rate(redis_keyspace_misses_total[5m]))",
+            "legendFormat": "Misses/sec"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Hit Rate"},
+          {"format": "short", "label": "Rate"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [70], "type": "lt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "Low Redis Hit Rate",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 5,
+        "title": "Node.js Heap Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "nodejs_heap_size_used_bytes / 1024 / 1024",
+            "legendFormat": "Heap Used (MB)"
+          },
+          {
+            "expr": "nodejs_heap_size_total_bytes / 1024 / 1024",
+            "legendFormat": "Heap Total (MB)"
+          },
+          {
+            "expr": "nodejs_external_memory_bytes / 1024 / 1024",
+            "legendFormat": "External Memory (MB)"
+          }
+        ],
+        "yaxes": [
+          {"format": "decmbytes", "label": "Memory"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [80], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "1m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Node.js Heap Usage",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 6,
+        "title": "Node.js Event Loop Lag",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "nodejs_eventloop_lag_seconds",
+            "legendFormat": "Event Loop Lag (s)"
+          },
+          {
+            "expr": "nodejs_eventloop_lag_p50_seconds",
+            "legendFormat": "P50 Lag"
+          },
+          {
+            "expr": "nodejs_eventloop_lag_p99_seconds",
+            "legendFormat": "P99 Lag"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Lag"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [0.1], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "1m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "30s",
+          "handler": 1,
+          "name": "High Event Loop Lag",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 7,
+        "title": "Node.js Garbage Collection",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(nodejs_gc_duration_seconds_sum[5m])",
+            "legendFormat": "GC Duration Rate"
+          },
+          {
+            "expr": "rate(nodejs_gc_operations_total[5m])",
+            "legendFormat": "GC Operations/sec"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short", "label": "Ops/sec"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Uptime per Instance",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "process_uptime_seconds",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Active Instances",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(up{job=~\"austa.*\"} == 1)"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 10,
+        "title": "Instance Restarts (24h)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(changes(process_start_time_seconds[24h]))"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 11,
+        "title": "CPU Usage per Instance",
+        "type": "graph",
+        "gridPos": {"x": 18, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "CPU %"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Instance Health Status",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 28, "w": 24, "h": 6},
+        "targets": [
+          {
+            "expr": "up",
+            "legendFormat": "{{instance}}",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "instance": "Instance",
+                "Value": "Status"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        },
+        {
+          "name": "environment",
+          "type": "custom",
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ],
+          "current": {
+            "text": "Production",
+            "value": "production"
+          }
+        }
+      ]
+    }
+  }
+}

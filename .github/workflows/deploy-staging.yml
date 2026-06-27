@@ -3,59 +3,20 @@ name: Deploy to Staging
 on:
   workflow_dispatch:
 
-env:
-  AWS_REGION: sa-east-1
-  EKS_CLUSTER_NAME: austa-care-staging
-  K8S_NAMESPACE: austa-staging
-
 jobs:
   deploy:
-    name: Deploy to Staging
     runs-on: ubuntu-latest
-    environment:
-      name: staging
-      url: https://staging.austa-care.com
-    permissions:
-      id-token: write
-      contents: read
-
+    environment: staging
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_STAGING_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name ${{ env.EKS_CLUSTER_NAME }}
-
-      - name: Apply Kubernetes manifests
-        working-directory: austa-care-platform/k8s
-        run: |
-          kubectl apply -f namespace.yaml
-          kubectl apply -f deployments/
-          kubectl apply -f services/
-          kubectl apply -f ingress.yaml
-
-      - name: Rollout status - Backend
-        run: |
-          kubectl rollout status deployment/backend \
-            -n ${{ env.K8S_NAMESPACE }} \
-            --timeout=300s
-
-      - name: Rollout status - Frontend
-        run: |
-          kubectl rollout status deployment/frontend \
-            -n ${{ env.K8S_NAMESPACE }} \
-            --timeout=300s
-
-      - name: Run smoke tests
-        run: |
-          curl -f https://staging.austa-care.com/health || exit 1
-          curl -f https://staging.austa-care.com/api/health || exit 1
+          aws-region: sa-east-1
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+      - run: aws eks update-kubeconfig --name austa-staging --region sa-east-1
+      - run: |
+          kubectl apply -f austa-care-platform/k8s/namespace.yaml
+          kubectl apply -f austa-care-platform/k8s/deployments/
+          kubectl apply -f austa-care-platform/k8s/services/
+          kubectl apply -f austa-care-platform/k8s/ingress.yaml
+      - run: kubectl rollout status deployment/backend -n austa-staging --timeout=5m

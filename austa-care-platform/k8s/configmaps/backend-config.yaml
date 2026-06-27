@@ -55,10 +55,12 @@ data:
 
   # WhatsApp Provider
   WHATSAPP_PROVIDER: "z-api"
+  ZAPI_BASE_URL: "https://api.z-api.io"
   ZAPI_RATE_LIMIT_REQUESTS: "20"
   ZAPI_RATE_LIMIT_WINDOW_MS: "60000"
   ZAPI_RETRY_ATTEMPTS: "3"
   ZAPI_RETRY_DELAY_MS: "1000"
+  TASY_API_URL: "https://tasy.example.com/api"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -92,7 +94,9 @@ data:
   RATE_LIMIT_MAX_REQUESTS: "200"
   HEALTH_CHECK_INTERVAL: "30000"
   WHATSAPP_PROVIDER: "z-api"
+  ZAPI_BASE_URL: "https://api.z-api.io"
   ZAPI_RATE_LIMIT_REQUESTS: "20"
   ZAPI_RATE_LIMIT_WINDOW_MS: "60000"
   ZAPI_RETRY_ATTEMPTS: "3"
   ZAPI_RETRY_DELAY_MS: "1000"
+  TASY_API_URL: "https://tasy.staging.example.com/api"

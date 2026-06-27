@@ -1,0 +1,42 @@
+name: Docker Build & Push
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: austa-care-platform/backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/austa-backend:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/austa-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: austa-care-platform/frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/austa-frontend:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/austa-frontend:latest

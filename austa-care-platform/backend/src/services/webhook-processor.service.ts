@@ -13,6 +13,7 @@ import {
 } from '@/types/whatsapp';
 import { EventEmitter } from 'events';
 import { prisma } from '../config/database';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 // Prisma CommunicationChannel enum — locally defined to avoid Prisma client schema mismatch
 const CommunicationChannel = { WHATSAPP: 'WHATSAPP' } as const;
 type CommunicationChannel = (typeof CommunicationChannel)[keyof typeof CommunicationChannel];
@@ -752,25 +753,42 @@ export class WebhookProcessorService extends EventEmitter {
 
     // Send reply via WhatsApp
     try {
-      await whatsappService.sendTextMessage({
+      const sendResult = await whatsappService.sendTextMessage({
         phone: payload.phone,
         message: responseText,
       });
 
-      // Persist outbound message
-      await prisma.message.create({
-        data: {
-          conversationId,
-          userId,
-          direction: 'OUTBOUND',
-          type: 'TEXT',
-          content: responseText,
-          isBot: true,
-          botResponseTime: 0,
-          status: 'DELIVERED',
-          sentAt: new Date(),
-        },
-      });
+      // Persist outbound message with idempotency (whatsappMessageId is @unique)
+      try {
+        await prisma.message.create({
+          data: {
+            whatsappMessageId: sendResult.messageId,
+            conversationId,
+            userId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: responseText,
+            isBot: true,
+            botResponseTime: 0,
+            status: 'DELIVERED',
+            sentAt: new Date(),
+          },
+        });
+      } catch (createError) {
+        // Prisma unique constraint violation (P2002) = duplicate message
+        if (
+          createError instanceof PrismaClientKnownRequestError &&
+          createError.code === 'P2002'
+        ) {
+          // Message already processed — idempotent, skip
+          logger.info('Outbound message already persisted (idempotent)', {
+            conversationId,
+            whatsappMessageId: sendResult.messageId,
+          });
+        } else {
+          throw createError;
+        }
+      }
 
       // Update conversation lastMessageAt
       await prisma.conversation.update({

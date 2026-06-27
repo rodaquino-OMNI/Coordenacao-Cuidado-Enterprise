@@ -11,6 +11,7 @@ import { defaultRateLimiter, strictRateLimiter, lenientRateLimiter } from '../mi
 import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { prisma } from '../database/prisma';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { whatsappService } from '../services/whatsapp.service';
 
 const router = Router();
@@ -143,18 +144,31 @@ router.post('/webhook',
                   }
 
                   if (conversation) {
-                    await prisma.message.create({
-                      data: {
-                        conversationId: conversation.id,
-                        userId: user?.id || '',
-                        whatsappMessageId: message.id,
-                        content: message.text?.body || message.type,
-                        type: message.type?.toUpperCase() as any || 'TEXT',
-                        direction: 'INBOUND',
-                        status: 'DELIVERED',
-                        sentAt: new Date(parseInt(message.timestamp) * 1000 || Date.now()),
-                      },
-                    });
+                    try {
+                      await prisma.message.create({
+                        data: {
+                          conversationId: conversation.id,
+                          userId: user?.id || '',
+                          whatsappMessageId: message.id,
+                          content: message.text?.body || message.type,
+                          type: message.type?.toUpperCase() as any || 'TEXT',
+                          direction: 'INBOUND',
+                          status: 'DELIVERED',
+                          sentAt: new Date(parseInt(message.timestamp) * 1000 || Date.now()),
+                        },
+                      });
+                    } catch (createError) {
+                      if (
+                        createError instanceof PrismaClientKnownRequestError &&
+                        createError.code === 'P2002'
+                      ) {
+                        logger.info('Inbound message already persisted (idempotent)', {
+                          whatsappMessageId: message.id,
+                        });
+                      } else {
+                        throw createError;
+                      }
+                    }
 
                     // Update lastMessageAt on conversation
                     await prisma.conversation.update({
@@ -293,18 +307,31 @@ router.post('/send',
         }
 
         if (conversation) {
-          await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              userId: user?.id || '',
-              whatsappMessageId: result.messageId,
-              content: text?.body || template?.name || 'Message',
-              type: type === 'text' ? 'TEXT' : 'TEXT',
-              direction: 'OUTBOUND',
-              status: 'SENT',
-              sentAt: new Date(),
-            },
-          });
+          try {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                userId: user?.id || '',
+                whatsappMessageId: result.messageId,
+                content: text?.body || template?.name || 'Message',
+                type: type === 'text' ? 'TEXT' : 'TEXT',
+                direction: 'OUTBOUND',
+                status: 'SENT',
+                sentAt: new Date(),
+              },
+            });
+          } catch (createError) {
+            if (
+              createError instanceof PrismaClientKnownRequestError &&
+              createError.code === 'P2002'
+            ) {
+              logger.info('Outbound message already persisted (idempotent)', {
+                whatsappMessageId: result.messageId,
+              });
+            } else {
+              throw createError;
+            }
+          }
 
           await prisma.conversation.update({
             where: { id: conversation.id },
@@ -750,19 +777,32 @@ router.post('/send-template',
         }
 
         if (conversation) {
-          await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              userId: user?.id || '',
-              whatsappMessageId: result.messageId,
-              content: `Template: ${templateName}`,
-              type: 'TEXT',
-              direction: 'OUTBOUND',
-              status: 'SENT',
-              sentAt: new Date(),
-              metadata: { templateName, language, parameters } as any,
-            },
-          });
+          try {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                userId: user?.id || '',
+                whatsappMessageId: result.messageId,
+                content: `Template: ${templateName}`,
+                type: 'TEXT',
+                direction: 'OUTBOUND',
+                status: 'SENT',
+                sentAt: new Date(),
+                metadata: { templateName, language, parameters } as any,
+              },
+            });
+          } catch (createError) {
+            if (
+              createError instanceof PrismaClientKnownRequestError &&
+              createError.code === 'P2002'
+            ) {
+              logger.info('Template message already persisted (idempotent)', {
+                whatsappMessageId: result.messageId,
+              });
+            } else {
+              throw createError;
+            }
+          }
 
           await prisma.conversation.update({
             where: { id: conversation.id },

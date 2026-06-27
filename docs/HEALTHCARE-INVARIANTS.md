@@ -41,21 +41,24 @@
 
 ## INV-2: Idempotência de Mensagens
 
-**Status:** ✅ IMPLEMENTED
+**Status:** ✅ IMPLEMENTED — Enhanced with P2002 error handling (2026-06-27)
 
 **Descrição:** Mensagens WhatsApp não podem ser processadas em duplicata. Cada mensagem deve ter um identificador único que garanta idempotência no processamento.
 
-**Implementação:**
+**Implementação (Wave 3 enhanced):**
 - `whatsappMessageId` field in `Message` model — unique constraint (`prisma/schema.prisma:231`)
 - `@unique` annotation garante rejeição de duplicatas a nível de banco
-- Processamento de webhooks usa `upsert` com `whatsappMessageId` como chave
+- **Webhook processor** (`webhook-processor.service.ts`): inbound messages use `upsert` with `whatsappMessageId`; outbound messages now set `whatsappMessageId` from Z-API response and catch `PrismaClientKnownRequestError` (P2002) for idempotent handling
+- **WhatsApp routes** (`whatsapp.routes.ts`): all three `prisma.message.create` calls (inbound, outbound, template) wrapped with P2002 idempotency catch
 
 **Verificação:**
 - [x] Campo `whatsappMessageId` tem constraint `@unique` no Prisma
 - [x] Índice no banco: `@@index([whatsappMessageId])`
-- [x] Webhook processor usa upsert baseado em whatsappMessageId
+- [x] Webhook processor: inbound via upsert, outbound with whatsappMessageId + P2002 catch
+- [x] WhatsApp routes: all create calls have P2002 idempotency handling
+- [x] Outbound messages now persist whatsappMessageId from Z-API SendMessageResponse
 
-**Arquivos:** `prisma/schema.prisma`, `src/services/webhook-processor.service.ts`, `src/services/whatsapp.service.ts`
+**Arquivos:** `prisma/schema.prisma`, `src/services/webhook-processor.service.ts`, `src/routes/whatsapp.routes.ts`
 
 ---
 
@@ -120,7 +123,7 @@
 
 ## INV-5: Health Check + Dead Man's Switch
 
-**Status:** ✅ IMPLEMENTED
+**Status:** ✅ IMPLEMENTED — Enhanced with latency measurement (2026-06-27)
 
 **Descrição:** Sistema deve expor endpoints de monitoramento para verificar saúde de todos os componentes e detectar inatividade (dead man's switch para alerta externo).
 
@@ -128,16 +131,31 @@
 
 | Endpoint | Descrição | Status |
 |---|---|---|
-| `GET /health` | Liveness probe (leve) | `healthy`/`unhealthy` |
-| `GET /health/detailed` | Component-level checks (DB, Redis, Encryption) | `healthy`/`degraded` |
-| `GET /health/ready` | Readiness probe (critical: DB + Encryption) | `ready`/`not ready` |
-| `GET /health/live` | Kubernetes liveness probe | `alive` |
-| `GET /health/dead-mans-switch` | Dead man's switch — timestamp última atividade | `alive`/`stale` |
+| `GET /api/v1/health` | Component-level checks with latency (DB, Redis, Encryption) | `healthy`/`degraded`/`unhealthy` |
+| `GET /api/v1/health/dead-mans-switch` | Dead man's switch — timestamp última atividade | `alive`/`stale` |
+| `GET /api/v1/health/ready` | Readiness probe (critical: DB + Encryption) | `ready`/`not ready` |
+| `GET /api/v1/health/live` | Kubernetes liveness probe | `alive` |
+| `GET /health` (root) | Simple liveness probe | `ok` |
 
-**Componentes monitorados:**
-- **Database:** `SELECT 1` via Prisma
-- **Redis:** `healthCheck()` com graceful degradation (servidor opera sem cache se Redis indisponível)
-- **Encryption:** verifica extensão `pgcrypto` no PostgreSQL
+**Componentes monitorados (with latency measurement):**
+- **Database:** `SELECT 1` via Prisma — reports `latencyMs`
+- **Redis:** `healthCheck()` with graceful degradation (servidor opera sem cache se Redis indisponível)
+- **Encryption:** verifica extensão `pgcrypto` no PostgreSQL — reports `latencyMs` + `algorithm: "aes256"`
+
+**Response format:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "...",
+  "uptime": 123.4,
+  "version": "1.0.0",
+  "components": {
+    "database": { "status": "up", "latencyMs": 2 },
+    "redis": { "status": "up", "latencyMs": 1 },
+    "encryption": { "status": "up", "latencyMs": 5, "algorithm": "aes256" }
+  }
+}
+```
 
 **Dead Man's Switch:**
 - `touchActivity()` — chamado a cada requisição autenticada para atualizar timestamp
@@ -146,19 +164,20 @@
 - Deve ser monitorado por Prometheus Blackbox Exporter externo
 
 **Verificação:**
-- [x] Endpoint `/health` retorna JSON com status
-- [x] Endpoint `/health/detailed` verifica DB, Redis, Encryption
-- [x] Endpoint `/health/dead-mans-switch` retorna timestamp da última atividade
+- [x] Endpoint `/api/v1/health` retorna JSON com status + latency
+- [x] Endpoint `/api/v1/health/dead-mans-switch` retorna timestamp da última atividade
+- [x] Endpoint `/api/v1/health/ready` verifica DB + Encryption
+- [x] Endpoint `/api/v1/health/live` lightweight probe
 - [x] Redis unavailable → graceful degradation (não quebra health check)
-- [x] pgcrypto verification funcional
+- [x] pgcrypto verification funcional com latency measurement
 
-**Arquivos:** `src/controllers/health.ts`, `src/infrastructure/redis/redis.cluster.ts`
+**Arquivos:** `src/routes/health.ts`, `src/infrastructure/redis/redis.cluster.ts`, `src/config/database.ts`
 
 ---
 
 ## INV-6: Retry com Backoff Unificado
 
-**Status:** ✅ IMPLEMENTED
+**Status:** ✅ IMPLEMENTED — Enhanced with RetryError + onRetry callback (2026-06-27)
 
 **Descrição:** Todas as chamadas a serviços externos (WhatsApp Z-API, Tasy ERP, notificações email/SMS) devem usar a mesma biblioteca de retry com exponential backoff + jitter.
 
@@ -166,9 +185,11 @@
 - `lib/retry.ts` — biblioteca centralizada:
   - `retryWithBackoff<T>()` — retry com exponential backoff configurável
   - `withRetry<T>()` — wrapper simplificado (retorna apenas o resultado)
+  - `RetryError` — structured error with `attempts` and `lastError` properties
   - `defaultShouldRetry()` — condição padrão: retry em 5xx, 429, network errors; NO retry em 4xx
   - `calculateBackoff()` — delay com jitter (±25%) para evitar thundering herd
   - `isApiError()` — verifica se resposta HTTP é erro
+  - `onRetry` callback — invoked before each retry attempt with (error, attempt, delayMs)
 
 **Serviços que usam `lib/retry.ts`:**
 
@@ -191,6 +212,8 @@
 - [x] Tasy API calls wrapped com `withRetry`
 - [x] Notification service usa `lib/retry.ts`
 - [x] Jitter configurado para evitar thundering herd
+- [x] `RetryError` class with structured error info (attempts, lastError)
+- [x] `onRetry` callback support for custom retry handling
 
 **Arquivos:** `src/lib/retry.ts`, `src/services/whatsapp.service.ts`, `src/services/tasyIntegration.ts`, `src/services/notificationService.ts`
 
@@ -224,16 +247,45 @@
 
 ---
 
+## Wave 3 Enhancements (2026-06-27)
+
+### Retry Library — RetryError + onRetry
+
+| Enhancement | Before | After |
+|---|---|---|
+| Error handling | Raw error thrown on failure | `RetryError` with structured `attempts` / `lastError` |
+| Retry callback | Logging only (internal) | `onRetry()` callback exposed to callers |
+| Error reporting | Generic error message | Structured `RetryError` for alerting systems |
+
+### WhatsApp — P2002 Idempotency
+
+| Enhancement | Before | After |
+|---|---|---|
+| Outbound message ID | No `whatsappMessageId` persisted | Captured from Z-API `SendMessageResponse.messageId` |
+| Duplicate handling | Crash on unique violation | P2002 caught, logged, operation skipped idempotently |
+| Coverage | Only `upsert` for inbound | All 4 `prisma.message.create` calls protected |
+
+### Health Check — Latency Measurement
+
+| Enhancement | Before | After |
+|---|---|---|
+| Endpoint location | `controllers/health.ts` (unused) | `routes/health.ts` (active, mounted at `/api/v1/health`) |
+| Component status | Binary healthy/unhealthy | `up`/`down`/`degraded` with `latencyMs` |
+| Encryption check | Boolean pgcrypto check | Includes `algorithm: "aes256"` in response |
+| Response format | Free-form JSON | Structured `HealthCheckResponse` type |
+
+---
+
 ## Summary
 
 | # | Invariante | Status |
 |---|---|---|
 | 1 | Audit Trail Imutável | ✅ Persisted to Prisma (all 18 fields) |
-| 2 | Idempotência de Mensagens | ✅ |
+| 2 | Idempotência de Mensagens | ✅ Enhanced with P2002 handling |
 | 3 | Versionamento de Algoritmos | ✅ |
 | 4 | Criptografia em Repouso | ✅ pgcrypto actively used |
-| 5 | Health Check + Dead Man's Switch | ✅ |
-| 6 | Retry com Backoff Unificado | ✅ |
+| 5 | Health Check + Dead Man's Switch | ✅ Enhanced with latency measurement |
+| 6 | Retry com Backoff Unificado | ✅ Enhanced with RetryError + onRetry |
 
 **Todos os 6 invariantes verificados e implementados com persistência real em banco de dados.**
 

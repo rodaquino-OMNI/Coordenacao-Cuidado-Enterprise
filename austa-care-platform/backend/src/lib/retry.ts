@@ -2,9 +2,29 @@
  * Retry Utility Library
  * Generic exponential backoff retry for async operations.
  * Used by WhatsApp (Z-API), notifications, and gamification services.
+ *
+ * Healthcare invariants compliance:
+ *   - INV-6: All external service calls use this unified retry library.
+ *   - Exponential backoff with jitter prevents thundering herd.
+ *   - RetryError provides structured error information for logging/alerting.
  */
 
 import { logger } from '../utils/logger';
+
+/**
+ * Error thrown when all retry attempts are exhausted.
+ * Provides structured access to the number of attempts and the last error.
+ */
+export class RetryError extends Error {
+  constructor(
+    message: string,
+    public readonly attempts: number,
+    public readonly lastError: Error
+  ) {
+    super(message);
+    this.name = 'RetryError';
+  }
+}
 
 export interface RetryOptions {
   /** Maximum number of attempts (default: 3) */
@@ -21,6 +41,8 @@ export interface RetryOptions {
   operationName?: string;
   /** Custom retry condition (return false to stop retrying) */
   shouldRetry?: (error: Error, attempt: number) => boolean;
+  /** Callback invoked on each retry attempt (before the backoff delay) */
+  onRetry?: (error: Error, attempt: number, delayMs: number) => void;
 }
 
 export interface RetryResult<T> {
@@ -105,6 +127,7 @@ export async function retryWithBackoff<T>(
     jitter = true,
     operationName = 'operation',
     shouldRetry = defaultShouldRetry,
+    onRetry,
   } = options;
 
   const startTime = Date.now();
@@ -136,7 +159,11 @@ export async function retryWithBackoff<T>(
           error: lastError.message,
           stack: lastError.stack,
         });
-        throw lastError;
+        throw new RetryError(
+          `Failed after ${attempt} attempt(s) [max=${maxAttempts}]: ${lastError.message}`,
+          attempt,
+          lastError
+        );
       }
 
       const delay = calculateBackoff(
@@ -146,6 +173,9 @@ export async function retryWithBackoff<T>(
         maxDelayMs,
         jitter
       );
+
+      // Invoke onRetry callback before waiting
+      onRetry?.(lastError, attempt, delay);
 
       logger.warn(`${operationName} attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms`, {
         error: lastError.message,
@@ -158,7 +188,11 @@ export async function retryWithBackoff<T>(
   }
 
   // Should never reach here, but TypeScript requires it
-  throw lastError!;
+  throw new RetryError(
+    `Failed after ${maxAttempts} attempt(s): unreachable`,
+    maxAttempts,
+    lastError ?? new Error('unreachable')
+  );
 }
 
 /**

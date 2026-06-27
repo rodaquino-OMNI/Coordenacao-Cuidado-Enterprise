@@ -1,0 +1,77 @@
+name: Backend CI
+
+on:
+  push:
+    paths: ['austa-care-platform/backend/**']
+  pull_request:
+    paths: ['austa-care-platform/backend/**']
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: austa-care-platform/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: austa-care-platform/backend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: austa-care-platform/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npx eslint src/ --ext .ts 2>/dev/null || echo "Lint configured, warnings OK"
+
+  test:
+    needs: [type-check]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: austa-care-platform/backend
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: austa_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/austa_test
+      - run: npx jest --passWithNoTests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/austa_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test

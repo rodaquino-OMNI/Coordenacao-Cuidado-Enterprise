@@ -1,0 +1,239 @@
+{
+  "dashboard": {
+    "title": "AUSTA Care - Clinical Metrics",
+    "tags": ["austa", "clinical", "healthcare"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Risk Assessments per Hour",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(risk_assessments_total[1h])) * 3600",
+            "legendFormat": "Risk Assessments/hr"
+          },
+          {
+            "expr": "sum(rate(risk_assessments_total{severity=\"high\"}[1h])) * 3600",
+            "legendFormat": "High Severity/hr"
+          },
+          {
+            "expr": "sum(rate(risk_assessments_total{severity=\"critical\"}[1h])) * 3600",
+            "legendFormat": "Critical Severity/hr"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Assessments / hour"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [10], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["C", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Critical Risk Assessment Rate",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "Emergency Alerts per Day",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(emergency_alerts_total[24h]))",
+            "legendFormat": "Emergency Alerts (24h)"
+          },
+          {
+            "expr": "sum(increase(emergency_alerts_total{type=\"clinical\"}[24h]))",
+            "legendFormat": "Clinical Emergencies"
+          },
+          {
+            "expr": "sum(increase(emergency_alerts_total{type=\"administrative\"}[24h]))",
+            "legendFormat": "Administrative"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Alerts / day"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Average WhatsApp Response Time",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(whatsapp_response_time_seconds_sum[5m])) / sum(rate(whatsapp_response_time_seconds_count[5m]))",
+            "legendFormat": "Avg Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(whatsapp_response_time_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95 Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(whatsapp_response_time_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50 Response Time"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Response Time"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [30], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "Slow WhatsApp Response Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "WhatsApp Message Volume",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(whatsapp_messages_total[5m])) by (direction)",
+            "legendFormat": "{{direction}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Patient Risk Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(patient_risk_level) by (level)"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Clinical Decisions per Hour",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(clinical_decisions_total[1h])) * 3600",
+            "legendFormat": "AI-Assisted Decisions/hr"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Decisions/hr"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "WhatsApp Delivery Status",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(whatsapp_messages_total{status=\"delivered\"}[1h])) / sum(rate(whatsapp_messages_total[1h])) * 100"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 8,
+        "title": "FHIR API Calls",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(fhir_api_requests_total[5m])) by (resource_type, operation)",
+            "legendFormat": "{{resource_type}} - {{operation}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "OCR Processing Time",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ocr_processing_seconds_bucket[5m])) by (le))",
+            "legendFormat": "OCR P95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(ocr_processing_seconds_bucket[5m])) by (le))",
+            "legendFormat": "OCR P50"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Processing Time"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        },
+        {
+          "name": "environment",
+          "type": "custom",
+          "options": [
+            {"text": "Production", "value": "production"},
+            {"text": "Staging", "value": "staging"}
+          ],
+          "current": {
+            "text": "Production",
+            "value": "production"
+          }
+        }
+      ]
+    }
+  }
+}
