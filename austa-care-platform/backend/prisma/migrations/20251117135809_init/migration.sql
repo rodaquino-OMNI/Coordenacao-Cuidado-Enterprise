@@ -71,7 +71,7 @@ CREATE TABLE "organizations" (
     "phone" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "hipaaCompliant" BOOLEAN NOT NULL DEFAULT true,
+    "lgpdCompliant" BOOLEAN NOT NULL DEFAULT true, -- LGPD/ANS/ANVISA compliance flag
     "dataRetentionYears" INTEGER NOT NULL DEFAULT 7,
     "settings" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

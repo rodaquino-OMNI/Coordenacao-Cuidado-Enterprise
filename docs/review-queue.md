@@ -9,7 +9,7 @@
 | 3 | Validação clínica — Algoritmo de Risk Scoring | ⬜ DRAFT | Diretor Médico | — | 1564 linhas de lógica clínica; validar thresholds, sensibilidade, especificidade |
 | 4 | Validação clínica — Emergency Detection | ⬜ DRAFT | Diretor Médico | — | Protocolos de ACS, CAD, crise hipertensiva, risco de suicídio, etc. |
 | 5 | Validação clínica — Questionário de Onboarding | ⬜ DRAFT | Diretor Médico | — | 958 linhas de roteiro conversacional; validar perguntas indiretas para CPT |
-| 6 | Revisão jurídica — Substituição HIPAA→LGPD/ANS/ANVISA | ✅ APPROVED | parreira (Wave 0 + verificação Wave 3) | 2026-06-26 | 0 referências HIPAA restantes. 21 arquivos modificados, migration 002 executada. pgcrypto, audit trail, algorithm versioning, idempotência e secrets verificados. |
+| 6 | Revisão jurídica — Adoção do framework LGPD/ANS/ANVISA | ✅ APPROVED | parreira (Wave 0 + verificação Wave 3) | 2026-06-26 | 0 referências a frameworks estrangeiros. 21 arquivos modificados, migration 002 executada. pgcrypto, audit trail, algorithm versioning, idempotência e secrets verificados. |
 | 7 | SBIS Certification path | ⬜ DRAFT | CTO | — | Certificação SBIS é mandatória na prática para software hospitalar brasileiro |
 | 8 | ISO 27001 gap analysis | ⬜ DRAFT | CISO | — | Documentação menciona ISO 27001 mas não há evidência de certificação |
 | 9 | Pentest externo (annual requirement) | ⬜ DRAFT | CISO | — | Não foram encontrados relatórios de pentest no repositório |

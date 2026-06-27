@@ -79,25 +79,25 @@ resource "aws_elasticache_replication_group" "redis" {
   engine_version = var.engine_version
   node_type      = var.node_type
 
-  num_cache_clusters        = var.num_cache_clusters
+  num_cache_clusters         = var.num_cache_clusters
   automatic_failover_enabled = var.automatic_failover
 
   subnet_group_name  = data.aws_elasticache_subnet_group.selected.name
   security_group_ids = [aws_security_group.redis.id]
 
   # Encryption (at rest + in transit)
-  at_rest_encryption_enabled  = true
-  transit_encryption_enabled  = true
-  auth_token                  = var.auth_token
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = var.auth_token
 
   # Parameter group
   parameter_group_name = aws_elasticache_parameter_group.redis7.name
 
   # Maintenance
-  maintenance_window          = "sun:05:00-sun:06:00"
-  snapshot_window             = "02:00-03:00"
-  snapshot_retention_limit    = var.snapshot_retention_limit
-  auto_minor_version_upgrade  = true
+  maintenance_window         = "sun:05:00-sun:06:00"
+  snapshot_window            = "02:00-03:00"
+  snapshot_retention_limit   = var.snapshot_retention_limit
+  auto_minor_version_upgrade = true
 
   # Multi-AZ placement
   multi_az_enabled = var.automatic_failover

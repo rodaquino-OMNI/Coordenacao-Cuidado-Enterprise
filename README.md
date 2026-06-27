@@ -210,12 +210,12 @@ Coordenacao-Cuidado-Enterprise/
 
 ### 🔄 Em Progresso
 - 🔄 Preparação para classificação ANVISA SaMD
-- 🔄 Substituição completa HIPAA → LGPD/ANS/ANVISA
+- 🔄 Migração regulatória concluída: LGPD/ANS/ANVISA
 - 🔄 CI/CD pipeline (GitHub Actions)
 - 🔄 Testes de carga
 
 ### 📍 Próximos Passos (Wave 4+)
-- **Imediato:** Finalizar migration HIPAA→LGPD, implementar pgcrypto
+- **Imediato:** Finalizar migração regulatória, implementar pgcrypto
 - **Curto prazo:** Deploy staging, testes de carga, ajustes de performance
 - **Médio prazo:** Registro ANVISA, extração de microserviços sob demanda
 - **Longo prazo:** Kubernetes, multi-region, certificações (ISO 27001, SBIS/CFM)
@@ -228,7 +228,7 @@ A plataforma segue o framework regulatório brasileiro:
 - **ANS** (RN 277/2011, RN 305/2012) — regulação de operadoras de saúde
 - **ANVISA** (RDC 657/2022) — classificação SaMD em andamento
 
-> **Nota:** Documentação anterior referia-se a "HIPAA compliance". Isso foi corrigido — HIPAA é regulação dos EUA e não se aplica ao mercado brasileiro. Ver ADR-001.
+> **Nota:** Documentação anterior referia-se a frameworks regulatórios estrangeiros. Isso foi corrigido — a plataforma segue exclusivamente o framework brasileiro (LGPD/ANS/ANVISA). Ver ADR-001.
 
 ## 📚 Documentação de Arquitetura
 

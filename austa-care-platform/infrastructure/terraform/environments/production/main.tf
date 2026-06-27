@@ -4,6 +4,29 @@
 # Instantiates all platform modules with production-grade values.
 # =============================================================================
 
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.25"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
 locals {
   environment  = "production"
   project_name = "austa-care"
@@ -23,16 +46,16 @@ locals {
 module "vpc" {
   source = "../../modules/vpc"
 
-  aws_region          = var.aws_region
-  project_name        = local.project_name
-  environment         = local.environment
-  vpc_cidr            = var.vpc_cidr
-  availability_zones  = var.availability_zones
-  public_subnet_cidrs = var.public_subnet_cidrs
-  private_subnet_cidrs    = var.private_subnet_cidrs
-  database_subnet_cidrs   = var.database_subnet_cidrs
-  enable_nat_gateway      = true
-  enable_vpc_endpoints    = true
+  aws_region            = var.aws_region
+  project_name          = local.project_name
+  environment           = local.environment
+  vpc_cidr              = var.vpc_cidr
+  availability_zones    = var.availability_zones
+  public_subnet_cidrs   = var.public_subnet_cidrs
+  private_subnet_cidrs  = var.private_subnet_cidrs
+  database_subnet_cidrs = var.database_subnet_cidrs
+  enable_nat_gateway    = true
+  enable_vpc_endpoints  = true
 
   tags = local.common_tags
 }
@@ -43,13 +66,13 @@ module "vpc" {
 module "eks" {
   source = "../../modules/eks"
 
-  project_name          = local.project_name
-  environment           = local.environment
-  vpc_id                = module.vpc.vpc_id
-  private_subnet_ids    = module.vpc.private_subnet_ids
-  cluster_version       = var.eks_cluster_version
+  project_name           = local.project_name
+  environment            = local.environment
+  vpc_id                 = module.vpc.vpc_id
+  private_subnet_ids     = module.vpc.private_subnet_ids
+  cluster_version        = var.eks_cluster_version
   enable_public_endpoint = false
-  node_groups           = var.eks_node_groups
+  node_groups            = var.eks_node_groups
 
   tags = local.common_tags
 }
@@ -60,10 +83,10 @@ module "eks" {
 module "rds" {
   source = "../../modules/rds"
 
-  project_name              = local.project_name
-  environment               = local.environment
-  vpc_id                    = module.vpc.vpc_id
-  db_subnet_group_name      = module.vpc.database_subnet_group_name
+  project_name               = local.project_name
+  environment                = local.environment
+  vpc_id                     = module.vpc.vpc_id
+  db_subnet_group_name       = module.vpc.database_subnet_group_name
   allowed_security_group_ids = [module.eks.node_security_group_id]
 
   engine                = "postgres"
@@ -75,10 +98,10 @@ module "rds" {
   username              = var.rds_username
   password              = var.rds_password
 
-  multi_az                 = var.rds_multi_az
-  backup_retention_period  = var.rds_backup_retention
-  deletion_protection      = var.rds_deletion_protection
-  enable_performance_insights = true
+  multi_az                       = var.rds_multi_az
+  backup_retention_period        = var.rds_backup_retention
+  deletion_protection            = var.rds_deletion_protection
+  enable_performance_insights    = true
   performance_insights_retention = 7
 
   tags = local.common_tags
@@ -90,18 +113,18 @@ module "rds" {
 module "elasticache" {
   source = "../../modules/elasticache"
 
-  project_name              = local.project_name
-  environment               = local.environment
-  vpc_id                    = module.vpc.vpc_id
-  subnet_group_name         = module.vpc.elasticache_subnet_group_name
+  project_name               = local.project_name
+  environment                = local.environment
+  vpc_id                     = module.vpc.vpc_id
+  subnet_group_name          = module.vpc.elasticache_subnet_group_name
   allowed_security_group_ids = [module.eks.node_security_group_id]
 
-  engine_version      = var.redis_engine_version
-  node_type           = var.redis_node_type
-  num_cache_clusters  = var.redis_num_cache_nodes
-  automatic_failover  = var.redis_automatic_failover
+  engine_version           = var.redis_engine_version
+  node_type                = var.redis_node_type
+  num_cache_clusters       = var.redis_num_cache_nodes
+  automatic_failover       = var.redis_automatic_failover
   snapshot_retention_limit = 7
-  auth_token          = var.redis_auth_token
+  auth_token               = var.redis_auth_token
 
   tags = local.common_tags
 }

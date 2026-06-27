@@ -41,8 +41,8 @@ output "nat_gateway_ips" {
 # Database Subnet Group (convenience resource for RDS / ElastiCache)
 # ---------------------------------------------------------------------------
 resource "aws_db_subnet_group" "database" {
-  name        = "${var.project_name}-${var.environment}-db-subnet-group"
-  subnet_ids  = aws_subnet.database[*].id
+  name       = "${var.project_name}-${var.environment}-db-subnet-group"
+  subnet_ids = aws_subnet.database[*].id
 
   tags = merge(
     var.tags,
@@ -53,8 +53,8 @@ resource "aws_db_subnet_group" "database" {
 }
 
 resource "aws_elasticache_subnet_group" "redis" {
-  name        = "${var.project_name}-${var.environment}-redis-subnet-group"
-  subnet_ids  = aws_subnet.database[*].id
+  name       = "${var.project_name}-${var.environment}-redis-subnet-group"
+  subnet_ids = aws_subnet.database[*].id
 
   tags = var.tags
 }

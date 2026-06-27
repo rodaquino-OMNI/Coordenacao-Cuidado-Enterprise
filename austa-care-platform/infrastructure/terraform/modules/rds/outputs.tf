@@ -8,8 +8,8 @@ output "endpoint" {
 }
 
 output "reader_endpoint" {
-  description = "RDS reader endpoint (empty if not Multi-AZ)"
-  value       = try(aws_db_instance.main.reader_endpoint, "")
+  description = "RDS reader endpoint (empty if not applicable)"
+  value       = ""
 }
 
 output "database_name" {

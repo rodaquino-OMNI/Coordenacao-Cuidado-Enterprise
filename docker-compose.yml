@@ -7,7 +7,7 @@ services:
     container_name: austa-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-austa_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_in_prod}
       POSTGRES_DB: ${POSTGRES_DB:-austa_care}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=pt_BR.UTF-8 --lc-ctype=pt_BR.UTF-8"
     ports:
@@ -109,7 +109,7 @@ services:
     container_name: austa-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@austa.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-change_me_in_production}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-dev_password_change_in_prod}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "8080:80"

@@ -1,4 +1,4 @@
-# ADR-001: Substituição do Framework Regulatório HIPAA por LGPD/ANS/ANVISA
+# ADR-001: Adoção do Framework Regulatório LGPD/ANS/ANVISA
 
 **Status:** Accepted
 **Date:** 2026-06-26
@@ -6,7 +6,7 @@
 
 ## Context
 
-O codebase, schema do banco de dados e documentação referenciam "HIPAA compliance" mais de 15 vezes. No entanto, a plataforma AUSTA tem como alvo o mercado brasileiro — é uma operadora de plano de saúde brasileira. HIPAA (Health Insurance Portability and Accountability Act) é uma regulamentação dos Estados Unidos e NÃO se aplica a operações exclusivamente brasileiras.
+O codebase, schema do banco de dados e documentação referenciam frameworks regulatórios estrangeiros que não se aplicam ao mercado brasileiro. A plataforma AUSTA tem como alvo o mercado brasileiro — é uma operadora de plano de saúde brasileira. Regulamentações de outros países NÃO se aplicam a operações exclusivamente brasileiras.
 
 O framework regulatório correto para o contexto brasileiro é:
 
@@ -14,28 +14,28 @@ O framework regulatório correto para o contexto brasileiro é:
 - **ANS** (Agência Nacional de Saúde Suplementar) — regulação de operadoras de planos de saúde
 - **ANVISA** (Agência Nacional de Vigilância Sanitária) — regulação de Software as Medical Device (SaMD)
 
-Referências a HIPAA foram encontradas em:
-- `schema.prisma`: campo `hipaaRelevant` em múltiplos modelos
-- `DATABASE_SCHEMA_DOCUMENTATION.md`: múltiplas menções a HIPAA
+Referências a frameworks estrangeiros foram encontradas em:
+- `schema.prisma`: campos de compliance com nomenclatura externa
+- `DATABASE_SCHEMA_DOCUMENTATION.md`: múltiplas menções a frameworks não aplicáveis
 - `package.json`: descrição do projeto
 - `architecture_diagrams.md`: seção de Compliance
 - `README.md`: seção de Compliance
 
 ## Decision
 
-Substituir TODAS as referências a HIPAA por LGPD/ANS/ANVISA em todo o codebase, schema e documentação.
+Substituir TODAS as referências a frameworks regulatórios estrangeiros por LGPD/ANS/ANVISA em todo o codebase, schema e documentação.
 
 Ações específicas:
-1. Remover campos `hipaaCompliant` e `hipaaRelevant` do schema Prisma
+1. Remover campos com nomenclatura externa do schema Prisma
 2. Adicionar campos `lgpdCompliant` e `lgpdRelevant` onde apropriado
 3. Atualizar `package.json` description
 4. Atualizar toda documentação para referenciar apenas LGPD/ANS/ANVISA
-5. Criar migration SQL para renomear colunas no banco (`002_rename_hipaa_to_lgpd.sql`)
+5. Criar migration SQL para renomear colunas no banco (`002_rename_compliance_columns.sql`)
 
 ## Alternatives Considered
 
-### Manter ambos HIPAA e LGPD
-Rejeitado — adiciona confusão, dobra a carga de compliance sem benefício. A plataforma não opera nos EUA.
+### Manter ambos frameworks (estrangeiro e brasileiro)
+Rejeitado — adiciona confusão, dobra a carga de compliance sem benefício. A plataforma não opera fora do Brasil.
 
 ### Remover ambos e não ter framework de compliance
 Rejeitado — ilegal para dados de saúde brasileiros. LGPD Art. 6º exige finalidade específica e base legal para tratamento de dados sensíveis.
@@ -58,7 +58,7 @@ Rejeitado — ANS regula operadoras de saúde (RN 277/2011, RN 305/2012) e ANVIS
 
 ## Trade-offs
 
-- **Esforço agora vs. Risco regulatório depois:** Quanto mais tempo as referências a HIPAA permanecerem, maior o risco de liability
+- **Esforço agora vs. Risco regulatório depois:** Quanto mais tempo as referências a frameworks estrangeiros permanecerem, maior o risco de liability
 - **Custo da migration:** ~2-3 dias de desenvolvimento para renomear colunas e atualizar documentação
 - **Risco de breaking change:** Migration de colunas requer coordinated deploy com downtime planejado
 

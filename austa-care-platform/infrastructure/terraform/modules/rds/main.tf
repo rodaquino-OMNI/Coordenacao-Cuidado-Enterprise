@@ -128,8 +128,8 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  copy_tags_to_snapshot = true
-  skip_final_snapshot   = false
+  copy_tags_to_snapshot     = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-${var.environment}-final-snapshot"
 
   # Protection

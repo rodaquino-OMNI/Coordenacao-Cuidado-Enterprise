@@ -28,7 +28,7 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 | **Kubernetes** | ✅ Manifests completos | Namespace, deployments (2), services (2), ingress, HPA, network policy, configmaps |
 | **Terraform** | ✅ 6 módulos | VPC, RDS, ElastiCache, EKS, S3, IAM — todos em `sa-east-1` |
 | **Healthcare invariants** | ✅ 6/6 verificados | Audit trail, idempotência, versionamento, criptografia, health check, retry |
-| **HIPAA → LGPD** | ✅ Substituído | 0 referências HIPAA. 21 arquivos modificados, migration 002 executada |
+| **Framework Regulatório → LGPD/ANS/ANVISA** | ✅ Substituído | 0 referências a frameworks estrangeiros. 21 arquivos modificados, migration 002 executada |
 | **Health check** | ✅ 5 endpoints | `/health`, `/health/detailed`, `/health/ready`, `/health/live`, `/health/dead-mans-switch` |
 
 ---
@@ -97,7 +97,7 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 
 | Check | Status |
 |-------|--------|
-| HIPAA references in code | ✅ 0 found |
+| Foreign regulatory references in code | ✅ 0 found |
 | pgcrypto functional | ✅ Extension loaded + encryptPHI/decryptPHI |
 | AuditLog persistent | ✅ `prisma.auditLog.create()` |
 | Algorithm versioning | ✅ `algorithm-registry.ts` (4 algorithms) |

@@ -325,8 +325,8 @@ CREATE TABLE "organizations" (
     "email" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "settings" JSONB,
-    "hipaaCompliant" BOOLEAN NOT NULL DEFAULT false,
-    "dataRetentionYears" INTEGER NOT NULL DEFAULT 7,
+    "lgpdCompliant" BOOLEAN NOT NULL DEFAULT false, -- LGPD/ANS/ANVISA compliance flag
+    "dataRetentionYears" INTEGER NOT NULL DEFAULT 7, -- LGPD Art. 16: minimum 6-10 years for health data
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),

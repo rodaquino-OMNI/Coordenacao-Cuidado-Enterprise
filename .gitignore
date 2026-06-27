@@ -254,7 +254,7 @@ documents/
 models/weights/
 !models/weights/.gitkeep
 
-# Health Data (LGPD/HIPAA compliance)
+# Health Data (LGPD/ANS/ANVISA compliance)
 patient-data/
 health-records/
 phi/

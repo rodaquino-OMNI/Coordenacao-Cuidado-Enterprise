@@ -207,13 +207,13 @@ resource "aws_security_group_rule" "node_ingress_from_cluster" {
 }
 
 resource "aws_security_group_rule" "node_ingress_self" {
-  description              = "Allow nodes to communicate with each other"
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 65535
-  protocol                 = "-1"
-  self                     = true
-  security_group_id        = aws_security_group.node.id
+  description       = "Allow nodes to communicate with each other"
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "-1"
+  self              = true
+  security_group_id = aws_security_group.node.id
 }
 
 # ---------------------------------------------------------------------------
@@ -243,7 +243,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   labels = {
-    node_group = each.key
+    node_group    = each.key
     capacity_type = lookup(each.value, "capacity_type", "ON_DEMAND")
   }
 

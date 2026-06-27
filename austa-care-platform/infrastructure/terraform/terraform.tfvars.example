@@ -1,0 +1,70 @@
+# =============================================================================
+# AUSTA Care Platform — Root terraform.tfvars.example
+# =============================================================================
+# Copy to terraform.tfvars and customise for your deployment.
+# The environment-specific overrides live under environments/<env>/terraform.tfvars.
+#
+# When deploying a specific environment, run Terraform from that directory:
+#   cd environments/production && terraform plan
+# =============================================================================
+
+# General
+project_name = "austa-care"
+environment  = "production"
+aws_region   = "sa-east-1"
+
+# VPC / Networking
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["sa-east-1a", "sa-east-1b", "sa-east-1c"]
+
+public_subnet_cidrs = [
+  "10.0.1.0/24",
+  "10.0.2.0/24",
+  "10.0.3.0/24",
+]
+
+private_subnet_cidrs = [
+  "10.0.11.0/24",
+  "10.0.12.0/24",
+  "10.0.13.0/24",
+]
+
+database_subnet_cidrs = [
+  "10.0.21.0/24",
+  "10.0.22.0/24",
+  "10.0.23.0/24",
+]
+
+# EKS
+eks_cluster_version = "1.28"
+eks_node_groups = {
+  general = {
+    instance_types = ["m5.xlarge", "m5a.xlarge"]
+    min_size       = 3
+    max_size       = 10
+    desired_size   = 3
+    disk_size      = 100
+  }
+  spot = {
+    instance_types = ["m5.large", "m5a.large", "m5n.large"]
+    min_size       = 0
+    max_size       = 20
+    desired_size   = 2
+    disk_size      = 50
+    capacity_type  = "SPOT"
+  }
+}
+
+# RDS (PostgreSQL 15)
+rds_instance_class     = "db.r6g.xlarge"
+rds_allocated_storage  = 100
+rds_engine_version     = "15.6"
+rds_backup_retention   = 30
+rds_multi_az           = true
+rds_deletion_protection = true
+
+# ElastiCache (Redis 7)
+redis_node_type          = "cache.r6g.large"
+redis_num_cache_nodes    = 3
+redis_engine_version     = "7.0"
+redis_automatic_failover  = true

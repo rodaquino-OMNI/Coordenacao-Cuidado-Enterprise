@@ -1,224 +1,160 @@
-# AUSTA Care Platform — Secrets Management Strategy
+# Secrets Management — AUSTA Care Platform
 
 ## Overview
 
-This document describes how secrets (passwords, API keys, tokens, encryption keys) are managed across all AUSTA Care Platform environments. **No secret is ever hardcoded in source files or committed to version control.**
+AUSTA Care uses a **layered secrets strategy**:
+- **Local development**: `.env` files (generated, never committed)
+- **Staging / Production**: AWS Secrets Manager (centralized, rotated, audited)
 
-## Quick Reference
-
-| Environment | Secret Store | How Secrets Reach the App |
-|---|---|---|
-| **Local Development** | `.env` file | `dotenv` loads into `process.env` at startup |
-| **Staging** | AWS Secrets Manager | `@aws-sdk/client-secrets-manager` fetches secrets at boot |
-| **Production** | AWS Secrets Manager (with automatic rotation) | Same SDK, plus Lambda‑based rotation for RDS/Redis |
+**Cardinal rule: NEVER commit `.env` files or any plaintext secrets to the repository.**
 
 ---
 
-## 1. Local Development
+## Local Development
 
-### Secrets are stored in `.env`
-
-```
-cp .env.example .env
-./scripts/generate-dev-secrets.sh   # generates strong random passwords
-```
-
-- The `.env` file is **gitignored** (see `.gitignore` lines 6‑12).
-- `docker-compose.yml` and `docker-compose.infrastructure.yml` reference `${VARIABLE:-default}` — no hardcoded passwords.
-- `austa-care-platform/backend/src/config/config.ts` loads `.env` via `dotenv` and validates with Zod.
-
-### Variables used by Docker Compose
-
-All service credentials are injected via environment variables:
-
-| Variable | Service | Example |
-|---|---|---|
-| `POSTGRES_PASSWORD` | PostgreSQL | `${POSTGRES_PASSWORD:-change_me_in_production}` |
-| `MONGO_INITDB_ROOT_PASSWORD` | MongoDB | `${MONGO_INITDB_ROOT_PASSWORD:-change_me_in_production}` |
-| `MINIO_ROOT_PASSWORD` | MinIO | `${MINIO_ROOT_PASSWORD:-change_me_in_production}` |
-| `GF_SECURITY_ADMIN_PASSWORD` | Grafana | `${GF_SECURITY_ADMIN_PASSWORD:-change_me_in_production}` |
-| `PGADMIN_DEFAULT_PASSWORD` | pgAdmin | `${PGADMIN_DEFAULT_PASSWORD:-change_me_in_production}` |
-
-### Generating Secrets for Development
+### Setup (first time)
 
 ```bash
-# Make executable (first time)
-chmod +x scripts/generate-dev-secrets.sh
-
-# Generate fresh secrets
-./scripts/generate-dev-secrets.sh
+# Generate a .env with random secrets for local dev
+bash scripts/generate-dev-secrets.sh
 ```
 
-The script:
-1. Copies `.env.example` → `.env`
-2. Generates cryptographically strong random secrets via `openssl rand -base64`
-3. Replaces all placeholder values in `.env`
-4. Outputs a summary of what was generated
+This creates a `.env` file with:
+- Random 32-byte hex strings for JWT secrets and encryption keys
+- Random 16-byte hex passwords for PostgreSQL, MongoDB, MinIO, Grafana, PGAdmin
+- Random 8-byte hex for Redis
+- Safe non-secret defaults (`NODE_ENV=development`, `PORT=3000`, etc.)
 
-⚠️ **You still need to manually set** `OPENAI_API_KEY`, `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, and AWS credentials — those cannot be auto‑generated.
+The script will **refuse to overwrite** an existing `.env` — delete it first if you need fresh secrets.
+
+### Adding new variables
+
+1. Add the variable with a `CHANGE_ME` placeholder to `.env.example`
+2. Add generation logic to `scripts/generate-dev-secrets.sh`
+3. Document it here
+
+### What NOT to put in `.env.example`
+
+- Real passwords, API keys, or tokens (even test ones)
+- Internal hostnames/IPs that differ per environment
+- Personally identifiable information (PII)
 
 ---
 
-## 2. Staging Environment (AWS Secrets Manager)
+## Staging & Production
 
-### Architecture
+### AWS Secrets Manager
 
-```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  EKS Pod    │────▶│  AWS Secrets     │────▶│  AWS Resources  │
-│  (backend)  │     │  Manager         │     │  (RDS, Redis,   │
-│             │     │  secrets/austa-  │     │   S3, etc.)     │
-│  SDK fetch  │     │  staging/*       │     │                 │
-└─────────────┘     └──────────────────┘     └─────────────────┘
-```
+Staging and production use [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) for all secrets.
 
-### Setup
+**Secrets stored:**
+- Database credentials (RDS master password)
+- Redis auth token (ElastiCache)
+- JWT signing keys
+- API keys (WhatsApp Z-API, OpenAI, Tasy ERP)
+- AWS IAM credentials for cross-account access
+- Audit encryption keys
 
-1. **Create secrets in AWS Secrets Manager:**
+**Access from application:**
+The backend uses `@aws-sdk/client-secrets-manager` (already in `package.json` dependencies):
 
-```bash
-# Database credentials
-aws secretsmanager create-secret \
-  --name austa-staging-database \
-  --secret-string '{"username":"austa","password":"<secure-password>","host":"rds.xxx.sa-east-1.rds.amazonaws.com","port":5432,"dbname":"austa_care"}'
+```typescript
+import { SecretsManager } from '@aws-sdk/client-secrets-manager';
 
-# JWT secrets
-aws secretsmanager create-secret \
-  --name austa-staging-jwt \
-  --secret-string '{"secret":"<64-char-random>","refreshSecret":"<64-char-random>"}'
+const client = new SecretsManager({ region: process.env.AWS_REGION });
 
-# Encryption key
-aws secretsmanager create-secret \
-  --name austa-staging-encryption \
-  --secret-string '{"key":"<64-char-hex>","algorithm":"aes-256-gcm"}'
-
-# API keys
-aws secretsmanager create-secret \
-  --name austa-staging-api-keys \
-  --secret-string '{"openai":"sk-...","zapiToken":"...","tasyApiKey":"..."}'
-```
-
-2. **Grant EKS nodes IAM permission:**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": ["secretsmanager:GetSecretValue"],
-  "Resource": [
-    "arn:aws:secretsmanager:sa-east-1:<account>:secret:austa-staging-*"
-  ]
+async function getSecret(secretName: string): Promise<Record<string, string>> {
+  const response = await client.getSecretValue({ SecretId: secretName });
+  return JSON.parse(response.SecretString || '{}');
 }
 ```
 
-3. **Application loads secrets at startup:**
-
-The `@aws-sdk/client-secrets-manager` package (already in `backend/package.json`) fetches secrets. Configuration module in `config.ts` can be extended to load from Secrets Manager when `NODE_ENV=staging`.
-
-### Environment Variables for Staging
-
-Minimal `.env` for staging (only non‑secret config):
-
+**Secret naming convention:**
 ```
-NODE_ENV=staging
-AWS_REGION=sa-east-1
-AWS_SECRETS_MANAGER_REGION=sa-east-1
-SECRETS_PREFIX=austa-staging
-KAFKA_BROKERS=b-1.msk.xxx:9092,b-2.msk.xxx:9092
-FHIR_BASE_URL=https://fhir.staging.austa.com.br/fhir
-CORS_ORIGIN=https://staging.austa.com.br
+austa-care/<environment>/<service>
 ```
+Examples:
+- `austa-care/staging/database`
+- `austa-care/production/jwt`
+- `austa-care/staging/whatsapp-z-api`
+
+### Secret Rotation
+
+| Secret Type         | Rotation Period | Method                    |
+|---------------------|-----------------|---------------------------|
+| Database passwords  | 90 days         | AWS Secrets Manager auto  |
+| JWT signing keys    | 90 days         | Manual (requires key rollover window) |
+| API keys            | Per provider    | Manual (provider-dependent) |
+| Encryption keys     | 180 days        | Manual (requires re-encryption of data) |
+
+Rotation is automated via AWS Secrets Manager's built-in rotation for RDS. For JWT and encryption keys, a manual rotation process with overlap windows is required.
 
 ---
 
-## 3. Production Environment (AWS Secrets Manager + Rotation)
+## Docker Compose
 
-### Additional Security Measures
-
-- **Automatic password rotation** for RDS and ElastiCache via AWS Lambda + Secrets Manager rotation templates.
-- **All secrets are encrypted** with AWS KMS customer‑managed keys (CMK).
-- **Secrets are never logged** — the application redacts secrets from log output.
-- **IAM least‑privilege** — only the backend service account can read secrets.
-- **VPC endpoint** for Secrets Manager — traffic never leaves the AWS network.
-
-### Rotation Configuration
-
-```bash
-# Enable automatic rotation for RDS credentials (every 30 days)
-aws secretsmanager rotate-secret \
-  --secret-id austa-production-database \
-  --rotation-lambda-arn arn:aws:lambda:sa-east-1:<account>:function:secrets-rotation-rds \
-  --rotation-rules AutomaticallyAfterDays=30
-```
-
-### Production Secret Names (convention)
-
-```
-austa-production-database          # RDS credentials
-austa-production-redis             # ElastiCache auth token
-austa-production-jwt               # JWT signing secrets
-austa-production-encryption        # App-level encryption key
-austa-production-api-keys          # OpenAI, Z-API, Tasy keys
-austa-production-mongodb           # DocumentDB credentials
-austa-production-kafka             # MSK SASL/SCRAM credentials
-```
-
----
-
-## 4. Docker Compose Conventions
-
-Both `docker-compose.yml` and `docker-compose.infrastructure.yml` follow this pattern:
+Both `docker-compose.yml` and `docker-compose.infrastructure.yml` reference environment variables with safe dev defaults:
 
 ```yaml
 environment:
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
-  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_in_production}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_in_prod}
 ```
 
-- `${VARIABLE}` — reads from the environment or `.env` file.
-- `:-default` — fallback for local dev when `.env` is missing.
-- **No hardcoded passwords** remain in any docker‑compose file.
+- In local dev: the value comes from `.env` (generated by the script)
+- In CI/CD: the value comes from CI secrets manager
+- The fallback `dev_password_change_in_prod` is an **intentional low-entropy default** that only works in local development — it will NOT be used in any deployed environment.
 
 ---
 
-## 5. Security Best Practices
+## CI/CD Pipeline
 
-| Practice | Status |
-|---|---|
-| No secrets in source code | ✅ Enforced by `.gitignore` |
-| `.env` in `.gitignore` | ✅ Lines 6‑12 |
-| Placeholder values only in `.env.example` | ✅ |
-| Docker Compose uses `${VAR}` references | ✅ |
-| AWS Secrets Manager for staging/production | ✅ SDK integrated |
-| Encryption at rest (KMS) | ✅ For production |
-| Automatic rotation | ✅ For production RDS |
-| Least‑privilege IAM | ✅ Service‑specific policies |
-| Secrets never logged | ✅ `sensitiveDataPatterns` in `security.config.ts` |
-| LGPD / ANS / ANVISA alignment | ✅ No PHI in environment variables |
+### GitHub Actions / CI
 
----
+Secrets are injected via environment variables from the CI provider's secrets store (GitHub Secrets, GitLab CI Variables, etc.).
 
-## 6. Quick Start Checklist
+**Never** store production secrets in CI variables for development branches — use separate staging credentials.
 
-- [ ] Run `cp .env.example .env`
-- [ ] Run `./scripts/generate-dev-secrets.sh`
-- [ ] Fill in real values for `OPENAI_API_KEY`, `ZAPI_*`, `AWS_*`
-- [ ] Verify `docker-compose up` works with generated secrets
-- [ ] For staging: create secrets in AWS Secrets Manager
-- [ ] For staging: configure IAM roles for EKS pods
-- [ ] For production: enable automatic rotation on RDS and Redis secrets
-- [ ] For production: use KMS CMK for encryption
+### Infrastructure as Code (Terraform)
+
+Terraform reads secrets from AWS Secrets Manager via data sources, **not** from `.tfvars` files:
+
+```hcl
+data "aws_secretsmanager_secret_version" "database" {
+  secret_id = "austa-care/${var.environment}/database"
+}
+```
+
+The `terraform.tfvars.example` files contain only non-sensitive configuration values.
 
 ---
 
-## Related Files
+## Security Checklist
 
-| File | Purpose |
-|---|---|
-| `.env.example` | Template with placeholder values |
-| `.env` | Actual secrets (gitignored) |
-| `scripts/generate-dev-secrets.sh` | Auto‑generates dev secrets |
-| `docker-compose.yml` | References `${VARIABLE}` |
-| `docker-compose.infrastructure.yml` | References `${VARIABLE}` |
-| `backend/package.json` | Includes `@aws-sdk/client-secrets-manager` |
-| `backend/src/config/config.ts` | Loads and validates config |
-| `backend/src/config/security.config.ts` | Redacts sensitive data from logs |
+- [ ] `.env` is in `.gitignore`
+- [ ] `.env.example` has only `CHANGE_ME` placeholders
+- [ ] No real secrets in committed files (run `git grep -i "password\|secret\|token\|key"` to verify)
+- [ ] Docker Compose files use `${VAR:-default}` syntax, never hardcoded passwords
+- [ ] Production secrets live in AWS Secrets Manager
+- [ ] Secret rotation is configured (90-day for databases)
+- [ ] CI/CD pipelines inject secrets from the CI provider, not from files
+- [ ] Terraform state files are encrypted (S3 + KMS)
+
+---
+
+## Incident Response
+
+If a secret is accidentally committed:
+
+1. **Rotate the secret immediately** (do not just delete the commit — the secret is in Git history)
+2. **Revoke the exposed credential** at the provider (AWS IAM key, API token, etc.)
+3. **Rewrite Git history** with `git filter-repo` or `BFG Repo-Cleaner`
+4. **Force-push** the cleaned history
+5. **Notify security team** and document the incident
+
+---
+
+## References
+
+- [AWS Secrets Manager Best Practices](https://docs.aws.amazon.com/secretsmanager/latest/userguide/best-practices.html)
+- [12-Factor App: Config](https://12factor.net/config)
+- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)

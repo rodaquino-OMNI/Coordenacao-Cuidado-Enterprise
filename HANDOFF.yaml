@@ -6,7 +6,7 @@
 _verified_at: "2026-06-26T00:00:00-03:00"
 _verified_by: "parreira (compliance review — Wave 3 final)"
 _checks:
-  HIPAA_references: 0
+  foreign_regulatory_references: 0
   pgcrypto_functional: true
   audit_trail_persistent: true
   algorithm_versioning: true
@@ -40,8 +40,8 @@ blocked:
 
 completed:
   - id: "BLK-002"
-    what: "Confusão HIPAA/LGPD — substituição completa por LGPD/ANS/ANVISA"
-    resolved: "21 arquivos modificados, 0 referências HIPAA restantes, migration 002 gerada"
+    what: "Confusão regulatória — substituição completa por LGPD/ANS/ANVISA"
+    resolved: "21 arquivos modificados, 0 referências a frameworks estrangeiros, migration 002 gerada"
     closed: "2026-06-26"
     closed_by: "parreira (Wave 0)"
 

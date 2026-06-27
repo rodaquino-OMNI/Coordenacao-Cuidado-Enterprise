@@ -214,7 +214,7 @@ graph TB
     style J fill:#fff3e0
 ```
 
-**Nota:** HIPAA foi substituído por LGPD/ANS/ANVISA (ver ADR-001). pgcrypto para envelope encryption de PHI (ver ADR-004). RBAC implementado via middleware de roles em TypeScript.
+**Nota:** O framework regulatório foi estabelecido como LGPD/ANS/ANVISA (ver ADR-001). pgcrypto para envelope encryption de PHI (ver ADR-004). RBAC implementado via middleware de roles em TypeScript.
 
 ---
 
@@ -345,7 +345,7 @@ graph TB
 - Microserviços serão extraídos quando houver demanda real de escala
 
 ### For Compliance Teams
-- Framework regulatório: **LGPD/ANS/ANVISA** (não HIPAA) — ver ADR-001
+- Framework regulatório: **LGPD/ANS/ANVISA** — ver ADR-001
 - Criptografia PHI: pgcrypto envelope encryption — ver ADR-004
 - Algoritmos clínicos versionados — ver ADR-005
 - Idempotência de mensagens para integridade de dados — ver ADR-006
@@ -358,7 +358,7 @@ Decisões arquiteturais formais estão documentadas em `docs/architecture/adr/`:
 
 | ADR | Título | Status |
 |-----|--------|--------|
-| ADR-001 | Substituição HIPAA → LGPD/ANS/ANVISA | Accepted |
+| ADR-001 | Adoção do framework LGPD/ANS/ANVISA | Accepted |
 | ADR-002 | Classificação ANVISA SaMD (RDC 657/2022) | Accepted |
 | ADR-003 | Arquitetura Monolith-First para MVP | Accepted |
 | ADR-004 | Envelope Encryption com pgcrypto para PHI | Accepted |
