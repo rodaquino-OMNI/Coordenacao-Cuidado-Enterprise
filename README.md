@@ -6,8 +6,6 @@
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Z--API%20(z--api.io)-25D366)](https://z-api.io)
 [![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%205-61DAFB)](https://react.dev)
 
-> **⚠️ STATUS HONESTO — Junho 2026:** A plataforma está em fase **Alpha/Pre-Production**. O backend é um **monolito TypeScript modular** (Express + Prisma), não microserviços. Documentação anterior descrevia uma arquitetura de 12 containers que não existe. Esta versão do README reflete a realidade do código.
-
 ## 🎯 O Problema Que Resolvemos
 
 Operadoras de saúde enfrentam desafios críticos:
