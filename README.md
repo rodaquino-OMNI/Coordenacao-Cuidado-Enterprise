@@ -32,6 +32,18 @@ Operadoras de saúde enfrentam desafios críticos:
 - Insights preditivos para intervenção proativa
 - Dashboard 360° com visão completa do beneficiário
 
+## 📡 API Overview
+
+| Domain | Endpoints | Auth | Description |
+|--------|----------|------|-------------|
+| Health | 4 | No | Component-level checks, dead man's switch, readiness/liveness probes |
+| Auth | 5 | Mixed | Login, register, refresh, logout, me (JWT) |
+| Clinical | 4 | Mixed | Algorithm versions, risk assessment, emergency detection |
+| Gamification | 8 | Yes | Profiles, points, achievements, badges, leaderboards |
+| WhatsApp | 4 | Mixed | Webhooks (Z-API), send messages, history, templates |
+
+> Full spec: [`docs/api/openapi.yaml`](docs/api/openapi.yaml) — 20 endpoints, 28 schemas, OpenAPI 3.0.3
+
 ## 📈 Status Atual do Desenvolvimento
 
 ### Estado Real (Junho 2026)
@@ -45,6 +57,7 @@ Operadoras de saúde enfrentam desafios críticos:
 | **IA/NLP** | ✅ Funcional | OpenAI GPT-4 via LangChain |
 | **Frontend** | ✅ Funcional | React 18 + Vite 5 + TailwindCSS |
 | **Testes** | ✅ Implementados | Unit + Integration + E2E (Jest/Vitest) |
+| **API Docs** | ✅ Completo | OpenAPI 3.0 — 20 endpoints + 28 schemas |
 | **CI/CD** | 🔄 Configurando | Docker Compose local; K8s planejado |
 | **Produção** | 🔜 Pre-Production | Deploy em VM única; sem multi-region ainda |
 
@@ -79,7 +92,7 @@ Operadoras de saúde enfrentam desafios críticos:
 ## 🛠️ Stack Tecnológica Real
 
 ### Backend (Monolith)
-- **Runtime:** Node.js + Express + TypeScript
+- **Runtime:** Node.js 20+ + Express + TypeScript
 - **ORM:** Prisma (PostgreSQL)
 - **Cache:** Redis 7 (ioredis)
 - **Filas:** BullMQ (backed by Redis)
@@ -111,43 +124,44 @@ Operadoras de saúde enfrentam desafios críticos:
 ## 🚀 Quick Start (Desenvolvimento)
 
 ### Pré-requisitos
-- Node.js 18+
+- Node.js 20+
 - Docker e Docker Compose
-- Conta Z-API (WhatsApp)
-- Chave API OpenAI
+- Conta Z-API (WhatsApp) — [z-api.io](https://z-api.io)
+- Chave API OpenAI — [platform.openai.com](https://platform.openai.com)
 
 ### Setup
 
 ```bash
 # 1. Clone
 git clone https://github.com/austa-health/austa-care-platform.git
-cd austa-care-platform
+cd Coordenacao-Cuidado-Enterprise
 
 # 2. Configure variáveis de ambiente
 cp .env.example .env
 # Edite .env com suas credenciais (Z-API, OpenAI, etc.)
+# Ou gere secrets de dev automaticamente:
+bash scripts/generate-dev-secrets.sh
 
 # 3. Inicie infraestrutura
-docker-compose up -d postgres redis
+docker compose up -d postgres redis
 
 # 4. Instale dependências
 cd austa-care-platform/backend && npm install
-cd ../frontend && npm install
 
-# 5. Execute migrations
-cd ../austa-care-platform/backend
-npm run db:migrate
-npm run db:seed
+# 5. Gere o Prisma Client e execute migrations
+npx prisma generate
+npx prisma migrate dev
+npx tsx prisma/seed/development.ts  # Opcional: dados de dev
 
-# 6. Inicie servidores
-# Terminal 1 - Backend
-cd austa-care-platform/backend && npm run dev
-# Terminal 2 - Frontend
-cd austa-care-platform/frontend && npm run dev
+# 6. Inicie o servidor
+npm run dev
 
 # 7. Verifique
 curl http://localhost:3000/health
+# Esperado: { "status": "healthy", ... }
 ```
+
+> Para instruções detalhadas, consulte o [Guia do Desenvolvedor](docs/DEVELOPER-GUIDE.md).
 
 ## 📂 Estrutura do Projeto
 
@@ -230,11 +244,25 @@ A plataforma segue o framework regulatório brasileiro:
 
 > **Nota:** Documentação anterior referia-se a frameworks regulatórios estrangeiros. Isso foi corrigido — a plataforma segue exclusivamente o framework brasileiro (LGPD/ANS/ANVISA). Ver ADR-001.
 
-## 📚 Documentação de Arquitetura
+## 📚 Documentação
 
+### Documentação Técnica
+| Documento | Descrição |
+|-----------|-----------|
+| [Guia do Desenvolvedor](docs/DEVELOPER-GUIDE.md) | Onboarding, setup, convenções de código, como contribuir |
+| [Operations Runbook](docs/OPERATIONS-RUNBOOK.md) | Deploy, health checks, alertas, backup, restore, rollback |
+| [OpenAPI 3.0 Spec](docs/api/openapi.yaml) | Especificação completa da API REST (20 endpoints, 28 schemas) |
+| [API Reference](docs/api/README.md) | Como visualizar e usar a especificação OpenAPI |
+
+### Arquitetura
 - **Diagramas:** `docs/architecture_diagrams.md` — C4Context, C4Container, Data Flow, Security, Deployment (atuais + futuros)
 - **ADRs:** `docs/architecture/adr/` — 6 decisões arquiteturais formais
 - **Análise:** `docs/_analysis/` — Análise detalhada da plataforma
+
+### Documentos de Domínio
+- [WhatsApp Integration](docs/WHATSAPP-INTEGRATION.md) — Integração com Z-API
+- [Secrets Management](docs/SECRETS-MANAGEMENT.md) — Gestão de secrets e rotação
+- [Healthcare Invariants](docs/HEALTHCARE-INVARIANTS.md) — Invariantes clínicos e regulatórios
 
 ## 📝 Licença
 

@@ -1,6 +1,6 @@
 # ADR-002: Encaminhamento para Classificação ANVISA SaMD (RDC 657/2022)
 
-**Status:** Accepted
+**Status:** Proposed
 **Date:** 2026-06-26
 **Deciders:** Parreira (Orquestrador DevOps)
 

@@ -26,7 +26,7 @@ data:
   KAFKA_SSL_ENABLED: "false"
 
   # AWS
-  aws-region: "us-east-1"
+  aws-region: "sa-east-1"
 
   # OpenAI
   OPENAI_MODEL: "gpt-4-turbo"
@@ -81,7 +81,7 @@ data:
   kafka-brokers: "kafka-broker.kafka.svc.cluster.local:9092"
   KAFKA_CLIENT_ID: "austa-care-platform-staging"
   KAFKA_SSL_ENABLED: "false"
-  aws-region: "us-east-1"
+  aws-region: "sa-east-1"
   OPENAI_MODEL: "gpt-4-turbo"
   OPENAI_MAX_TOKENS: "2048"
   JWT_EXPIRY: "24h"

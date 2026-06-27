@@ -1,7 +1,7 @@
 # PROJECT_STATUS.md — AUSTA Care Platform
 
 **Status Global:** ⚠️ ALPHA / PRE-PRODUCTION — *não pronto para dados reais de pacientes*
-**Data:** 2026-06-26
+**Data:** 2026-06-27
 **Autor:** parreira (compliance review — Wave 3 final)
 **Plataforma:** Coordenação-Cuidado Enterprise / AUSTA Care Platform
 **Mercado:** Saúde suplementar brasileira (planos de saúde)
@@ -16,20 +16,33 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 
 ---
 
+## 🌊 Development Waves — Status Summary
+
+| Wave | Nome | Status | Concluída em | Entregáveis |
+|------|------|--------|-------------|-------------|
+| **Wave 0** | Regulatory Foundation | ✅ Complete | 2026-06-26 | HIPAA→LGPD/ANS/ANVISA (21 arquivos, migration 002), AWS us-east-1→sa-east-1 (25 .tf files, 6 módulos Terraform) |
+| **Wave 1** | Gap Analysis & Discovery | ✅ Complete | 2026-06-26 | PLATFORM-REVIEW.md (728 linhas), 3 agentes especialistas: Product/Reqs, Architecture/Data, Codebase/Infra |
+| **Wave 2** | Healthcare Invariants & Compliance | ✅ Complete | 2026-06-26 | 6/6 invariantes implementados: audit trail, idempotência, versionamento, criptografia, health check, retry. Arquitetura documentada honestamente (architecture_diagrams.md v2.0) |
+| **Wave 3** | ADRs & Final Compliance Review | ✅ Complete | 2026-06-26 | 6 Architecture Decision Records (docs/architecture/adr/), HANDOFF.yaml atualizado, PROJECT_STATUS.md consolidado |
+
+---
+
 ## ✅ O Que Funciona
 
 | Área | Status | Detalhes |
 |------|--------|----------|
 | **TypeScript** | ✅ Compila | Backend com 140+ arquivos TypeScript, Prisma ORM, Express. `tsc --noEmit` = exit code 0 (sem erros no src/) |
+| **Arquitetura Real** | ✅ Modular Monolith | TypeScript/Express monolith com 14+ módulos, PostgreSQL 15 (Prisma), Redis 7 (BullMQ), Z-API WhatsApp. Ver ADR-003. |
 | **Serviços clínicos** | ✅ Implementados | Risk assessment (1564 linhas), emergency detection (579 linhas), onboarding (958 linhas) |
 | **Audit trail** | ✅ Persistente | `prisma.auditLog.create()` em `auditService.ts`. LGPD + ANS compliance. |
-| **Criptografia em repouso** | ✅ Implementada | pgcrypto (`pgp_sym_encrypt`/`decrypt`) via `lib/crypto.ts`. Envelope encryption por tenant. |
+| **Criptografia em repouso** | ✅ Implementada | pgcrypto (`pgp_sym_encrypt`/`decrypt`) via `lib/crypto.ts`. Envelope encryption por tenant. Ver ADR-004. |
 | **CI/CD** | ✅ Corrigido | GitHub Actions pipelines corrigidos para `sa-east-1` |
 | **Kubernetes** | ✅ Manifests completos | Namespace, deployments (2), services (2), ingress, HPA, network policy, configmaps |
 | **Terraform** | ✅ 6 módulos | VPC, RDS, ElastiCache, EKS, S3, IAM — todos em `sa-east-1` |
-| **Healthcare invariants** | ✅ 6/6 verificados | Audit trail, idempotência, versionamento, criptografia, health check, retry |
-| **Framework Regulatório → LGPD/ANS/ANVISA** | ✅ Substituído | 0 referências a frameworks estrangeiros. 21 arquivos modificados, migration 002 executada |
+| **Healthcare invariants** | ✅ 6/6 verificados | Audit trail, idempotência, versionamento, criptografia, health check, retry. Ver docs/HEALTHCARE-INVARIANTS.md |
+| **Framework Regulatório → LGPD/ANS/ANVISA** | ✅ Substituído | 0 referências a frameworks estrangeiros. 21 arquivos modificados, migration 002 executada. Ver ADR-001. |
 | **Health check** | ✅ 5 endpoints | `/health`, `/health/detailed`, `/health/ready`, `/health/live`, `/health/dead-mans-switch` |
+| **ADRs** | ✅ 6 documentos | Decisões arquiteturais formais em `docs/architecture/adr/`. Ver tabela de ADRs abaixo. |
 
 ---
 
@@ -82,7 +95,7 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 
 ---
 
-## 🏗️ Build Status (verificado 2026-06-26)
+## 🏗️ Build Status (verificado 2026-06-27)
 
 | Pipeline | Status |
 |----------|--------|
@@ -93,16 +106,29 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 
 ---
 
-## 📝 Compliance Verification (2026-06-26)
+## 📝 Compliance Verification (2026-06-27)
 
-| Check | Status |
-|-------|--------|
-| Foreign regulatory references in code | ✅ 0 found |
-| pgcrypto functional | ✅ Extension loaded + encryptPHI/decryptPHI |
-| AuditLog persistent | ✅ `prisma.auditLog.create()` |
-| Algorithm versioning | ✅ `algorithm-registry.ts` (4 algorithms) |
-| WhatsApp idempotency | ✅ `whatsappMessageId @unique` |
-| Secrets not hardcoded | ✅ `${VAR}` pattern in docker-compose |
+| Check | Status | ADR |
+|-------|--------|-----|
+| Foreign regulatory references in code | ✅ 0 found | ADR-001 |
+| pgcrypto functional | ✅ Extension loaded + encryptPHI/decryptPHI | ADR-004 |
+| AuditLog persistent | ✅ `prisma.auditLog.create()` | ADR-004 |
+| Algorithm versioning | ✅ `algorithm-registry.ts` (4 algorithms) | ADR-005 |
+| WhatsApp idempotency | ✅ `whatsappMessageId @unique` | ADR-006 |
+| Secrets not hardcoded | ✅ `${VAR}` pattern in docker-compose | ADR-004 |
+
+---
+
+## 📚 Architecture Decision Records (ADRs)
+
+| ADR | Título | Status |
+|-----|--------|--------|
+| ADR-001 | Adoção do Framework Regulatório LGPD/ANS/ANVISA | Accepted |
+| ADR-002 | Classificação ANVISA SaMD (RDC 657/2022) | Proposed |
+| ADR-003 | Arquitetura Monolith-First para MVP | Accepted |
+| ADR-004 | Envelope Encryption com pgcrypto para PHI | Accepted |
+| ADR-005 | Versionamento de Algoritmos Clínicos | Accepted |
+| ADR-006 | Idempotência para Processamento de Mensagens | Accepted |
 
 ---
 
@@ -110,9 +136,11 @@ Este documento é o **ponto de entrada para stakeholders** (CTO, Diretor Médico
 
 **A plataforma está tecnicamente avançada mas regulatoriamente bloqueada.**
 
-- **Código:** Backend + Frontend + Infra completos, com 6 invariantes de healthcare verificados
-- **Regulatório:** Sem classificação ANVISA, sem RIPD LGPD — impossível processar dados reais
-- **Clínico:** Algoritmos implementados mas sem validação médica — risco clínico inaceitável
+- **Código:** Backend + Frontend + Infra completos, com 6 invariantes de healthcare verificados (Wave 2)
+- **Arquitetura:** Modular monolith TypeScript/Express + PostgreSQL + Redis — documentada honestamente em architecture_diagrams.md v2.0 e ADR-003
+- **Regulatório:** Sem classificação ANVISA (ADR-002 — Proposed), sem RIPD LGPD — impossível processar dados reais
+- **Clínico:** Algoritmos implementados mas sem validação médica — risco clínico inaceitável. Algoritmos versionados conforme ADR-005.
+- **Documentação:** 6 ADRs formais em `docs/architecture/adr/`, cobrindo regulação, arquitetura, criptografia, versionamento e idempotência
 - **Recomendação:** Priorizar contratação de especialista regulatório ANVISA + DPO antes de qualquer desenvolvimento adicional de features
 
 **Próximo passo recomendado:** Iniciar processo de classificação ANVISA SaMD (RDC 657/2022) e elaboração do RIPD LGPD em paralelo.

@@ -1,18 +1,27 @@
 openapi: "3.0.3"
 info:
   title: AUSTA Care Platform API
-  description: |
-    API RESTful da plataforma AUSTA Care — saúde integrada no Brasil.
-
-    **Domínios**: Autenticação, Usuários, Autorizações ANS, Risk Assessment,
-    Gamificação, WhatsApp Webhook, Health Checks.
-
-    **Autenticação**: Bearer JWT (Authorization: Bearer <token>).
-    **Formato de Erro Padrão**: `{ "error": "mensagem", "success": false, "timestamp": "...", "path": "...", "method": "..." }`
-
-    **LGPD Compliance**: Todos os dados de PHI/PII são criptografados com pgcrypto.
-    Endpoints de deleção implementam soft-delete conforme políticas LGPD.
   version: "1.0.0"
+  description: |
+    LGPD-compliant healthcare coordination platform for Brazilian health plans.
+
+    **Domains**: Health Checks, Authentication, Clinical Risk Assessment,
+    Gamification & Engagement, WhatsApp Webhooks via Z-API.
+
+    **Authentication**: Bearer JWT (`Authorization: Bearer <token>`).
+    Obtain tokens via `POST /api/v1/auth/login` or `POST /api/v1/auth/register`.
+
+    **Error Format** (all endpoints):
+    ```json
+    { "success": false, "error": { "code": "ERROR_CODE", "message": "..." },
+      "timestamp": "2026-06-27T...", "path": "/api/v1/...", "method": "GET" }
+    ```
+
+    **LGPD Compliance**: All PHI/PII data encrypted at rest via PostgreSQL pgcrypto
+    (envelope encryption). See ADR-004.
+
+    **Current Status (Jun 2026)**: Alpha / Pre-Production.
+    Backend is a TypeScript monolith (Express + Prisma). Not yet on Kubernetes.
   contact:
     name: AUSTA Care Platform Team
     email: dev@austa.care
@@ -21,107 +30,666 @@ info:
     url: https://austa.care/legal
 
 servers:
-  - url: http://localhost:3000
-    description: Desenvolvimento local
-  - url: https://staging-api.austa.care
-    description: Staging (homologação)
-  - url: https://api.austa.care
-    description: Produção
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.staging.austa.com.br/api/v1
+    description: Staging (planejado)
 
 tags:
   - name: Health
-    description: Health checks e monitoramento
+    description: Health checks, probes e monitoramento
   - name: Auth
-    description: Autenticação e autorização
-  - name: Users
-    description: Gerenciamento de usuários
-  - name: Authorizations
-    description: Autorizações de procedimentos (ANS)
-  - name: Risk Assessment
-    description: Avaliação de risco médico
+    description: Autenticação e autorização (JWT)
+  - name: Clinical
+    description: Algoritmos clínicos, risk assessment, detecção de emergência
   - name: Gamification
-    description: Sistema de gamificação e engajamento
+    description: Sistema de gamificação e engajamento de pacientes
   - name: WhatsApp
-    description: Webhooks e mensagens WhatsApp
+    description: Webhooks e mensagens via Z-API (WhatsApp Business)
 
-security:
-  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── General ──────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Invalid request parameters
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+        method:
+          type: string
+
+    # ── Health ───────────────────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      required: [status, timestamp, uptime, version, components]
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: number
+          description: Process uptime in seconds
+          example: 3600.5
+        version:
+          type: string
+          example: "1.0.0"
+        components:
+          type: object
+          properties:
+            database:
+              $ref: "#/components/schemas/ComponentStatus"
+            redis:
+              $ref: "#/components/schemas/ComponentStatus"
+            encryption:
+              $ref: "#/components/schemas/EncryptionStatus"
+
+    ComponentStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [up, down, degraded]
+        latencyMs:
+          type: number
+          description: Latência do health check em milissegundos
+        error:
+          type: string
+          description: Mensagem de erro se status = down
+
+    EncryptionStatus:
+      allOf:
+        - $ref: "#/components/schemas/ComponentStatus"
+        - type: object
+          properties:
+            algorithm:
+              type: string
+              example: aes256
+
+    DeadMansSwitchResponse:
+      type: object
+      required: [status, timestamp, lastActivity, idleSeconds, thresholdSeconds]
+      properties:
+        status:
+          type: string
+          enum: [alive, stale, error]
+        timestamp:
+          type: string
+          format: date-time
+        lastActivity:
+          type: string
+          format: date-time
+          description: Timestamp da última atividade registrada no sistema
+        idleSeconds:
+          type: number
+          description: Segundos desde a última atividade
+        thresholdSeconds:
+          type: number
+          description: Threshold configurado (default 300s / 5 min)
+
+    ReadyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ready, "not ready"]
+        timestamp:
+          type: string
+          format: date-time
+        database:
+          type: string
+          enum: [up, down]
+        encryption:
+          type: string
+          enum: [up, down]
+
+    LiveResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: alive
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: number
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: paciente@exemplo.com.br
+        password:
+          type: string
+          minLength: 8
+          example: senhaSegura123
+        deviceId:
+          type: string
+          description: Identificador do dispositivo para rastreamento de sessão
+
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName, cpf]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        firstName:
+          type: string
+        lastName:
+          type: string
+        cpf:
+          type: string
+          pattern: '^\d{11}$'
+          description: CPF do paciente (apenas dígitos)
+        phone:
+          type: string
+          description: Número de WhatsApp (formato +5511999999999)
+        birthDate:
+          type: string
+          format: date
+
+    AuthResponse:
+      type: object
+      properties:
+        tokens:
+          $ref: "#/components/schemas/Tokens"
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    Tokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (expira em 15 min)
+        refreshToken:
+          type: string
+          description: JWT refresh token (expira em 7 dias)
+        expiresIn:
+          type: number
+          example: 900
+        tokenType:
+          type: string
+          example: Bearer
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        cpf:
+          type: string
+        phone:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["patient"]
+        organizationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Clinical ─────────────────────────────────────────────────────────
+    AlgorithmVersion:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        deployedAt:
+          type: string
+          format: date-time
+
+    AlgorithmVersionsResponse:
+      type: object
+      properties:
+        algorithms:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlgorithmVersion"
+        timestamp:
+          type: string
+          format: date-time
+
+    SingleAlgorithmResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+
+    RiskAssessmentRequest:
+      type: object
+      required: [patientId]
+      properties:
+        patientId:
+          type: string
+          format: uuid
+        questionnaireId:
+          type: string
+          format: uuid
+          description: ID do questionário preenchido
+        responses:
+          type: object
+          description: Respostas do questionário de saúde
+        vitalSigns:
+          type: object
+          properties:
+            systolicBP:
+              type: number
+            diastolicBP:
+              type: number
+            heartRate:
+              type: number
+            temperature:
+              type: number
+            oxygenSaturation:
+              type: number
+            bloodGlucose:
+              type: number
+        clinicalHistory:
+          type: array
+          items:
+            type: string
+          description: Condições clínicas conhecidas
+
+    RiskAssessmentResponse:
+      type: object
+      properties:
+        algorithmVersion:
+          type: string
+        riskLevel:
+          type: string
+          enum: [low, moderate, high, critical]
+          description: Nível de risco calculado
+        score:
+          type: number
+          description: Score numérico (0-100)
+        factors:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              weight:
+                type: number
+              value:
+                type: number
+        recommendations:
+          type: array
+          items:
+            type: string
+        requiresImmediateAttention:
+          type: boolean
+
+    EmergencyDetectionRequest:
+      type: object
+      required: [riskAssessmentId, organizationId]
+      properties:
+        riskAssessmentId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+
+    EmergencyAlert:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [immediate, critical, high]
+        severity:
+          type: string
+        message:
+          type: string
+        recommendedAction:
+          type: string
+
+    EmergencyDetectionResponse:
+      type: object
+      properties:
+        algorithmVersion:
+          type: string
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmergencyAlert"
+        count:
+          type: integer
+
+    # ── Gamification ─────────────────────────────────────────────────────
+    HealthPointsResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        totalPoints:
+          type: integer
+          example: 1250
+        availablePoints:
+          type: integer
+        currentLevel:
+          type: integer
+          example: 5
+        experiencePoints:
+          type: integer
+        nextLevelAt:
+          type: integer
+          example: 600
+        rank:
+          type: string
+          enum: [Bronze, Silver, Gold]
+
+    PointsHistoryResponse:
+      type: object
+      properties:
+        pointsHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              points:
+                type: integer
+              reason:
+                type: string
+              category:
+                type: string
+              earnedAt:
+                type: string
+                format: date-time
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+        summary:
+          type: object
+          properties:
+            totalPoints:
+              type: integer
+            pointsThisWeek:
+              type: integer
+            pointsThisMonth:
+              type: integer
+
+    Mission:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [health_tracking, engagement, education, achievement, referral]
+        pointsReward:
+          type: integer
+        isActive:
+          type: boolean
+
+    ProgressResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        level:
+          type: integer
+        totalPoints:
+          type: integer
+        achievements:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
+              progress:
+                type: integer
+              target:
+                type: integer
+              reward:
+                type: integer
+              status:
+                type: string
+                enum: [completed, in_progress]
+        streaks:
+          type: object
+          properties:
+            current:
+              type: integer
+            longest:
+              type: integer
+            lastActivity:
+              type: string
+              format: date-time
+
+    # ── WhatsApp ─────────────────────────────────────────────────────────
+    WhatsAppWebhookRequest:
+      type: object
+      properties:
+        entry:
+          type: array
+          items:
+            type: object
+            properties:
+              changes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      enum: [messages]
+                    value:
+                      type: object
+                      properties:
+                        messages:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/WhatsAppInboundMessage"
+                        statuses:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/WhatsAppStatusUpdate"
+
+    WhatsAppInboundMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          description: WhatsApp message ID (usado para idempotência)
+        from:
+          type: string
+          description: Número do remetente
+        type:
+          type: string
+          enum: [text, image, audio, video, document, location, interactive]
+        timestamp:
+          type: string
+        text:
+          type: object
+          properties:
+            body:
+              type: string
+
+    WhatsAppStatusUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          description: WhatsApp message ID
+        status:
+          type: string
+          enum: [sent, delivered, read, failed]
+        timestamp:
+          type: string
 
 paths:
-  # ==========================================================================
+  # ═══════════════════════════════════════════════════════════════════════
   # HEALTH
-  # ==========================================================================
+  # ═══════════════════════════════════════════════════════════════════════
   /health:
     get:
       tags: [Health]
-      summary: Health check básico (liveness probe)
-      description: Retorna status do serviço, uptime e uso de memória.
+      summary: Component-level health check
+      description: |
+        Verifica todos os componentes do sistema (database, Redis, pgcrypto encryption)
+        com medição de latência. Redis é opcional — o sistema opera em modo degradado
+        sem cache se Redis estiver indisponível.
       operationId: getHealth
       security: []
       responses:
         "200":
-          description: Serviço saudável
+          description: Sistema saudável (database + encryption OK, Redis opcional)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: healthy
+                timestamp: "2026-06-27T12:00:00.000Z"
+                uptime: 3600.5
+                version: "1.0.0"
+                components:
+                  database:
+                    status: up
+                    latencyMs: 2
+                  redis:
+                    status: up
+                    latencyMs: 1
+                  encryption:
+                    status: up
+                    latencyMs: 5
+                    algorithm: aes256
         "503":
-          description: Serviço indisponível
+          description: Sistema degradado ou indisponível
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /health/detailed:
-    get:
-      tags: [Health]
-      summary: Health check detalhado (componentes)
-      description: Verifica database, Redis, e pgcrypto encryption.
-      operationId: getHealthDetailed
-      security: []
-      responses:
-        "200":
-          description: Todos os componentes saudáveis
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DetailedHealthResponse"
-        "503":
-          description: Um ou mais componentes degradados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DetailedHealthResponse"
+                $ref: "#/components/schemas/HealthResponse"
 
   /health/dead-mans-switch:
     get:
       tags: [Health]
-      summary: Dead man's switch para monitoramento externo
-      description: >
-        Endpoint para Prometheus Blackbox Exporter verificar se o sistema
-        continua processando atividade. Retorna 200 se ativo ou 503 se
-        `lastActivityTimestamp` estiver stale (> threshold).
+      summary: Dead man's switch endpoint
+      description: |
+        Endpoint para monitoramento externo (Prometheus Blackbox Exporter).
+        Retorna o timestamp da última atividade do sistema.
+        Se `idleSeconds` exceder `thresholdSeconds` (default 300s / 5 min),
+        retorna status "stale" com HTTP 503 para disparar alertas.
       operationId: getDeadMansSwitch
       security: []
       responses:
         "200":
-          description: Sistema ativo
+          description: Sistema ativo — atividade recente dentro do threshold
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeadMansSwitchResponse"
+              example:
+                status: alive
+                timestamp: "2026-06-27T12:00:00.000Z"
+                lastActivity: "2026-06-27T11:59:55.000Z"
+                idleSeconds: 5
+                thresholdSeconds: 300
         "503":
-          description: Sistema stale — sem atividade recente
+          description: Sistema stale — sem atividade por mais tempo que o threshold
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeadMansSwitchResponse"
+              example:
+                status: stale
+                timestamp: "2026-06-27T12:00:00.000Z"
+                lastActivity: "2026-06-27T11:50:00.000Z"
+                idleSeconds: 600
+                thresholdSeconds: 300
 
   /health/ready:
     get:
       tags: [Health]
-      summary: Readiness probe (Kubernetes)
-      description: Verifica se serviços críticos estão prontos (DB + encryption).
+      summary: Readiness probe
+      description: |
+        Verifica apenas serviços críticos: database e pgcrypto encryption.
+        Usado como readiness probe para Kubernetes ou load balancers.
+        Não verifica Redis (é opcional para operação).
       operationId: getReadiness
       security: []
       responses:
@@ -130,25 +698,30 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ready
-                  timestamp:
-                    type: string
-                    format: date-time
+                $ref: "#/components/schemas/ReadyResponse"
+              example:
+                status: ready
+                timestamp: "2026-06-27T12:00:00.000Z"
         "503":
-          description: Não está pronto
+          description: Não está pronto — database ou encryption indisponível
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ReadyResponse"
+              example:
+                status: "not ready"
+                timestamp: "2026-06-27T12:00:00.000Z"
+                database: up
+                encryption: down
 
   /health/live:
     get:
       tags: [Health]
-      summary: Liveness probe (Kubernetes)
+      summary: Liveness probe
+      description: |
+        Probe leve que apenas verifica se o processo está rodando.
+        Não verifica dependências externas. Usado como liveness probe
+        para Kubernetes (reinicia o pod se falhar).
       operationId: getLiveness
       security: []
       responses:
@@ -157,25 +730,69 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: alive
-                  timestamp:
-                    type: string
-                    format: date-time
-                  uptime:
-                    type: number
-                    example: 3600.5
+                $ref: "#/components/schemas/LiveResponse"
+              example:
+                status: alive
+                timestamp: "2026-06-27T12:00:00.000Z"
+                uptime: 3600.5
 
-  # ==========================================================================
+  # ═══════════════════════════════════════════════════════════════════════
   # AUTH
-  # ==========================================================================
-  /api/v1/auth/register:
+  # ═══════════════════════════════════════════════════════════════════════
+  /auth/login:
     post:
       tags: [Auth]
-      summary: Registrar novo usuário
+      summary: Login
+      description: |
+        Autentica usuário e retorna JWT access token + refresh token.
+        ⚠️ NOTA (Jun 2026): Endpoint registrado mas implementação pendente (retorna 501).
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login realizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit excedido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Endpoint não implementado ainda
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register
+      description: |
+        Registra novo usuário (paciente) na plataforma.
+        ⚠️ NOTA (Jun 2026): Endpoint registrado mas implementação pendente (retorna 501).
       operationId: register
       security: []
       requestBody:
@@ -192,48 +809,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
-          description: Dados inválidos
+          description: Dados inválidos ou CPF já cadastrado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ValidationErrorResponse"
+                $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Rate limit excedido
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /api/v1/auth/login:
-    post:
-      tags: [Auth]
-      summary: Autenticar usuário
-      operationId: login
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Login realizado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthResponse"
-        "401":
-          description: Credenciais inválidas
+        "501":
+          description: Endpoint não implementado ainda
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/auth/refresh:
+  /auth/refresh:
     post:
       tags: [Auth]
-      summary: Renovar access token
+      summary: Refresh JWT token
+      description: |
+        Renova o access token usando um refresh token válido.
+        ⚠️ NOTA (Jun 2026): Endpoint registrado mas implementação pendente (retorna 501).
       operationId: refreshToken
       security: []
       requestBody:
@@ -258,30 +858,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /api/v1/auth/logout:
-    post:
-      tags: [Auth]
-      summary: Logout (invalida tokens)
-      operationId: logout
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Logout realizado
+        "501":
+          description: Endpoint não implementado ainda
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Logout successful
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/auth/me:
+  /auth/me:
     get:
       tags: [Auth]
-      summary: Obter usuário autenticado atual
+      summary: Get current user
+      description: Retorna o perfil do usuário autenticado a partir do JWT.
       operationId: getCurrentUser
       security:
         - bearerAuth: []
@@ -291,470 +879,86 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfile"
-        "401":
-          description: Não autenticado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/v1/auth/session:
-    get:
-      tags: [Auth]
-      summary: Validar sessão
-      description: Retorna se há uma sessão autenticada (auth opcional).
-      operationId: validateSession
-      security: []
-      responses:
-        "200":
-          description: Status da sessão
-          content:
-            application/json:
-              schema:
                 type: object
                 properties:
-                  authenticated:
-                    type: boolean
-                    example: true
                   user:
                     $ref: "#/components/schemas/UserProfile"
-
-  /api/v1/auth/forgot-password:
-    post:
-      tags: [Auth]
-      summary: Solicitar reset de senha
-      operationId: forgotPassword
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email]
-              properties:
-                email:
-                  type: string
-                  format: email
-      responses:
-        "200":
-          description: Email enviado (se conta existir)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-
-  /api/v1/auth/reset-password:
-    post:
-      tags: [Auth]
-      summary: Resetar senha com token
-      operationId: resetPassword
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token, password]
-              properties:
-                token:
-                  type: string
-                password:
-                  type: string
-                  minLength: 8
-      responses:
-        "200":
-          description: Senha alterada
-        "400":
-          description: Token inválido ou expirado
-
-  /api/v1/auth/change-password:
-    post:
-      tags: [Auth]
-      summary: Alterar senha (autenticado)
-      operationId: changePassword
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [currentPassword, newPassword]
-              properties:
-                currentPassword:
-                  type: string
-                newPassword:
-                  type: string
-                  minLength: 8
-      responses:
-        "200":
-          description: Senha alterada com sucesso
-
-  /api/v1/auth/verify-email:
-    post:
-      tags: [Auth]
-      summary: Verificar email
-      operationId: verifyEmail
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token]
-              properties:
-                token:
-                  type: string
-      responses:
-        "200":
-          description: Email verificado
-
-  # ==========================================================================
-  # USERS
-  # ==========================================================================
-  /api/v1/users:
-    get:
-      tags: [Users]
-      summary: Listar usuários (admin)
-      operationId: listUsers
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
-        - name: limit
-          in: query
-          schema: { type: integer, default: 20, maximum: 100 }
-        - name: search
-          in: query
-          schema: { type: string }
-        - name: role
-          in: query
-          schema: { type: string }
-        - name: status
-          in: query
-          schema: { type: string, enum: [active, inactive, suspended] }
-        - name: sortBy
-          in: query
-          schema: { type: string, enum: [createdAt, name, email], default: createdAt }
-        - name: sortOrder
-          in: query
-          schema: { type: string, enum: [asc, desc], default: desc }
-      responses:
-        "200":
-          description: Lista paginada de usuários
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserListResponse"
-        "403":
-          description: Acesso negado (requer admin)
+        "401":
+          description: Token ausente, inválido ou expirado
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-    post:
-      tags: [Users]
-      summary: Criar usuário (admin)
-      operationId: createUser
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUserRequest"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # CLINICAL
+  # ═══════════════════════════════════════════════════════════════════════
+  /clinical/algorithm-versions:
+    get:
+      tags: [Clinical]
+      summary: List all registered clinical algorithm versions
+      description: |
+        Retorna todas as versões de algoritmos clínicos registrados no sistema.
+        Inclui risk-assessment, emergency-detection, e outros algoritmos de IA clínica.
+        Endpoint público — não requer autenticação.
+        Ver ADR-005 para política de versionamento de algoritmos.
+      operationId: listAlgorithmVersions
+      security: []
       responses:
-        "201":
-          description: Usuário criado
+        "200":
+          description: Lista de algoritmos com versões e metadados
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfile"
+                $ref: "#/components/schemas/AlgorithmVersionsResponse"
+              example:
+                algorithms:
+                  - name: risk-assessment
+                    version: "2.1.0"
+                    description: Avaliação de risco multifatorial com ML
+                    deployedAt: "2026-06-15T00:00:00.000Z"
+                  - name: emergency-detection
+                    version: "1.3.0"
+                    description: Detecção de emergências a partir de risk scores
+                    deployedAt: "2026-06-10T00:00:00.000Z"
+                timestamp: "2026-06-27T12:00:00.000Z"
 
-  /api/v1/users/{userId}:
+  /clinical/algorithm-version/{name}:
     get:
-      tags: [Users]
-      summary: Obter usuário por ID
-      operationId: getUserById
-      security:
-        - bearerAuth: []
+      tags: [Clinical]
+      summary: Get version of a specific algorithm
+      operationId: getAlgorithmVersion
+      security: []
       parameters:
-        - name: userId
+        - name: name
           in: path
           required: true
           schema:
             type: string
-            format: uuid
+            example: risk-assessment
       responses:
         "200":
-          description: Dados do usuário
+          description: Versão do algoritmo
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfile"
-        "403":
-          description: Acesso negado
+                $ref: "#/components/schemas/SingleAlgorithmResponse"
         "404":
-          description: Usuário não encontrado
-    put:
-      tags: [Users]
-      summary: Atualizar usuário
-      operationId: updateUser
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateUserRequest"
-      responses:
-        "200":
-          description: Usuário atualizado
+          description: Algoritmo não registrado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfile"
-    delete:
-      tags: [Users]
-      summary: Soft-delete usuário (LGPD)
-      operationId: deleteUser
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Deleção agendada (soft delete LGPD)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message: { type: string }
-                  userId: { type: string }
-                  note: { type: string }
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/users/{userId}/profile:
-    get:
-      tags: [Users]
-      summary: Perfil detalhado com health data
-      operationId: getUserProfile
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Perfil completo
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserProfile"
-
-  /api/v1/users/{userId}/activity:
-    get:
-      tags: [Users]
-      summary: Histórico de atividades do usuário
-      operationId: getUserActivity
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Lista de atividades
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  activities:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/UserActivity"
-
-  # ==========================================================================
-  # AUTHORIZATIONS
-  # ==========================================================================
-  /api/v1/authorizations:
+  /clinical/risk-assessment:
     post:
-      tags: [Authorizations]
-      summary: Criar autorização de procedimento
-      description: >
-        Inicia fluxo de autorização conforme regulação ANS.
-        Estados: initiated → document_collection → medical_review →
-        administrative_review → approved/rejected.
-      operationId: createAuthorization
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateAuthorizationRequest"
-      responses:
-        "201":
-          description: Autorização criada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Authorization"
-        "400":
-          description: Dados inválidos
-
-  /api/v1/authorizations/{authorizationId}:
-    get:
-      tags: [Authorizations]
-      summary: Obter autorização por ID
-      operationId: getAuthorization
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: authorizationId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: "^auth-\\d+-[a-z0-9]+$"
-      responses:
-        "200":
-          description: Detalhes da autorização
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Authorization"
-
-  /api/v1/authorizations/{authorizationId}/action:
-    post:
-      tags: [Authorizations]
-      summary: Executar ação no workflow
-      operationId: executeAction
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: authorizationId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ExecuteActionRequest"
-      responses:
-        "200":
-          description: Ação executada
-
-  /api/v1/authorizations/{authorizationId}/documents:
-    post:
-      tags: [Authorizations]
-      summary: Upload de documentos
-      operationId: uploadDocuments
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: authorizationId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                documents:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
-                  description: "JPEG, PNG, PDF, TIFF — máx 10MB cada, até 10 arquivos"
-      responses:
-        "200":
-          description: Documentos processados
-
-  /api/v1/authorizations/search:
-    get:
-      tags: [Authorizations]
-      summary: Buscar autorizações com filtros
-      operationId: searchAuthorizations
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: patientId
-          in: query
-          schema: { type: string, format: uuid }
-        - name: state
-          in: query
-          schema:
-            type: string
-            enum: [initiated, document_collection, medical_review, administrative_review, approved, rejected, appealed, canceled, on_hold]
-        - name: urgency
-          in: query
-          schema:
-            type: string
-            enum: [low, medium, high, urgent, emergency]
-        - name: limit
-          in: query
-          schema: { type: integer, default: 20 }
-        - name: offset
-          in: query
-          schema: { type: integer, default: 0 }
-      responses:
-        "200":
-          description: Resultados da busca
-
-  # ==========================================================================
-  # RISK ASSESSMENT
-  # ==========================================================================
-  /api/v1/risk-assessment/assess:
-    post:
-      tags: [Risk Assessment]
-      summary: Avaliação de risco médico
-      description: >
-        Processa questionário de saúde e retorna análise com:
-        nível de risco (low/moderate/high/critical), fatores identificados,
-        e recomendações.
-      operationId: assessRisk
+      tags: [Clinical]
+      summary: Run risk assessment
+      description: |
+        Executa o pipeline de avaliação de risco avançada com base nas respostas
+        do questionário, sinais vitais e histórico clínico do paciente.
+        Utiliza o algoritmo registrado (versionado conforme ADR-005).
+      operationId: runRiskAssessment
       security:
         - bearerAuth: []
       requestBody:
@@ -765,26 +969,39 @@ paths:
               $ref: "#/components/schemas/RiskAssessmentRequest"
       responses:
         "200":
-          description: Resultado da avaliação
+          description: Resultado da avaliação de risco
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RiskAssessmentResponse"
+        "400":
+          description: Dados inválidos ou paciente não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
-          description: Erro no processamento
+          description: Erro no pipeline de avaliação
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/risk-assessment/emergency:
+  /clinical/emergency-detection:
     post:
-      tags: [Risk Assessment]
-      summary: Reavaliação de emergência
-      description: >
-        Para sintomas urgentes. Retorna screening de emergência e ações imediatas.
-        Em caso de emergência real, sempre orienta ligar 192 (SAMU).
-      operationId: emergencyReassessment
+      tags: [Clinical]
+      summary: Run emergency detection
+      description: |
+        Executa detecção de emergências com base em um risk assessment já realizado.
+        Retorna alertas classificados por severidade (immediate, critical, high).
+        Pode disparar escalação automática se configurado.
+      operationId: runEmergencyDetection
       security:
         - bearerAuth: []
       requestBody:
@@ -792,155 +1009,43 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EmergencyReassessmentRequest"
+              $ref: "#/components/schemas/EmergencyDetectionRequest"
       responses:
         "200":
-          description: Screening de emergência
+          description: Alertas de emergência detectados (pode ser array vazio)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EmergencyResponse"
-
-  /api/v1/risk-assessment/user/{userId}/summary:
-    get:
-      tags: [Risk Assessment]
-      summary: Dashboard de risco do usuário
-      operationId: getUserRiskSummary
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Resumo de risco atual
+                $ref: "#/components/schemas/EmergencyDetectionResponse"
+        "400":
+          description: Dados inválidos
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  userId: { type: string }
-                  currentRiskLevel:
-                    type: string
-                    enum: [low, moderate, high, critical]
-                  lastAssessment: { type: string, format: date-time }
-                  activeAlerts: { type: array, items: { type: object } }
-                  trends:
-                    type: object
-                    properties:
-                      cardiovascular: { type: string }
-                      diabetes: { type: string }
-                      mentalHealth: { type: string }
-                      respiratory: { type: string }
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Erro na detecção de emergência
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/risk-assessment/temporal/{userId}:
-    get:
-      tags: [Risk Assessment]
-      summary: Relatório temporal de progressão de risco
-      operationId: getTemporalRiskReport
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: timeframe
-          in: query
-          schema:
-            type: string
-            enum: [90d, 180d, 1y]
-            default: 90d
-      responses:
-        "200":
-          description: Relatório temporal
-
-  # ==========================================================================
+  # ═══════════════════════════════════════════════════════════════════════
   # GAMIFICATION
-  # ==========================================================================
-  /api/v1/gamification/status:
+  # ═══════════════════════════════════════════════════════════════════════
+  /gamification/user/{userId}/profile:
     get:
       tags: [Gamification]
-      summary: Status geral da gamificação
-      description: Retorna estatísticas globais, badges disponíveis e leaderboard atual.
-      operationId: getGamificationStatus
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Status de gamificação
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  stats:
-                    $ref: "#/components/schemas/GamificationStats"
-                  badges:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Badge"
-                  leaderboard:
-                    $ref: "#/components/schemas/Leaderboard"
-
-  /api/v1/gamification/leaderboard:
-    get:
-      tags: [Gamification]
-      summary: Leaderboard
-      operationId: getLeaderboard
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: timeframe
-          in: query
-          schema:
-            type: string
-            enum: [daily, weekly, monthly, all_time]
-            default: weekly
-        - name: limit
-          in: query
-          schema: { type: integer, default: 10 }
-        - name: category
-          in: query
-          schema:
-            type: string
-            enum: [health_tracking, engagement, education, achievement, referral, overall]
-      responses:
-        "200":
-          description: Leaderboard
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Leaderboard"
-
-  /api/v1/gamification/badges:
-    get:
-      tags: [Gamification]
-      summary: Listar todos os badges disponíveis
-      operationId: listBadges
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Lista de badges
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  badges:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Badge"
-
-  /api/v1/gamification/user/{userId}/profile:
-    get:
-      tags: [Gamification]
-      summary: Perfil de gamificação do usuário
+      summary: Get user gamification profile
+      description: |
+        Retorna o perfil completo de gamificação do usuário: nível, pontos,
+        badges, achievements, streaks e estatísticas.
       operationId: getUserGamificationProfile
       security:
         - bearerAuth: []
@@ -953,119 +1058,276 @@ paths:
             format: uuid
       responses:
         "200":
-          description: Perfil de gamificação
+          description: Perfil de gamificação do usuário
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GamificationProfile"
+                $ref: "#/components/schemas/ProgressResponse"
+        "403":
+          description: Acesso negado (usuário só pode ver o próprio perfil, admin pode ver qualquer)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/gamification/points/award:
-    post:
+  /gamification/user/{userId}/healthpoints:
+    get:
       tags: [Gamification]
-      summary: Conceder pontos (admin)
-      operationId: awardPoints
+      summary: Get user health points and history
+      description: |
+        Retorna o histórico de pontos de saúde do usuário com sumário
+        semanal e mensal, além do total acumulado.
+      operationId: getUserHealthPoints
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [userId, points, reason, category]
-              properties:
-                userId:
-                  type: string
-                  format: uuid
-                points:
-                  type: integer
-                  minimum: 1
-                reason:
-                  type: string
-                category:
-                  type: string
-                  enum: [health_tracking, engagement, education, achievement, referral]
-                metadata:
-                  type: object
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
-        "201":
-          description: Pontos concedidos
+        "200":
+          description: Histórico de pontos com sumário
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointsHistoryResponse"
+        "403":
+          description: Acesso negado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  # ==========================================================================
-  # WHATSAPP
-  # ==========================================================================
-  /api/v1/webhooks/whatsapp/webhook:
+  /gamification/user/{userId}/achievements:
+    get:
+      tags: [Gamification]
+      summary: Get user onboarding progress and achievements
+      description: |
+        Retorna o progresso do usuário em todas as achievements (conquistas).
+        Inclui status de cada achievement (completed/in_progress).
+      operationId: getUserAchievements
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Lista de achievements com progresso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  achievements:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        progress:
+                          type: integer
+                        target:
+                          type: integer
+                        reward:
+                          type: integer
+                        status:
+                          type: string
+                          enum: [completed, in_progress]
+                  completed:
+                    type: integer
+                  inProgress:
+                    type: integer
+        "403":
+          description: Acesso negado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /gamification/leaderboard:
+    get:
+      tags: [Gamification]
+      summary: Get leaderboard
+      description: Ranking de usuários por pontos de saúde.
+      operationId: getLeaderboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, all_time]
+            default: weekly
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [health_tracking, engagement, education, achievement, referral, overall]
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leaderboard:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rank:
+                          type: integer
+                        userId:
+                          type: string
+                        userName:
+                          type: string
+                        points:
+                          type: integer
+                        level:
+                          type: integer
+                  timeframe:
+                    type: string
+                  userPosition:
+                    type: object
+                    nullable: true
+
+  /gamification/badges:
+    get:
+      tags: [Gamification]
+      summary: List all available badges
+      operationId: listBadges
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista de badges disponíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  badges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        icon:
+                          type: string
+                        rarity:
+                          type: string
+                          enum: [common, rare, epic]
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # WHATSAPP WEBHOOKS
+  # ═══════════════════════════════════════════════════════════════════════
+  /webhooks/whatsapp/webhook:
     get:
       tags: [WhatsApp]
-      summary: Verificação de webhook WhatsApp
-      description: >
-        Endpoint de verificação do webhook da Meta (anteriormente Facebook).
-        A Meta envia `hub.mode`, `hub.verify_token`, e `hub.challenge`.
+      summary: WhatsApp webhook verification
+      description: |
+        Endpoint de verificação para o Z-API (WhatsApp Business API).
+        O Z-API envia uma requisição GET com hub.mode, hub.verify_token e hub.challenge
+        para verificar que o webhook está configurado corretamente.
+        Responde com o challenge se o token for válido.
       operationId: verifyWhatsAppWebhook
       security: []
       parameters:
         - name: hub.mode
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
+          description: Deve ser "subscribe"
         - name: hub.verify_token
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
+          description: Token configurado no Z-API (WHATSAPP_VERIFY_TOKEN)
         - name: hub.challenge
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
+          description: Valor a ser retornado para confirmar a verificação
       responses:
         "200":
-          description: Webhook verificado — retorna challenge
+          description: Verificação bem sucedida — retorna o challenge
           content:
             text/plain:
               schema:
                 type: string
         "403":
-          description: Verificação falhou
-
+          description: Token de verificação inválido
     post:
       tags: [WhatsApp]
-      summary: Receber mensagens WhatsApp (webhook)
-      description: >
-        Endpoint principal do webhook da Meta para receber mensagens,
-        status updates, e outros eventos.
-      operationId: receiveWhatsAppMessage
+      summary: WhatsApp incoming webhook
+      description: |
+        Recebe mensagens e status updates do WhatsApp via Z-API.
+        **Idempotente**: Mensagens duplicadas são detectadas pelo whatsappMessageId
+        e ignoradas (ver ADR-006).
+        Processa:
+        - Mensagens recebidas (persiste no banco, cria/atualiza conversa)
+        - Status updates (sent, delivered, read, failed)
+      operationId: receiveWhatsAppWebhook
       security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                entry:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      changes:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            field:
-                              type: string
-                              enum: [messages]
-                            value:
-                              type: object
+              $ref: "#/components/schemas/WhatsAppWebhookRequest"
       responses:
         "200":
-          description: Mensagem recebida e processada
+          description: Webhook processado com sucesso
         "400":
           description: Payload inválido
+        "500":
+          description: Erro interno no processamento
 
-  /api/v1/webhooks/whatsapp/send:
+  /webhooks/whatsapp/send:
     post:
       tags: [WhatsApp]
-      summary: Enviar mensagem WhatsApp
+      summary: Send WhatsApp message
+      description: Envia mensagem via Z-API e persiste no banco de dados.
       operationId: sendWhatsAppMessage
       security:
         - bearerAuth: []
@@ -1074,732 +1336,149 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SendWhatsAppMessageRequest"
+              type: object
+              required: [to, type]
+              properties:
+                to:
+                  type: string
+                  pattern: '^\+\d{10,15}$'
+                  description: Número do destinatário (WhatsApp)
+                  example: "+5511999999999"
+                type:
+                  type: string
+                  enum: [text, template, interactive]
+                  default: text
+                text:
+                  type: object
+                  properties:
+                    body:
+                      type: string
+                      description: Corpo da mensagem de texto
+                template:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    language:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          example: pt_BR
+                    components:
+                      type: array
+                      items: {}
       responses:
         "201":
-          description: Mensagem enviada
+          description: Mensagem enviada com sucesso
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WhatsAppMessage"
+                type: object
+                properties:
+                  id:
+                    type: string
+                  to:
+                    type: string
+                  type:
+                    type: string
+                  status:
+                    type: string
+                    example: sent
+                  timestamp:
+                    type: string
+                    format: date-time
+                  zapiResponse:
+                    type: object
+        "400":
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /api/v1/webhooks/whatsapp/messages:
+  /webhooks/whatsapp/messages:
     get:
       tags: [WhatsApp]
-      summary: Histórico de mensagens
+      summary: Get WhatsApp message history
+      description: Retorna histórico paginado de mensagens WhatsApp com filtros.
       operationId: getWhatsAppMessages
       security:
         - bearerAuth: []
       parameters:
         - name: page
           in: query
-          schema: { type: integer, default: 1 }
+          schema:
+            type: integer
+            default: 1
         - name: limit
           in: query
-          schema: { type: integer, default: 50 }
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: phoneNumber
+          in: query
+          schema:
+            type: string
         - name: status
           in: query
           schema:
             type: string
             enum: [sent, delivered, read, failed]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
-          description: Lista de mensagens
-
-# ============================================================================
-# COMPONENTS
-# ============================================================================
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: |
-        JWT obtido via /api/v1/auth/login ou /api/v1/auth/register.
-        Formato: `Authorization: Bearer <accessToken>`
-
-  schemas:
-    # -----------------------------------------------------------------------
-    # Error
-    # -----------------------------------------------------------------------
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-          description: Mensagem de erro
-        success:
-          type: boolean
-          example: false
-        timestamp:
-          type: string
-          format: date-time
-        path:
-          type: string
-        method:
-          type: string
-      example:
-        error: "Access denied. No token provided."
-        success: false
-        timestamp: "2025-06-26T10:30:00.000Z"
-        path: "/api/v1/users"
-        method: "GET"
-
-    ValidationErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Validation Error"
-        details:
-          type: array
-          items:
-            type: object
-            properties:
-              field:
-                type: string
-              message:
-                type: string
-
-    # -----------------------------------------------------------------------
-    # Health
-    # -----------------------------------------------------------------------
-    HealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [healthy, unhealthy]
-        timestamp:
-          type: string
-          format: date-time
-        uptime:
-          type: number
-        environment:
-          type: string
-        version:
-          type: string
-        memory:
-          type: object
-          properties:
-            used:
-              type: number
-              description: Heap usado em MB
-            total:
-              type: number
-            external:
-              type: number
-        services:
-          type: object
-          properties:
-            api: { type: string }
-            database: { type: string }
-            redis: { type: string }
-            encryption: { type: string }
-
-    DetailedHealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [healthy, degraded, unhealthy]
-        timestamp: { type: string, format: date-time }
-        uptime: { type: number }
-        environment: { type: string }
-        version: { type: string }
-        services:
-          type: object
-          properties:
-            database: { type: string }
-            redis: { type: string }
-            encryption: { type: string }
-        checks:
-          type: array
-          items:
-            type: object
-            properties:
-              service: { type: string }
-              status: { type: string }
-              error: { type: string }
-
-    DeadMansSwitchResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [alive, stale, error]
-        timestamp: { type: string, format: date-time }
-        lastActivity: { type: string, format: date-time }
-        idleSeconds: { type: integer }
-        thresholdSeconds: { type: integer }
-
-    # -----------------------------------------------------------------------
-    # Auth
-    # -----------------------------------------------------------------------
-    RegisterRequest:
-      type: object
-      required: [email, password, name]
-      properties:
-        email:
-          type: string
-          format: email
-          example: "maria@example.com"
-        password:
-          type: string
-          minLength: 8
-          description: "Mín 8 chars, 1 maiúscula, 1 minúscula, 1 número, 1 especial"
-          example: "Maria@2025!"
-        name:
-          type: string
-          minLength: 2
-          example: "Maria Silva"
-        phone:
-          type: string
-          example: "+5511987654321"
-        cpf:
-          type: string
-          example: "12345678900"
-        dateOfBirth:
-          type: string
-          format: date-time
-        gender:
-          type: string
-          enum: [M, F, Other]
-
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-          example: "maria@example.com"
-        password:
-          type: string
-          example: "Maria@2025!"
-        rememberMe:
-          type: boolean
-          default: false
-          description: "Se true, token expira em 30 dias ao invés de 1 hora"
-
-    RefreshTokenRequest:
-      type: object
-      required: [refreshToken]
-      properties:
-        refreshToken:
-          type: string
-
-    Tokens:
-      type: object
-      properties:
-        accessToken:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIs..."
-        refreshToken:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIs..."
-        expiresIn:
-          type: integer
-          example: 3600
-
-    AuthResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          example: "Login successful"
-        user:
-          $ref: "#/components/schemas/UserProfile"
-        tokens:
-          $ref: "#/components/schemas/Tokens"
-
-    # -----------------------------------------------------------------------
-    # Users
-    # -----------------------------------------------------------------------
-    UserProfile:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          example: "123e4567-e89b-12d3-a456-426614174000"
-        email:
-          type: string
-          format: email
-          example: "maria@example.com"
-        name:
-          type: string
-          example: "Maria Silva"
-        phone:
-          type: string
-          example: "+5511987654321"
-        cpf:
-          type: string
-          description: "Mascarado por segurança"
-          example: "***.***.***-**"
-        dateOfBirth:
-          type: string
-          format: date
-          example: "1990-01-15"
-        gender:
-          type: string
-          enum: [M, F, Other]
-        roles:
-          type: array
-          items:
-            type: string
-          example: ["user"]
-        permissions:
-          type: array
-          items:
-            type: string
-        status:
-          type: string
-          enum: [active, inactive, suspended]
-        emailVerified:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-        lastLogin:
-          type: string
-          format: date-time
-        preferences:
-          type: object
-        metadata:
-          type: object
-        address:
-          type: object
-          properties:
-            street: { type: string }
-            city: { type: string }
-            state: { type: string }
-            zipCode: { type: string }
-        healthData:
-          type: object
-          properties:
-            bloodType: { type: string }
-            allergies: { type: array, items: { type: string } }
-            chronicConditions: { type: array, items: { type: string } }
-        statistics:
-          type: object
-          properties:
-            totalConversations: { type: integer }
-            totalAssessments: { type: integer }
-            lastActivity: { type: string, format: date-time }
-
-    CreateUserRequest:
-      type: object
-      required: [email, password, name]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-        name:
-          type: string
-          minLength: 2
-        phone:
-          type: string
-        cpf:
-          type: string
-        roles:
-          type: array
-          items:
-            type: string
-          default: ["user"]
-
-    UpdateUserRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-        name:
-          type: string
-          minLength: 2
-        phone:
-          type: string
-        cpf:
-          type: string
-        dateOfBirth:
-          type: string
-          format: date-time
-        gender:
-          type: string
-          enum: [M, F, Other]
-        preferences:
-          type: object
-        metadata:
-          type: object
-
-    UserListResponse:
-      type: object
-      properties:
-        users:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserProfile"
-        pagination:
-          type: object
-          properties:
-            page: { type: integer }
-            limit: { type: integer }
-            total: { type: integer }
-            totalPages: { type: integer }
-
-    UserActivity:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          description: "login, conversation_started, assessment_completed, etc."
-        timestamp:
-          type: string
-          format: date-time
-        metadata:
-          type: object
-
-    # -----------------------------------------------------------------------
-    # Authorizations
-    # -----------------------------------------------------------------------
-    CreateAuthorizationRequest:
-      type: object
-      required: [patientId, providerId, procedureId, requestedDate, urgency, clinicalJustification, estimatedCost]
-      properties:
-        patientId:
-          type: string
-          format: uuid
-        providerId:
-          type: string
-          format: uuid
-        procedureId:
-          type: string
-          description: "Código TUSS ou identificador do procedimento"
-        requestedDate:
-          type: string
-          format: date-time
-        preferredDate:
-          type: string
-          format: date-time
-        urgency:
-          type: string
-          enum: [low, medium, high, urgent, emergency]
-        clinicalJustification:
-          type: string
-          minLength: 20
-        estimatedCost:
-          type: number
-          minimum: 0
-          exclusiveMinimum: true
-        requiredDocuments:
-          type: array
-          items:
-            type: string
-
-    Authorization:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "auth-19283-abc123"
-        patientId: { type: string, format: uuid }
-        providerId: { type: string, format: uuid }
-        procedureId: { type: string }
-        state:
-          type: string
-          enum: [initiated, document_collection, medical_review, administrative_review, approved, rejected, appealed, canceled, on_hold]
-        urgency:
-          type: string
-          enum: [low, medium, high, urgent, emergency]
-        clinicalJustification: { type: string }
-        estimatedCost: { type: number }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        documents:
-          type: array
-          items:
-            type: object
-
-    ExecuteActionRequest:
-      type: object
-      required: [action]
-      properties:
-        action:
-          type: string
-          enum:
-            - initiate
-            - submit_documents
-            - request_additional_info
-            - provide_additional_info
-            - start_medical_review
-            - complete_medical_review
-            - start_admin_review
-            - complete_admin_review
-            - approve
-            - reject
-            - appeal
-            - cancel
-            - put_on_hold
-            - resume
-            - expire
-            - escalate
-        metadata:
-          type: object
-
-    # -----------------------------------------------------------------------
-    # Risk Assessment
-    # -----------------------------------------------------------------------
-    RiskAssessmentRequest:
-      type: object
-      required: [userId, questionnaireId, responses]
-      properties:
-        userId:
-          type: string
-        questionnaireId:
-          type: string
-        responses:
-          type: array
-          minItems: 1
-          items:
-            type: object
-            required: [questionId, question, answer, type]
-            properties:
-              questionId: { type: string }
-              question: { type: string }
-              answer: {}
-              type:
-                type: string
-                enum: [boolean, multiple_choice, scale, text, numeric]
-              medicalRelevance:
+          description: Lista paginada de mensagens
+          content:
+            application/json:
+              schema:
                 type: object
                 properties:
-                  conditions: { type: array, items: { type: string } }
-                  weight: { type: number }
-                  category: { type: string }
-              timestamp: { type: string, format: date-time }
-        userProfile:
-          type: object
-          properties:
-            age: { type: integer }
-            gender: { type: string, enum: [M, F] }
-            medicalHistory: { type: array, items: { type: string } }
-            currentMedications: { type: array, items: { type: string } }
-            socioeconomicFactors: { type: object }
-        emergencyContacts:
-          type: object
-          properties:
-            primary: { type: string }
-            secondary: { type: string }
-            medical: { type: string }
-
-    RiskAssessmentResponse:
-      type: object
-      properties:
-        assessmentId: { type: string }
-        userId: { type: string }
-        riskLevel:
-          type: string
-          enum: [low, moderate, high, critical]
-        score: { type: number }
-        factors:
-          type: array
-          items:
-            type: object
-            properties:
-              name: { type: string }
-              severity: { type: string }
-              contribution: { type: number }
-        recommendations:
-          type: array
-          items:
-            type: string
-        nextAssessmentDate: { type: string, format: date }
-        timestamp: { type: string, format: date-time }
-
-    EmergencyReassessmentRequest:
-      type: object
-      required: [userId, urgentSymptoms]
-      properties:
-        userId:
-          type: string
-        urgentSymptoms:
-          type: array
-          items:
-            type: string
-          example: ["chest_pain", "shortness_of_breath"]
-        currentMedications:
-          type: array
-          items:
-            type: string
-        additionalInfo:
-          type: string
-
-    EmergencyResponse:
-      type: object
-      properties:
-        emergencyLevel:
-          type: string
-          enum: [immediate_care, urgent_care, non_urgent]
-        immediateActions:
-          type: array
-          items:
-            type: string
-          example: ["Ligue 192 (SAMU) IMEDIATAMENTE", "Não se desloque sozinho"]
-        riskFactors:
-          type: array
-          items:
-            type: string
-        timestamp: { type: string, format: date-time }
-
-    # -----------------------------------------------------------------------
-    # Gamification
-    # -----------------------------------------------------------------------
-    GamificationProfile:
-      type: object
-      properties:
-        userId: { type: string, format: uuid }
-        level: { type: integer, example: 12 }
-        totalPoints: { type: integer, example: 3450 }
-        currentLevelPoints: { type: integer }
-        nextLevelPoints: { type: integer }
-        rank:
-          type: string
-          enum: [Bronze, Silver, Gold, Platinum, Diamond]
-          example: "Silver"
-        badges:
-          type: array
-          items:
-            $ref: "#/components/schemas/Badge"
-        achievements:
-          type: array
-          items:
-            type: object
-            properties:
-              id: { type: string }
-              title: { type: string }
-              progress: { type: integer }
-              target: { type: integer }
-              reward: { type: integer }
-              status: { type: string, enum: [in_progress, completed] }
-        streaks:
-          type: object
-          properties:
-            current: { type: integer, example: 7 }
-            longest: { type: integer, example: 15 }
-            lastActivity: { type: string, format: date-time }
-        statistics:
-          type: object
-          properties:
-            totalActivities: { type: integer }
-            daysActive: { type: integer }
-            referrals: { type: integer }
-
-    Badge:
-      type: object
-      properties:
-        id: { type: string }
-        name: { type: string, example: "Health Warrior" }
-        description: { type: string }
-        icon: { type: string, example: "🏆" }
-        rarity:
-          type: string
-          enum: [common, rare, epic, legendary]
-          example: "rare"
-        requirement: { type: string }
-        earnedAt: { type: string, format: date-time }
-
-    Leaderboard:
-      type: object
-      properties:
-        leaderboard:
-          type: array
-          items:
-            type: object
-            properties:
-              rank: { type: integer }
-              userId: { type: string }
-              userName: { type: string }
-              points: { type: integer }
-              level: { type: integer }
-              badge: { type: string }
-              avatar: { type: string, nullable: true }
-        timeframe: { type: string }
-        lastUpdated: { type: string, format: date-time }
-        userPosition:
-          type: object
-          properties:
-            rank: { type: integer }
-            points: { type: integer }
-
-    GamificationStats:
-      type: object
-      properties:
-        totalPointsAwarded: { type: integer }
-        activeUsers: { type: integer }
-        totalBadgesEarned: { type: integer }
-        averagePointsPerUser: { type: number }
-        topLevel: { type: integer }
-        averageLevel: { type: number }
-        engagementMetrics:
-          type: object
-          properties:
-            dailyActiveUsers: { type: integer }
-            weeklyActiveUsers: { type: integer }
-            monthlyActiveUsers: { type: integer }
-
-    # -----------------------------------------------------------------------
-    # WhatsApp
-    # -----------------------------------------------------------------------
-    SendWhatsAppMessageRequest:
-      type: object
-      required: [to]
-      properties:
-        to:
-          type: string
-          pattern: "^\\+?\\d{10,15}$"
-          example: "+5511987654321"
-        type:
-          type: string
-          enum: [text, template, interactive]
-          default: text
-        text:
-          type: object
-          properties:
-            body:
-              type: string
-              example: "Olá! Como posso ajudá-lo?"
-        template:
-          type: object
-          properties:
-            name: { type: string, example: "welcome_message" }
-            language:
-              type: object
-              properties:
-                code: { type: string, example: "pt_BR" }
-            components:
-              type: array
-              items: { type: object }
-        interactive:
-          type: object
-
-    WhatsAppMessage:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "wamid.1719432000"
-        to: { type: string }
-        type: { type: string }
-        status:
-          type: string
-          enum: [sent, delivered, read, failed]
-        timestamp: { type: string, format: date-time }
-        direction:
-          type: string
-          enum: [inbound, outbound]
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        from:
+                          type: string
+                        to:
+                          type: string
+                        type:
+                          type: string
+                        text:
+                          type: object
+                        timestamp:
+                          type: string
+                        status:
+                          type: string
+                        direction:
+                          type: string
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer

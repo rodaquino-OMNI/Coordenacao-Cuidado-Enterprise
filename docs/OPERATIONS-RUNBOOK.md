@@ -1,151 +1,197 @@
 # AUSTA Care Platform — Operations Runbook
 
-> **Última atualização**: 2025-06-26  
-> **Escopo**: Ambiente staging + produção  
-> **Plataforma**: Kubernetes (EKS) + Docker Compose (dev)
+> **Última atualização**: 2026-06-27  
+> **Status**: Alpha / Pre-Production  
+> **Deploy atual**: Docker Compose (dev) + VM única (produção planejada)  
+> **Kubernetes**: Aspiracional — NÃO está em produção ainda
 
 ---
 
-## 1. Arquitetura de Deploy
+## 1. System Architecture Overview
+
+### 1.1 O que REALMENTE roda (Jun/2026)
 
 ```
-┌──────────────────────────────────────────────┐
-│                   CI/CD                       │
-│  GitHub Actions → Build → Push ECR → Deploy   │
-└──────────────────┬───────────────────────────┘
-                   │
-    ┌──────────────▼──────────────┐
-    │     EKS Cluster (AWS)       │
-    │                             │
-    │  ┌───────────────────────┐  │
-    │  │ austa-care-backend    │  │
-    │  │ (Node.js/Express)     │  │
-    │  │ Port: 3000            │  │
-    │  └───────────┬───────────┘  │
-    │              │               │
-    │  ┌───────────▼───────────┐  │
-    │  │   PostgreSQL 15       │  │
-    │  │   (RDS / pgcrypto)    │  │
-    │  └───────────────────────┘  │
-    │                             │
-    │  ┌───────────────────────┐  │
-    │  │   Redis 7              │  │
-    │  │   (ElastiCache)        │  │
-    │  └───────────────────────┘  │
-    │                             │
-    │  ┌───────────────────────┐  │
-    │  │   Kafka (MSK)          │  │
-    │  └───────────────────────┘  │
-    └─────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│               VM / Servidor Único                 │
+│                                                    │
+│  ┌──────────────────────────────────────────────┐ │
+│  │        Docker Compose Stack                   │ │
+│  │                                                │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  │ │
+│  │  │ Backend  │  │PostgreSQL│  │  Redis 7  │  │ │
+│  │  │ Express  │  │   15     │  │ (cache)   │  │ │
+│  │  │ :3000    │  │  :5432   │  │  :6379    │  │ │
+│  │  └────┬─────┘  └────┬─────┘  └─────┬─────┘  │ │
+│  │       │              │              │         │ │
+│  │       └──────────────┼──────────────┘         │ │
+│  │                      │                        │ │
+│  └──────────────────────┼────────────────────────┘ │
+│                         │                          │
+│  Serviços Externos:     │                          │
+│  ┌──────────┐  ┌────────┴────┐  ┌─────────────┐  │
+│  │ Z-API    │  │  OpenAI     │  │  Prometheus  │  │
+│  │WhatsApp  │  │  GPT-4      │  │  (local)     │  │
+│  └──────────┘  └─────────────┘  └─────────────┘  │
+└──────────────────────────────────────────────────┘
 ```
 
----
+### 1.2 Componentes
 
-## 2. Deploy
+| Componente | Tecnologia | Porta | Health Check |
+|-----------|-----------|-------|-------------|
+| Backend API | Node.js 18+/Express/TypeScript | 3000 | `GET /health` |
+| PostgreSQL | PostgreSQL 15 + pgcrypto | 5432 | `pg_isready` |
+| Redis | Redis 7 (ioredis) | 6379 | `redis-cli ping` |
+| WhatsApp | Z-API (z-api.io) | N/A | Via API status |
+| AI/NLP | OpenAI GPT-4 via LangChain | N/A | Via API status |
 
-### 2.1 Deploy Staging
+### 1.3 Arquitetura Futura (Aspiracional)
 
-```bash
-# 1. Fazer merge em staging
-git checkout staging
-git merge main
-git push origin staging
-
-# 2. CI/CD automaticamente builda e deploya
-#    Pipeline: .github/workflows/deploy-staging.yml
 ```
-
-**Verificar status do deploy:**
-```bash
-# Verificar pods
-kubectl get pods -n austa-staging -l app=austa-backend
-
-# Ver logs do deploy
-kubectl logs -n austa-staging deployment/austa-backend --tail=100
-
-# Ver rollout status
-kubectl rollout status deployment/austa-backend -n austa-staging
-```
-
-### 2.2 Deploy Produção
-
-```bash
-# 1. Criar release tag
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
-
-# 2. CI/CD deploya via GitHub Actions
-#    Pipeline: .github/workflows/deploy-prod.yml
-```
-
-**Deploy manual (emergência):**
-```bash
-# Build imagem
-docker build -t austa-backend:latest -f backend/Dockerfile .
-
-# Push para ECR
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
-docker tag austa-backend:latest 123456789.dkr.ecr.us-east-1.amazonaws.com/austa-backend:latest
-docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/austa-backend:latest
-
-# Aplicar manifests
-kubectl apply -f k8s/production/
-kubectl rollout restart deployment/austa-backend -n austa-prod
+┌──────────────────────────────────────────────────┐
+│  Kubernetes (EKS/GKE) — NÃO em produção ainda     │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐            │
+│  │ Backend │ │ Backend │ │ Backend │  (3+ pods) │
+│  │ Pod     │ │ Pod     │ │ Pod     │            │
+│  └────┬────┘ └────┬────┘ └────┬────┘            │
+│       └───────────┼───────────┘                  │
+│                   │                              │
+│  ┌────────────────┴────────────────┐             │
+│  │        RDS PostgreSQL           │             │
+│  └─────────────────────────────────┘             │
+│  ┌─────────────────────────────────┐             │
+│  │        ElastiCache Redis        │             │
+│  └─────────────────────────────────┘             │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Health Checks
+## 2. Deploy Procedures
 
-### 3.1 Endpoints de Health
-
-| Endpoint                    | Uso                          | Esperado |
-|-----------------------------|------------------------------|----------|
-| `GET /health`               | Liveness (básico)            | `200` + `{"status":"healthy"}` |
-| `GET /health/detailed`      | Componentes (DB, Redis, Enc) | `200` ou `503` se degradado |
-| `GET /health/dead-mans-switch` | Atividade do sistema       | `200` alive / `503` stale |
-| `GET /health/ready`         | Readiness (K8s)              | `200` ou `503` |
-| `GET /health/live`          | Liveness (K8s)               | `200` |
-| `GET /metrics`              | Prometheus metrics           | `200` + texto Prometheus |
-
-### 3.2 Verificar via CLI
+### 2.1 Deploy Staging (Local / VM)
 
 ```bash
-# Health básico
+# 1. Atualizar código
+cd /opt/austa-care-platform
+git pull origin main
+
+# 2. Rebuild e restart
+docker compose down
+docker compose up -d --build postgres redis backend
+
+# 3. Rodar migrations
+docker compose exec backend npx prisma migrate deploy
+
+# 4. Verificar health
 curl -s http://localhost:3000/health | jq .
+# Esperado: { "status": "healthy", ... }
+```
 
-# Health detalhado
-curl -s http://localhost:3000/health/detailed | jq .
+### 2.2 Deploy Produção (VM Única — atual)
+
+```bash
+# 1. Acessar servidor de produção
+ssh austa-prod
+
+# 2. Entrar no diretório do projeto
+cd /opt/austa-care-platform
+
+# 3. Pull e rebuild
+git fetch origin
+git checkout main
+git pull origin main
+
+# 4. Build e restart com Docker Compose
+docker compose -f docker-compose.yml down
+docker compose -f docker-compose.yml up -d --build postgres redis backend
+
+# 5. Rodar migrations (NUNCA pular)
+docker compose exec backend npx prisma migrate deploy
+
+# 6. Smoke test
+curl -s http://localhost:3000/health | jq .status
+# Esperado: "healthy"
+
+# 7. Verificar logs
+docker compose logs backend --tail=50
+```
+
+### 2.3 Deploy Manual (sem Docker Compose)
+
+```bash
+# Build
+cd austa-care-platform/backend
+npm install
+npm run build
+
+# Iniciar (com PM2 recomendado)
+pm2 start dist/server.js --name austa-backend
+pm2 save
+```
+
+---
+
+## 3. Health Check Interpretation
+
+### 3.1 Endpoints
+
+| Endpoint | Uso | HTTP 200 = |
+|----------|-----|-----------|
+| `GET /health` | Component-level check | DB + Encryption OK, Redis opcional |
+| `GET /health/dead-mans-switch` | Atividade do sistema | Sistema ativo (última atividade < threshold) |
+| `GET /health/ready` | Readiness probe | DB + Encryption OK (críticos) |
+| `GET /health/live` | Liveness probe | Processo Node.js rodando |
+
+### 3.2 Interpretação do HealthResponse
+
+```json
+{
+  "status": "healthy",     // healthy | degraded | unhealthy
+  "components": {
+    "database": { "status": "up", "latencyMs": 2 },
+    "redis":    { "status": "up", "latencyMs": 1 },   // opcional
+    "encryption": { "status": "up", "algorithm": "aes256" }
+  }
+}
+```
+
+**Estados**:
+- `healthy`: Database UP + Encryption UP (Redis opcional)
+- `degraded`: Database UP + Encryption UP, mas Redis DOWN — sistema opera sem cache
+- `unhealthy`: Database DOWN ou Encryption DOWN — **sistema não funciona**
+
+### 3.3 Verificação via CLI
+
+```bash
+# Health completo
+curl -s http://localhost:3000/health | jq .
 
 # Dead man's switch
 curl -s http://localhost:3000/health/dead-mans-switch | jq .
 
-# Kubernetes probes
-kubectl exec -n austa-prod deployment/austa-backend -- \
-  curl -s http://localhost:3000/health/ready
+# Readiness
+curl -s http://localhost:3000/health/ready | jq .
+
+# Liveness
+curl -s http://localhost:3000/health/live | jq .
 ```
 
-### 3.3 Logs
+### 3.4 Dead Man's Switch
 
+O dead man's switch é atualizado a cada requisição autenticada (`touchActivity()` no middleware). Se nenhum usuário autenticado usar o sistema por mais de `DEAD_MANS_SWITCH_THRESHOLD_MS` (default: 300000ms = 5 min), o endpoint retorna 503.
+
+**Configuração**:
 ```bash
-# Últimos 100 logs do backend
-kubectl logs -n austa-prod deployment/austa-backend --tail=100
-
-# Logs com filtro de erro
-kubectl logs -n austa-prod deployment/austa-backend --tail=500 | grep -i error
-
-# Seguir logs em tempo real
-kubectl logs -n austa-prod deployment/austa-backend -f
-
-# Logs do PostgreSQL
-kubectl logs -n austa-prod deployment/austa-postgres --tail=100
+# No .env
+DEAD_MANS_SWITCH_THRESHOLD_MS=300000  # 5 minutos (default)
 ```
 
-### 3.4 Métricas Prometheus
+### 3.5 Métricas Prometheus
 
 ```bash
-# Endpoint de métricas
+# Endpoint de métricas (se configurado)
 curl -s http://localhost:3000/metrics | grep austa_
 
 # Métricas chave:
@@ -156,323 +202,367 @@ curl -s http://localhost:3000/metrics | grep austa_
 # - austa_encryption_health_status
 ```
 
-### 3.5 Dashboard Grafana
-
-```
-URL: https://grafana.austa.care
-Dashboard: "AUSTA Care - Platform Overview"
-Panels chave:
-  - HTTP Request Rate (4xx/5xx)
-  - P95 Latency
-  - Database Connection Pool
-  - Encryption Health
-  - Dead Man's Switch Status
-  - Audit Log Write Success Rate
-```
-
 ---
 
-## 4. Alertas e Resposta
+## 4. Common Alerts and Response Procedures
 
 ### 4.1 HighApiErrorRate
 
-**Alerta**: `rate(http_requests_total{status=~"5.."}[5m]) > 0.05`
+**Sintoma**: Taxa de erro 5xx acima de 5% em janela de 5 minutos.
 
 **Resposta**:
 ```bash
-# 1. Verificar logs de erro
-kubectl logs -n austa-prod deployment/austa-backend --tail=200 | grep -i error
+# 1. Verificar logs de erro recentes
+docker compose logs backend --tail=200 | grep -i error
 
-# 2. Verificar métricas detalhadas
-curl -s http://POD_IP:3000/metrics | grep austa_api_errors
+# 2. Verificar health dos componentes
+curl -s http://localhost:3000/health | jq .
 
-# 3. Verificar dependências
-curl -s http://localhost:3000/health/detailed | jq .
+# 3. Se database down:
+docker compose logs postgres --tail=50
+docker compose restart postgres
 
-# 4. Se erro for de banco → verificar RDS
-aws rds describe-db-instances --db-instance-identifier austa-prod
+# 4. Se erro for de código (nova versão):
+# Rollback de imagem Docker
+docker compose down backend
+# Editar docker-compose.yml para usar a tag anterior
+docker compose up -d backend
 
-# 5. Se erro for de código → rollback (ver seção 5)
-kubectl rollout undo deployment/austa-backend -n austa-prod
-
-# 6. Se erro for de infra → verificar AWS Health Dashboard
-aws health describe-events --filter region=us-east-1
+# 5. Verificar uso de recursos
+docker stats --no-stream
 ```
 
 ### 4.2 DeadMansSwitchSilent
 
-**Alerta**: `austa_dead_mans_switch_status == 0` (stale > 5 min)
+**Sintoma**: `GET /health/dead-mans-switch` retorna `status: "stale"` com HTTP 503.
 
 **Resposta**:
 ```bash
-# 1. Verificar se os pods estão rodando
-kubectl get pods -n austa-prod -l app=austa-backend
+# 1. Verificar se o backend está rodando
+docker compose ps backend
 
-# 2. Verificar status do deployment
-kubectl describe deployment austa-backend -n austa-prod
+# 2. Verificar se o processo está respondendo
+curl -v http://localhost:3000/health/live
 
-# 3. Verificar eventos recentes
-kubectl get events -n austa-prod --sort-by='.lastTimestamp' | tail -20
+# 3. Se o container está rodando mas não responde:
+docker compose restart backend
 
-# 4. Verificar se o serviço está respondendo
-curl -v http://localhost:3000/health 2>&1 | head -20
+# 4. Verificar logs para causa raiz
+docker compose logs backend --tail=100
 
-# 5. Se pods estão rodando mas não respondem → reiniciar
-kubectl rollout restart deployment/austa-backend -n austa-prod
-
-# 6. Verificar CPU/Memória
-kubectl top pods -n austa-prod -l app=austa-backend
+# 5. Se o sistema está ativo mas sem requisições autenticadas,
+#    isso é esperado em ambientes com baixo tráfego.
+#    Ajustar threshold se necessário:
+#    DEAD_MANS_SWITCH_THRESHOLD_MS=600000  # 10 min
 ```
 
-### 4.3 AuditLogPersistenceFailed
+### 4.3 DatabaseConnectionFailure
 
-**Alerta**: `rate(austa_audit_log_write_failures_total[5m]) > 0`
+**Sintoma**: `GET /health` mostra `database.status: "down"`.
 
 **Resposta**:
 ```bash
-# 1. Verificar conexão PostgreSQL
-kubectl exec -n austa-prod deployment/austa-backend -- \
-  node -e "const {PrismaClient}=require('@prisma/client');new PrismaClient().\$queryRawUnsafe('SELECT 1').then(()=>console.log('OK')).catch(e=>console.error(e))"
+# 1. Verificar se PostgreSQL está rodando
+docker compose ps postgres
+docker compose logs postgres --tail=50
 
-# 2. Verificar espaço em disco do RDS
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name FreeStorageSpace \
-  --dimensions Name=DBInstanceIdentifier,Value=austa-prod \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  --period 300 \
-  --statistics Average
+# 2. Verificar conectividade
+docker compose exec postgres pg_isready -U austa_user -d austa_care
 
-# 3. Verificar locks no PostgreSQL
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  psql -U austa_user -d austa_care -c \
+# 3. Se o container está parado:
+docker compose up -d postgres
+
+# 4. Se pg_isready falha mas container roda:
+# Verificar disco
+df -h /var/lib/docker/volumes/
+
+# 5. Verificar locks no banco
+docker compose exec postgres psql -U austa_user -d austa_care -c \
   "SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state
    FROM pg_stat_activity
    WHERE state != 'idle' AND now() - pg_stat_activity.query_start > interval '5 minutes';"
 
-# 4. Se banco estiver cheio → escalar storage ou limpar
-#    Atenção: NUNCA deletar dados de auditoria — são exigidos por compliance.
-#    Escalar storage ou arquivar logs antigos para S3.
+# 6. Se disco cheio:
+# - Limpar logs antigos
+# - Expadir volume Docker
+# - NUNCA deletar dados do banco sem backup
 ```
 
-### 4.4 EncryptionHealthCheckFailed
+### 4.4 RedisUnavailable
 
-**Alerta**: `austa_encryption_health_status == 0`
+**Sintoma**: `GET /health` mostra `redis.status: "down"`.
+
+**Impacto**: Sistema opera em modo degradado — sem cache, sem rate limiting via Redis.
 
 **Resposta**:
 ```bash
-# 1. Verificar se pgcrypto extension está instalada
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  psql -U austa_user -d austa_care -c \
+# 1. Verificar Redis
+docker compose ps redis
+docker compose logs redis --tail=30
+
+# 2. Tentar ping
+docker compose exec redis redis-cli ping
+
+# 3. Reiniciar se necessário
+docker compose restart redis
+
+# 4. Redis é opcional — sistema continua funcionando sem cache.
+#    Isso é esperado em desenvolvimento. Em produção, restaurar ASAP.
+```
+
+### 4.5 EncryptionHealthCheckFailed
+
+**Sintoma**: `GET /health` mostra `encryption.status: "down"`.
+
+**IMPACTO CRÍTICO**: Dados PHI/PII podem estar sendo armazenados SEM criptografia. Violação LGPD.
+
+**Resposta**:
+```bash
+# 1. Verificar se pgcrypto está instalado
+docker compose exec postgres psql -U austa_user -d austa_care -c \
   "SELECT extname, extversion FROM pg_extension WHERE extname = 'pgcrypto';"
 
-# 2. Se não estiver instalada → INSTALAR IMEDIATAMENTE
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  psql -U austa_user -d austa_care -c \
+# 2. Se NÃO estiver instalado → INSTALAR IMEDIATAMENTE
+docker compose exec postgres psql -U austa_user -d austa_care -c \
   "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
 
-# 3. Verificar se o backend reconhece a extensão
-curl -s http://localhost:3000/health/detailed | jq '.services.encryption'
-
-# 4. Verificar permissões do usuário do banco
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  psql -U austa_user -d austa_care -c \
+# 3. Verificar permissões do usuário
+docker compose exec postgres psql -U austa_user -d austa_care -c \
   "SELECT current_user, session_user;"
+
+# 4. Verificar se o backend reconhece a extensão
+curl -s http://localhost:3000/health | jq '.components.encryption'
+
+# 5. Se o erro persistir, verificar logs do backend
+docker compose logs backend --tail=50 | grep -i encrypt
 ```
 
 ---
 
-## 5. Rollback
+## 5. Backup and Restore (PostgreSQL)
 
-### 5.1 Rollback Kubernetes
-
-```bash
-# Ver histórico de revisões
-kubectl rollout history deployment/austa-backend -n austa-prod
-
-# Rollback para revisão anterior
-kubectl rollout undo deployment/austa-backend -n austa-prod
-
-# Rollback para revisão específica
-kubectl rollout undo deployment/austa-backend -n austa-prod --to-revision=3
-
-# Verificar status do rollback
-kubectl rollout status deployment/austa-backend -n austa-prod
-```
-
-### 5.2 Rollback de Migração Prisma
+### 5.1 Backup Manual
 
 ```bash
-# Listar migrações aplicadas
-kubectl exec -n austa-prod deployment/austa-backend -- \
-  npx prisma migrate status
-
-# Rollback de migração (⚠️ pode causar perda de dados)
-kubectl exec -n austa-prod deployment/austa-backend -- \
-  npx prisma migrate resolve --rolled-back MIGRATION_NAME
-```
-
-### 5.3 Rollback Manual de Imagem
-
-```bash
-# Tag a imagem estável anterior
-kubectl set image deployment/austa-backend \
-  austa-backend=123456789.dkr.ecr.us-east-1.amazonaws.com/austa-backend:v1.1.9 \
-  -n austa-prod
-```
-
----
-
-## 6. Backup e Restore (PostgreSQL)
-
-### 6.1 Backup
-
-```bash
-# Backup completo via pg_dump
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  pg_dump -U austa_user -d austa_care \
+# Backup completo (formato custom — recomendado)
+docker compose exec postgres pg_dump \
+  -U austa_user -d austa_care \
   --format=custom \
   --compress=9 \
   --file=/tmp/austa_backup_$(date +%Y%m%d_%H%M%S).dump
 
 # Copiar para máquina local
-kubectl cp austa-prod/POD_NAME:/tmp/austa_backup_*.dump ./backups/
+docker cp austa-postgres:/tmp/austa_backup_*.dump ./backups/
 
-# Upload para S3
-aws s3 cp ./backups/austa_backup_*.dump \
-  s3://austa-backups/production/$(date +%Y)/$(date +%m)/ \
-  --storage-class STANDARD_IA
+# Alternativa: backup SQL plain-text (para inspeção humana)
+docker compose exec postgres pg_dump \
+  -U austa_user -d austa_care \
+  --clean --if-exists \
+  > ./backups/austa_backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-### 6.2 Backup Automatizado (RDS)
+### 5.2 Backup Automatizado (Cron)
 
-O RDS faz snapshots automáticos diários. Verificar:
+Adicionar ao crontab do servidor:
 
 ```bash
-# Listar snapshots
-aws rds describe-db-snapshots \
-  --db-instance-identifier austa-prod \
-  --snapshot-type automated \
-  --query "DBSnapshots[-5:].{Time:SnapshotCreateTime,Id:DBSnapshotIdentifier}" \
-  --output table
+# /etc/cron.d/austa-backup
+# Backup diário às 2h da manhã
+0 2 * * * root cd /opt/austa-care-platform && \
+  docker compose exec -T postgres pg_dump -U austa_user -d austa_care --format=custom --compress=9 \
+  > /backups/austa_backup_$(date +\%Y\%m\%d).dump && \
+  find /backups -name "austa_backup_*.dump" -mtime +30 -delete
 ```
 
-### 6.3 Restore
+### 5.3 Restore
 
 ```bash
-# Restaurar de dump custom
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  pg_restore -U austa_user -d austa_care \
-  --clean \
-  --if-exists \
-  /tmp/austa_backup_20250626_120000.dump
+# ⚠️ AVISO: Restore sobrescreve dados existentes!
 
-# Restaurar de snapshot RDS
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier austa-prod-restored \
-  --db-snapshot-identifier rds:austa-prod-2025-06-26-00-00
+# 1. Parar o backend (evitar writes durante restore)
+docker compose stop backend
+
+# 2. Restaurar de dump custom
+docker compose exec -T postgres pg_restore \
+  -U austa_user -d austa_care \
+  --clean --if-exists \
+  < ./backups/austa_backup_20260627_120000.dump
+
+# 3. Ou restaurar de SQL plain-text
+docker compose exec -T postgres psql \
+  -U austa_user -d austa_care \
+  < ./backups/austa_backup_20260627_120000.sql
+
+# 4. Reindexar
+docker compose exec postgres psql -U austa_user -d austa_care -c "REINDEX DATABASE austa_care;"
+
+# 5. Reiniciar backend
+docker compose start backend
+
+# 6. Verificar
+curl -s http://localhost:3000/health | jq .status
 ```
 
-### 6.4 Verificar Integridade do Backup
+### 5.4 Verificar Integridade do Backup
 
 ```bash
-# pg_restore com --list para verificar conteúdo sem restaurar
-kubectl exec -n austa-prod deployment/austa-postgres -- \
-  pg_restore --list /tmp/austa_backup_20250626_120000.dump | head -50
+# Listar conteúdo do dump sem restaurar
+docker compose exec -T postgres pg_restore --list \
+  < ./backups/austa_backup_20260627_120000.dump | head -50
 ```
 
 ---
 
-## 7. Rotação de Secrets (AWS Secrets Manager)
+## 6. Secret Rotation Procedure
 
-### 7.1 Secrets Gerenciados
+### 6.1 Secrets Gerenciados
 
-| Secret                      | Rotação   | Impacto                               |
-|-----------------------------|-----------|---------------------------------------|
-| `austa/prod/jwt-secret`     | 90 dias   | Invalida todos os tokens — requer redeploy |
-| `austa/prod/db-password`    | 30 dias   | Requer atualização no connection string |
-| `austa/prod/encryption-key` | 180 dias  | NÃO rotacionar sem migração de dados    |
-| `austa/prod/zapi-token`     | Sob demanda | Atualizar no WhatsApp Business API    |
+| Secret | Localização | Rotação | Impacto |
+|--------|------------|---------|---------|
+| `JWT_SECRET` | `.env` | 90 dias | Invalida todos os tokens ativos |
+| `DATABASE_URL` | `.env` | 30 dias | Requer restart do backend |
+| `ENCRYPTION_KEY` | `.env` / pgcrypto | **180 dias** | ⚠️ NÃO rotacionar sem migração de dados |
+| `WHATSAPP_TOKEN` | `.env` | Sob demanda | Atualizar no Z-API |
+| `OPENAI_API_KEY` | `.env` | Conforme política OpenAI | Atualizar .env e restart |
 
-### 7.2 Procedimento
+### 6.2 Procedimento de Rotação (JWT)
 
 ```bash
 # 1. Gerar novo secret
 NEW_JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
+echo "Novo JWT_SECRET: $NEW_JWT_SECRET"
 
-# 2. Atualizar no AWS Secrets Manager
-aws secretsmanager put-secret-value \
-  --secret-id austa/prod/jwt-secret \
-  --secret-string "{\"JWT_SECRET\":\"$NEW_JWT_SECRET\"}"
+# 2. Atualizar .env
+sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$NEW_JWT_SECRET/" .env
 
-# 3. Atualizar Kubernetes secret
-kubectl create secret generic austa-secrets \
-  --from-literal=JWT_SECRET="$NEW_JWT_SECRET" \
-  --dry-run=client -o yaml | \
-  kubectl apply -f - -n austa-prod
+# 3. Restart do backend
+docker compose restart backend
 
-# 4. Rolling restart dos pods
-kubectl rollout restart deployment/austa-backend -n austa-prod
-
-# 5. Verificar
-kubectl rollout status deployment/austa-backend -n austa-prod
+# 4. Verificar
 curl -s http://localhost:3000/health | jq .status
+# Esperado: "healthy"
+
+# ⚠️ Todos os tokens existentes serão invalidados.
+# Usuários precisarão fazer login novamente.
 ```
 
-**⚠️ IMPORTANTE**: Rotação de `encryption-key` requer migração completa dos dados criptografados.  
-**NÃO rotacione** sem plano de migração aprovado.
+### 6.3 Rotação de ENCRYPTION_KEY
+
+**⚠️ CRÍTICO**: A chave de criptografia (`ENCRYPTION_KEY` / `pgcrypto`) NÃO pode ser rotacionada sem um plano de migração completo.
+
+```
+Procedimento requer:
+1. Gerar nova chave
+2. Descriptografar TODOS os dados PHI/PII com a chave antiga
+3. Re-criptografar com a nova chave
+4. Verificar integridade de todos os registros
+5. Atualizar a chave no .env
+
+Este procedimento NÃO é coberto por este runbook.
+Requer aprovação do DPO e CTO.
+```
 
 ---
 
-## 8. Contatos de Emergência
+## 7. Emergency Contacts (Placeholders)
 
-| Papel                  | Contato                  | Canal              |
-|------------------------|--------------------------|--------------------|
-| Tech Lead / On-call    | [NOME] — [TELEFONE]     | PagerDuty / WhatsApp |
-| DevOps / Infra         | [NOME] — [TELEFONE]     | PagerDuty           |
-| DPO (LGPD)             | [NOME] — [EMAIL]        | Email / Slack       |
-| Security               | [NOME] — [EMAIL]        | Slack #security     |
-| AWS Support (Enterprise)| Via AWS Console        | Caso AWS            |
+| Papel | Contato | Canal |
+|-------|---------|-------|
+| Tech Lead / On-call | [NOME] — [TELEFONE] | WhatsApp / PagerDuty |
+| DevOps / Infra | [NOME] — [TELEFONE] | WhatsApp |
+| DPO (LGPD) | [NOME] — [EMAIL] | Email / Slack |
+| Security | [NOME] — [EMAIL] | Slack #security |
+| Z-API Support | [suporte@z-api.io] | Email / Painel Z-API |
 
 **Escalação**:
 1. Tech Lead on-call → **15 min**
 2. DevOps on-call → **30 min**
 3. CTO → **1 hora**
-4. AWS Enterprise Support → **simultâneo** se suspeita de infra
 
 ---
 
-## 9. Comandos Rápidos (Cheat Sheet)
+## 8. Rollback Procedure
+
+### 8.1 Rollback de Código (Docker Compose)
+
+```bash
+# 1. Identificar a tag/imagem estável anterior
+docker images austa-backend
+
+# 2. Editar docker-compose.yml para usar a tag anterior
+#    ou fazer checkout do commit estável
+git log --oneline -10
+git checkout <COMMIT_ESTAVEL>
+
+# 3. Rebuild e restart
+docker compose up -d --build backend
+
+# 4. Verificar
+curl -s http://localhost:3000/health | jq .status
+```
+
+### 8.2 Rollback de Migration Prisma
+
+```bash
+# ⚠️ Pode causar perda de dados! Use com extrema cautela.
+
+# 1. Listar migrações aplicadas
+docker compose exec backend npx prisma migrate status
+
+# 2. Rollback de uma migração específica
+docker compose exec backend npx prisma migrate resolve --rolled-back MIGRATION_NAME
+
+# 3. Verificar schema
+docker compose exec backend npx prisma migrate status
+```
+
+### 8.3 Rollback de Restore (Pior Caso)
+
+Se o rollback normal falhar, restaurar do backup:
+
+```bash
+# Ver seção 5.3 — Restore
+```
+
+---
+
+## 9. Quick Reference (Cheat Sheet)
 
 ```bash
 # === STATUS ===
-kubectl get pods -n austa-prod
-kubectl top pods -n austa-prod
+docker compose ps
+docker stats --no-stream
 curl -s http://localhost:3000/health | jq .status
 
 # === LOGS ===
-kubectl logs -n austa-prod deployment/austa-backend --tail=100
-kubectl logs -n austa-prod deployment/austa-backend --tail=100 | grep ERROR
-
-# === DEPLOY ===
-kubectl rollout status deployment/austa-backend -n austa-prod
-kubectl rollout history deployment/austa-backend -n austa-prod
-
-# === ROLLBACK ===
-kubectl rollout undo deployment/austa-backend -n austa-prod
+docker compose logs backend --tail=100
+docker compose logs backend --tail=100 | grep ERROR
+docker compose logs postgres --tail=50
 
 # === RESTART ===
-kubectl rollout restart deployment/austa-backend -n austa-prod
+docker compose restart backend
+docker compose restart postgres
 
-# === SCALE ===
-kubectl scale deployment austa-backend --replicas=3 -n austa-prod
+# === DEPLOY ===
+git pull origin main
+docker compose up -d --build backend
+docker compose exec backend npx prisma migrate deploy
+
+# === ROLLBACK ===
+git checkout <COMMIT_ESTAVEL>
+docker compose up -d --build backend
 
 # === DB ===
-kubectl exec -n austa-prod deployment/austa-postgres -- psql -U austa_user -d austa_care -c "SELECT 1"
+docker compose exec postgres psql -U austa_user -d austa_care -c "SELECT 1"
+
+# === BACKUP ===
+docker compose exec postgres pg_dump -U austa_user -d austa_care \
+  --format=custom --compress=9 -f /tmp/backup_$(date +%Y%m%d).dump
+docker cp austa-postgres:/tmp/backup_*.dump ./backups/
 
 # === METRICS ===
-curl -s http://localhost:3000/metrics | grep austa_api_errors_total
+curl -s http://localhost:3000/metrics | grep austa_
+curl -s http://localhost:3000/health/dead-mans-switch | jq .
 ```
 
 ---
@@ -483,28 +573,29 @@ curl -s http://localhost:3000/metrics | grep austa_api_errors_total
 
 ```bash
 # 1. Notificar stakeholders (24h antes)
-# 2. Colocar modo de manutenção (opcional)
-kubectl create configmap maintenance-mode \
-  --from-literal=ENABLED=true -n austa-prod
-
+# 2. Fazer backup (seção 5.1)
 # 3. Executar manutenção
-
-# 4. Remover modo de manutenção
-kubectl delete configmap maintenance-mode -n austa-prod
-
-# 5. Verificar health
-curl -s http://localhost:3000/health/detailed | jq .
+# 4. Verificar health
+curl -s http://localhost:3000/health | jq .
+# 5. Smoke test de endpoints principais
 ```
 
 ### 10.2 Limpeza de Dados Conforme LGPD
 
-Dados de pacientes têm períodos de retenção definidos. A limpeza é feita via job agendado:
-
 ```bash
-# Verificar status do job de retenção LGPD
-kubectl get cronjobs -n austa-prod
-
-# Executar manualmente se necessário
-kubectl create job --from=cronjob/lgpd-retention-cleanup \
-  lgpd-manual-$(date +%Y%m%d) -n austa-prod
+# Soft-delete de dados de paciente (LGPD Art. 18)
+# NÃO use DELETE direto — use soft-delete via Prisma
+docker compose exec backend npx tsx -e "
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+  // Soft delete user data
+  prisma.user.update({
+    where: { id: 'USER_ID' },
+    data: { deletedAt: new Date(), status: 'DELETED' }
+  }).then(() => console.log('Done'));
+"
 ```
+
+---
+
+**🏥 AUSTA Care Platform — Runbook | Junho 2026 | Alpha/Pre-Production**
