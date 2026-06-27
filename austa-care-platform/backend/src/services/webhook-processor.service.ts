@@ -13,7 +13,9 @@ import {
 } from '@/types/whatsapp';
 import { EventEmitter } from 'events';
 import { prisma } from '../config/database';
-import { CommunicationChannel } from '@prisma/client';
+// Prisma CommunicationChannel enum — locally defined to avoid Prisma client schema mismatch
+const CommunicationChannel = { WHATSAPP: 'WHATSAPP' } as const;
+type CommunicationChannel = (typeof CommunicationChannel)[keyof typeof CommunicationChannel];
 import { ConversationFlowEngine } from './conversationFlowEngine';
 import { PersonaType } from '../types/ai';
 

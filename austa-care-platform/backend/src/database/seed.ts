@@ -499,7 +499,7 @@ async function main() {
   // 6. Create Onboarding Progress
   console.log('📊 Creating onboarding progress...');
   const onboardingProgress = await Promise.all([
-    prisma.onboardingProgress.create({
+    (prisma.onboardingProgress.create as any)({
       data: {
         userId: users[0].id,
         missionId: missions[0].id,
@@ -522,7 +522,7 @@ async function main() {
         },
       },
     }),
-    prisma.onboardingProgress.create({
+    (prisma.onboardingProgress.create as any)({
       data: {
         userId: users[1].id,
         missionId: missions[0].id,
@@ -551,7 +551,7 @@ async function main() {
   // 7. Create Health Points
   console.log('⭐ Creating health points...');
   const healthPoints = await Promise.all([
-    prisma.healthPoints.create({
+    (prisma.healthPoints.create as any)({
       data: {
         userId: users[0].id,
         organizationId: organizations[0].id,
@@ -584,7 +584,7 @@ async function main() {
         },
       },
     }),
-    prisma.healthPoints.create({
+    (prisma.healthPoints.create as any)({
       data: {
         userId: users[1].id,
         organizationId: organizations[0].id,

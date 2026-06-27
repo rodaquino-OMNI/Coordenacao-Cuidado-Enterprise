@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import * as jwt from 'jsonwebtoken';
-import { config } from '../config/config';
-import { logger } from '../utils/logger';
+import jwt from 'jsonwebtoken';
 
 // Extend Express Request interface to include user
 declare global {
@@ -17,76 +15,72 @@ declare global {
   }
 }
 
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+
+interface JwtPayload {
+  userId?: string;
+  id?: string;
+  email?: string;
+  roles?: string[];
+  role?: string;
+  permissions?: string[];
+  organizationId?: string;
+  name?: string;
+}
+
 /**
- * Verify JWT token (used for WebSocket authentication)
+ * Verify JWT token
  */
-export const verifyToken = (token: string): any => {
-  try {
-    return jwt.verify(token, config.jwt.secret);
-  } catch (error) {
-    throw new Error('Invalid token');
-  }
+export const verifyToken = (token: string): JwtPayload => {
+  return jwt.verify(token, JWT_SECRET) as JwtPayload;
 };
 
 /**
  * JWT Authentication middleware
  */
-export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+export const authenticateToken = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    logger.warn('Authentication failed: No token provided', {
-      path: req.path,
-      method: req.method,
-      ip: req.ip
+    res.status(401).json({
+      error: { code: 'UNAUTHORIZED', message: 'Access denied. No token provided.' }
     });
-
-    return res.status(401).json({
-      error: 'Access denied. No token provided.'
-    });
+    return;
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwt.secret) as any;
-    
-    // Add user information to request
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
     req.user = {
-      id: decoded.userId || decoded.id,
-      email: decoded.email,
+      id: decoded.userId || decoded.id || '',
+      email: decoded.email || '',
       roles: decoded.roles || ['user'],
       permissions: decoded.permissions || []
     };
 
-    logger.debug('Authentication successful', {
-      userId: req.user.id,
-      path: req.path,
-      method: req.method
-    });
-
     next();
   } catch (error) {
-    logger.warn('Authentication failed: Invalid token', {
-      path: req.path,
-      method: req.method,
-      ip: req.ip,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-
     if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({
-        error: 'Access denied. Token has expired.'
+      res.status(401).json({
+        error: { code: 'TOKEN_EXPIRED', message: 'Access denied. Token has expired.' }
       });
+      return;
     }
 
     if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({
-        error: 'Access denied. Invalid token.'
+      res.status(401).json({
+        error: { code: 'INVALID_TOKEN', message: 'Access denied. Invalid token.' }
       });
+      return;
     }
 
-    return res.status(401).json({
-      error: 'Access denied. Token verification failed.'
+    res.status(401).json({
+      error: { code: 'UNAUTHORIZED', message: 'Access denied. Token verification failed.' }
     });
   }
 };
@@ -95,71 +89,22 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
  * Role-based authorization middleware
  */
 export const requireRole = (requiredRoles: string | string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({
-        error: 'Authentication required.'
+      res.status(401).json({
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required.' }
       });
+      return;
     }
 
     const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
     const hasRequiredRole = roles.some(role => req.user!.roles.includes(role));
 
     if (!hasRequiredRole) {
-      logger.warn('Authorization failed: Insufficient permissions', {
-        userId: req.user.id,
-        userRoles: req.user.roles,
-        requiredRoles: roles,
-        path: req.path,
-        method: req.method
+      res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Access denied. Insufficient permissions.' }
       });
-
-      return res.status(403).json({
-        error: 'Access denied. Insufficient permissions.',
-        requiredRoles: roles
-      });
-    }
-
-    logger.debug('Authorization successful', {
-      userId: req.user.id,
-      userRoles: req.user.roles,
-      path: req.path,
-      method: req.method
-    });
-
-    next();
-  };
-};
-
-/**
- * Permission-based authorization middleware
- */
-export const requirePermission = (requiredPermissions: string | string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({
-        error: 'Authentication required.'
-      });
-    }
-
-    const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
-    const hasRequiredPermission = permissions.some(permission => 
-      req.user!.permissions.includes(permission)
-    );
-
-    if (!hasRequiredPermission) {
-      logger.warn('Authorization failed: Missing permissions', {
-        userId: req.user.id,
-        userPermissions: req.user.permissions,
-        requiredPermissions: permissions,
-        path: req.path,
-        method: req.method
-      });
-
-      return res.status(403).json({
-        error: 'Access denied. Missing required permissions.',
-        requiredPermissions: permissions
-      });
+      return;
     }
 
     next();
@@ -169,30 +114,60 @@ export const requirePermission = (requiredPermissions: string | string[]) => {
 /**
  * Optional authentication middleware - doesn't fail if no token provided
  */
-export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return next(); // Continue without user info
+    next();
+    return;
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwt.secret) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
     req.user = {
-      id: decoded.userId || decoded.id,
-      email: decoded.email,
+      id: decoded.userId || decoded.id || '',
+      email: decoded.email || '',
       roles: decoded.roles || ['user'],
       permissions: decoded.permissions || []
     };
-  } catch (error) {
-    // Log but don't fail
-    logger.debug('Optional auth failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+  } catch {
+    // Token invalid — continue without user info
   }
 
   next();
+};
+
+/**
+ * Permission-based authorization middleware
+ */
+export const requirePermission = (requiredPermissions: string | string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required.' }
+      });
+      return;
+    }
+
+    const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
+    const hasRequiredPermission = permissions.some(permission =>
+      req.user!.permissions.includes(permission)
+    );
+
+    if (!hasRequiredPermission) {
+      res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Access denied. Missing required permissions.' }
+      });
+      return;
+    }
+
+    next();
+  };
 };
 
 /**

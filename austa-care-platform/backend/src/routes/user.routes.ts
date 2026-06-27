@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticateToken, requireRole, requirePermission } from '../middleware/auth';
+import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateRequest, validateQuery, validateParams } from '../middleware/validation';
 import { defaultRateLimiter, strictRateLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';

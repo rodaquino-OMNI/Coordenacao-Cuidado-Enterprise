@@ -330,7 +330,7 @@ export class OCRController {
           metadata: true,
           ocrProcessed: true,
           createdAt: true,
-        },
+        } as any,
       });
 
       if (!document) {
@@ -455,7 +455,7 @@ export class OCRController {
           extractedText: true,
           metadata: true,
           ocrProcessed: true,
-        },
+        } as any,
       });
 
       if (!document) {
@@ -485,7 +485,7 @@ export class OCRController {
       } as any, [] as any);
 
       // Store FHIR export event in audit log
-      await prisma.auditLog.create({
+      await (prisma.auditLog.create as any)({
         data: {
           userId: document.userId,
           action: 'EXPORT',
@@ -585,7 +585,7 @@ export class OCRController {
 
       // Get processing statistics from database
       const totalDocuments = await prisma.document.count();
-      const processedDocuments = await prisma.document.count({ where: { ocrProcessed: true } });
+      const processedDocuments = await prisma.document.count({ where: { ocrProcessed: true } as any });
 
       const healthStatus = {
         status: dbStatus === 'operational' ? 'healthy' : 'degraded',
