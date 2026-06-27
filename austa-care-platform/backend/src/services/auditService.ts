@@ -170,6 +170,16 @@ function resolveOrganizationId(explicit?: string): string {
   return explicit || process.env.DEFAULT_ORG_ID || 'system';
 }
 
+/** Map severity string to Prisma RiskLevel enum. */
+function mapSeverityToRiskLevel(severity: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  switch (severity) {
+    case 'critical': return 'CRITICAL';
+    case 'high': return 'HIGH';
+    case 'medium': return 'MEDIUM';
+    default: return 'LOW';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // AuditService
 // ---------------------------------------------------------------------------
@@ -631,20 +641,68 @@ export class AuditService extends EventEmitter {
         ? entry.performedBy
         : null;
 
+    // Extract optional fields from metadata
+    const description =
+      (entry.metadata?.description as string) || null;
+    const reason =
+      (entry.metadata?.reason as string) || (entry.metadata?.justification as string) || null;
+    const requestId =
+      (entry.metadata?.requestId as string) || null;
+    const providerId =
+      (entry.metadata?.providerId as string) || null;
+
+    // Map severity to RiskLevel enum
+    const riskLevel = mapSeverityToRiskLevel(entry.severity);
+
+    // Determine compliance flags
+    const lgpdRelevant = entry.complianceFlags.includes('LGPD');
+    const sensitiveData = entry.encrypted || entry.complianceFlags.includes('LGPD');
+    const requiresReview =
+      entry.severity === 'high' || entry.severity === 'critical';
+
+    // Extract change tracking from state transitions
+    const oldValues =
+      entry.metadata?.fromState
+        ? { state: entry.metadata.fromState }
+        : undefined;
+    const newValues =
+      entry.metadata?.toState
+        ? { state: entry.metadata.toState }
+        : undefined;
+    const changedFields: string[] = [];
+    if (entry.metadata?.fromState && entry.metadata?.toState) {
+      changedFields.push('state');
+    }
+    if (entry.metadata?.changedFields) {
+      changedFields.push(...(entry.metadata.changedFields as string[]));
+    }
+
     // Immediate persistence via Prisma (guaranteed write)
     try {
       await prisma.auditLog.create({
         data: {
           id: entry.id,
           userId,
-          organizationId: entry.organizationId || '',
+          providerId,
+          organizationId: entry.organizationId || resolveOrganizationId(),
           action: auditAction,
           entity,
           entityId: entry.authorizationId || null,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
+          description,
+          reason,
+          sessionId: entry.sessionId,
+          requestId,
+          riskLevel,
+          sensitiveData,
+          requiresReview,
+          lgpdRelevant,
+          oldValues,
+          newValues,
+          changedFields,
           metadata: metadataPayload,
-          createdAt: entry.timestamp,
+          occurredAt: entry.timestamp,
         },
       });
     } catch (err) {
@@ -685,9 +743,9 @@ export class AuditService extends EventEmitter {
     const where: Record<string, any> = {};
 
     if (criteria.startDate || criteria.endDate) {
-      where.createdAt = {};
-      if (criteria.startDate) where.createdAt.gte = criteria.startDate;
-      if (criteria.endDate) where.createdAt.lte = criteria.endDate;
+      where.occurredAt = {};
+      if (criteria.startDate) where.occurredAt.gte = criteria.startDate;
+      if (criteria.endDate) where.occurredAt.lte = criteria.endDate;
     }
 
     if (criteria.authorizationIds?.length) {
@@ -717,7 +775,7 @@ export class AuditService extends EventEmitter {
 
     const logs = await prisma.auditLog.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { occurredAt: 'desc' },
       take: criteria.limit || 1000,
       skip: criteria.offset || 0,
     });
@@ -726,7 +784,7 @@ export class AuditService extends EventEmitter {
       const meta = (log.metadata as Record<string, any>) || {};
       return {
         id: log.id,
-        timestamp: log.createdAt,
+        timestamp: log.occurredAt,
         authorizationId: log.entityId,
         eventType: meta._eventType || log.entity.toLowerCase(),
         action: meta._internalAction || log.action.toLowerCase(),
@@ -785,18 +843,57 @@ export class AuditService extends EventEmitter {
             _internalAction: entry.action,
           };
 
+          const description =
+            (entry.metadata?.description as string) || null;
+          const reason =
+            (entry.metadata?.reason as string) || (entry.metadata?.justification as string) || null;
+          const requestId =
+            (entry.metadata?.requestId as string) || null;
+          const providerId =
+            (entry.metadata?.providerId as string) || null;
+          const riskLevel = mapSeverityToRiskLevel(entry.severity);
+          const lgpdRelevant = entry.complianceFlags.includes('LGPD');
+          const sensitiveData = entry.encrypted || entry.complianceFlags.includes('LGPD');
+          const requiresReview =
+            entry.severity === 'high' || entry.severity === 'critical';
+          const oldValues = entry.metadata?.fromState
+            ? { state: entry.metadata.fromState }
+            : undefined;
+          const newValues = entry.metadata?.toState
+            ? { state: entry.metadata.toState }
+            : undefined;
+          const changedFields: string[] = [];
+          if (entry.metadata?.fromState && entry.metadata?.toState) {
+            changedFields.push('state');
+          }
+          if (entry.metadata?.changedFields) {
+            changedFields.push(...(entry.metadata.changedFields as string[]));
+          }
+
           return prisma.auditLog.create({
             data: {
               id: entry.id,
               userId,
+              providerId,
               organizationId: entry.organizationId || resolveOrganizationId() || '',
               action: auditAction,
               entity,
               entityId: entry.authorizationId || null,
               ipAddress: entry.ipAddress,
               userAgent: entry.userAgent,
+              description,
+              reason,
+              sessionId: entry.sessionId,
+              requestId,
+              riskLevel,
+              sensitiveData,
+              requiresReview,
+              lgpdRelevant,
+              oldValues,
+              newValues,
+              changedFields,
               metadata: metadataPayload,
-              createdAt: entry.timestamp,
+              occurredAt: entry.timestamp,
             },
           });
         })

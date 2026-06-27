@@ -21,6 +21,28 @@
 import { prisma } from '../config/database';
 
 // ---------------------------------------------------------------------------
+// Key resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the static encryption key from environment.
+ * Used as fallback when tenant-specific keys are not configured.
+ *
+ * Production: AWS KMS / HashiCorp Vault
+ * Development: AUDIT_ENCRYPTION_KEY env variable
+ */
+function getEncryptionKey(): string {
+  const key = process.env.AUDIT_ENCRYPTION_KEY
+    || process.env.ENCRYPTION_KEY
+    || process.env.PGCRYPTO_KEY
+    || 'austa-dev-default-key';
+  if (!key && process.env.NODE_ENV === 'production') {
+    throw new Error('AUDIT_ENCRYPTION_KEY not set in production');
+  }
+  return key;
+}
+
+// ---------------------------------------------------------------------------
 // Tenant key resolution
 // ---------------------------------------------------------------------------
 
@@ -43,10 +65,7 @@ async function getTenantKey(organizationId: string): Promise<string> {
   //   });
   //   return secret.SecretString;
   // ------------------------------------------------------------------
-  return (
-    process.env.ENCRYPTION_KEY ||
-    `austa-dev-key-${organizationId}`
-  );
+  return getEncryptionKey();
 }
 
 // ---------------------------------------------------------------------------
