@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { healthRoutes } from './health';
-import { authRoutes } from './auth.routes';
+import { authRoutes } from '../controllers/auth';
 import { clinicalRoutes } from './clinical.routes';
 import gamificationRoutes from './gamification.routes';
 import whatsappRoutes from './whatsapp.routes';

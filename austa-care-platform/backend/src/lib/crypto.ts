@@ -34,10 +34,9 @@ import { prisma } from '../config/database';
 function getEncryptionKey(): string {
   const key = process.env.AUDIT_ENCRYPTION_KEY
     || process.env.ENCRYPTION_KEY
-    || process.env.PGCRYPTO_KEY
-    || 'austa-dev-default-key';
-  if (!key && process.env.NODE_ENV === 'production') {
-    throw new Error('AUDIT_ENCRYPTION_KEY not set in production');
+    || process.env.PGCRYPTO_KEY;
+  if (!key) {
+    throw new Error('Encryption key environment variable is required (set AUDIT_ENCRYPTION_KEY, ENCRYPTION_KEY, or PGCRYPTO_KEY)');
   }
   return key;
 }

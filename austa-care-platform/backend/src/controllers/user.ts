@@ -8,6 +8,7 @@ import {
   isUserActive,
   getUserOnboardingStatus,
   formatUserResponse,
+  formatUserResponseSync,
   searchUsers
 } from '../utils/user.helpers';
 import {
@@ -146,10 +147,24 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.user.count({ where })
     ]);
 
-    // Format all users with health scores
-    const formattedUsers = await Promise.all(
-      users.map(user => formatUserResponse(user, true))
-    );
+    // Batch-fetch health points to avoid N+1 queries
+    const userIds = users.map(u => u.id);
+    const healthPointsMap = new Map<string, number>();
+    if (userIds.length > 0) {
+      const healthPoints = await prisma.healthPoints.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, availablePoints: true }
+      });
+      for (const hp of healthPoints) {
+        healthPointsMap.set(hp.userId, hp.availablePoints);
+      }
+    }
+
+    // Format all users using batched health scores
+    const formattedUsers = users.map(user => ({
+      ...formatUserResponseSync(user),
+      healthScore: healthPointsMap.get(user.id) ?? 0
+    }));
 
     const pagination = calculatePagination(query.page, query.limit, total);
 

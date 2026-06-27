@@ -14,7 +14,10 @@ const router = Router();
 const prisma = new PrismaClient();
 
 // JWT configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 const JWT_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
@@ -295,6 +298,110 @@ router.post('/refresh', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Token refresh failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Logout endpoint
+router.post('/logout', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    // Verify token (in production, add to blacklist/cache for invalidation)
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // TODO: Invalidate refresh token in session/cache
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    logger.error('Logout error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Logout failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get current user profile
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        cpf: true,
+        organizationId: true,
+        status: true,
+        role: true,
+        emailVerified: true,
+        phoneVerified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const formattedUser = await formatUserResponse(user as any);
+
+    res.status(200).json({
+      success: true,
+      data: { user: formattedUser }
+    });
+  } catch (error) {
+    logger.error('Profile fetch error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user profile',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

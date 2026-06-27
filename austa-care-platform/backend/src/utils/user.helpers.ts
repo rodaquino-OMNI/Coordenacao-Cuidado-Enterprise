@@ -80,7 +80,7 @@ export async function formatUserResponse(
   user: User,
   includeHealthScore: boolean = false
 ) {
-  const response: any = {
+  const response: Record<string, unknown> = {
     id: user.id,
     email: user.email,
     fullName: getFullName(user),
@@ -103,29 +103,73 @@ export async function formatUserResponse(
 }
 
 /**
+ * Synchronous version of formatUserResponse that does NOT include health score.
+ * Use this in batch/map contexts and add healthScore from a separate batch query.
+ */
+export function formatUserResponseSync(user: User): Record<string, unknown> {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: getFullName(user),
+    firstName: user.firstName,
+    lastName: user.lastName,
+    cpf: user.cpf,
+    phone: user.phone,
+    status: user.status,
+    isActive: isUserActive(user),
+    role: user.role,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+/**
  * Get complete user profile including related data
  * @param userId - User ID to query
  * @returns Complete user profile with health score and onboarding status
  */
 export async function getUserProfile(userId: string) {
   const user = await prisma.user.findUnique({
-    where: { id: userId }
+    where: { id: userId },
+    include: {
+      healthPoints: true,
+      onboardingProgress: {
+        take: 1,
+        orderBy: { createdAt: 'desc' }
+      }
+    }
   });
 
   if (!user) {
     return null;
   }
 
-  const [healthScore, onboardingStatus] = await Promise.all([
-    getUserHealthScore(userId),
-    getUserOnboardingStatus(userId)
-  ]);
+  const healthScore = user.healthPoints?.[0]?.availablePoints ?? 0;
+  const latestOnboarding = user.onboardingProgress?.[0] ?? null;
+
+  // Build onboarding status from the eagerly-loaded progress
+  const onboardingStatus = latestOnboarding
+    ? {
+        isComplete: latestOnboarding.status === 'COMPLETED',
+        currentStep: latestOnboarding.currentStep,
+        stepsCompleted: latestOnboarding.currentStep,
+        totalSteps: latestOnboarding.totalSteps,
+        completionPercentage:
+          latestOnboarding.totalSteps > 0
+            ? Math.round((latestOnboarding.currentStep / latestOnboarding.totalSteps) * 100)
+            : 0,
+        completedAt: latestOnboarding.completedAt,
+      }
+    : null;
 
   return {
     ...user,
     fullName: getFullName(user),
     healthScore,
-    onboardingStatus
+    onboardingStatus,
+    // Remove the raw relation arrays from the response
+    healthPoints: undefined,
+    onboardingProgress: undefined,
   };
 }
 

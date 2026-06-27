@@ -161,12 +161,23 @@ router.get('/',
         prisma.user.count({ where }),
       ]);
 
-      const enrichedUsers = await Promise.all(
-        users.map(async (user) => ({
-          ...formatUserResponse(user),
-          healthScore: await getUserHealthScore(user.id).catch(() => user.healthScore || 0),
-        }))
-      );
+      // Batch-fetch health points to avoid N+1 queries
+      const userIds = users.map((u: any) => u.id);
+      const healthPointsMap = new Map<string, number>();
+      if (userIds.length > 0) {
+        const healthPoints = await prisma.healthPoints.findMany({
+          where: { userId: { in: userIds } },
+          select: { userId: true, availablePoints: true },
+        });
+        for (const hp of healthPoints) {
+          healthPointsMap.set(hp.userId, hp.availablePoints);
+        }
+      }
+
+      const enrichedUsers = users.map((user: any) => ({
+        ...formatUserResponse(user),
+        healthScore: healthPointsMap.get(user.id) ?? user.healthScore ?? 0,
+      }));
 
       res.json({
         users: enrichedUsers,

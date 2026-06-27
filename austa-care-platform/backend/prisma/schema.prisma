@@ -98,6 +98,12 @@ model User {
   // Multi-tenancy
   organizationId String
 
+  // AMH Platform Integration
+  mpiId              String?   @unique
+  mpiMatchConfidence Float?
+  mpiMatchMethod     String?   // DETERMINISTIC | PROBABILISTIC | MANUAL
+  mpiResolvedAt      DateTime?
+
   // Emergency Contact (PHI - encrypt at rest)
   emergencyContact Json? // PHI - encrypt at rest: { name, phone, relationship }
 
@@ -126,6 +132,7 @@ model User {
   @@index([cpf])
   @@index([resetToken])
   @@index([healthScore])
+  @@index([mpiId])
   @@map("users")
 }
 
