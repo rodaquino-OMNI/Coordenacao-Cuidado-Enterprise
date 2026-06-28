@@ -32,7 +32,7 @@ export class TestFactories {
       userId: faker.string.uuid(),
       startedAt: new Date(),
       endedAt: null,
-      status: 'active',
+      status: 'ACTIVE',
       platform: 'whatsapp',
       ...overrides
     };

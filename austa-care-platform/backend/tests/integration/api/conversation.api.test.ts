@@ -4,7 +4,7 @@
  */
 
 import request from 'supertest';
-import { app } from '../../../src/server';
+import { app } from '../../../src/app';
 import { TestDatabase } from '../../helpers/test-database';
 import { TestFactories } from '../../helpers/test-factories';
 
@@ -83,7 +83,7 @@ describe('Conversation API Integration Tests', () => {
           {
             userId: testUser.id,
             platform: 'whatsapp',
-            status: 'active',
+            status: 'ACTIVE',
             startedAt: new Date()
           },
           {
@@ -111,7 +111,7 @@ describe('Conversation API Integration Tests', () => {
           {
             userId: testUser.id,
             platform: 'whatsapp',
-            status: 'active',
+            status: 'ACTIVE',
             startedAt: new Date()
           },
           {
@@ -138,7 +138,7 @@ describe('Conversation API Integration Tests', () => {
       const conversations = Array.from({ length: 15 }, () => ({
         userId: testUser.id,
         platform: 'whatsapp',
-        status: 'active',
+        status: 'ACTIVE',
         startedAt: new Date()
       }));
 
@@ -163,7 +163,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -198,7 +198,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: otherUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -217,7 +217,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -242,7 +242,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -285,7 +285,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -324,7 +324,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -356,7 +356,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -418,7 +418,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });
@@ -436,7 +436,7 @@ describe('Conversation API Integration Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'active',
+          status: 'ACTIVE',
           startedAt: new Date()
         }
       });

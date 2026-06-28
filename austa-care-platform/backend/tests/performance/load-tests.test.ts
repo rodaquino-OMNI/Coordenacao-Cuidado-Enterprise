@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '@/server';
+import { app } from '@/app';
 import { PerformanceTester } from '../helpers/performance-helpers';
 import { WhatsAppTestHelpers } from '../helpers/whatsapp-test-helpers';
 import { logger } from '@/utils/logger';

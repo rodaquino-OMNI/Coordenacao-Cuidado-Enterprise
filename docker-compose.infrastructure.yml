@@ -3,6 +3,7 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: austa_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-austa}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_in_prod}
@@ -30,6 +31,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: austa_redis
+    restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -53,6 +55,7 @@ services:
   mongodb:
     image: mongo:6
     container_name: austa_mongodb
+    restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-austa}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-dev_password_change_in_prod}
@@ -80,6 +83,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: austa_zookeeper
+    restart: always
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -88,6 +92,11 @@ services:
     volumes:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -100,6 +109,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: austa_kafka
+    restart: always
     depends_on:
       - zookeeper
     ports:
@@ -138,6 +148,7 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: austa_kafka_ui
+    restart: unless-stopped
     depends_on:
       - kafka
     ports:
@@ -159,6 +170,7 @@ services:
   fhir:
     image: hapiproject/hapi:latest
     container_name: austa_fhir
+    restart: unless-stopped
     ports:
       - "8090:8080"
     environment:
@@ -188,6 +200,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: austa_prometheus
+    restart: unless-stopped
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -216,6 +229,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: austa_grafana
+    restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
@@ -246,6 +260,7 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: austa_jaeger
+    restart: unless-stopped
     environment:
       COLLECTOR_ZIPKIN_HTTP_PORT: 9411
     ports:
@@ -275,6 +290,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: austa_minio
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -302,6 +318,7 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: austa_elasticsearch
+    restart: unless-stopped
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
@@ -329,6 +346,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
     container_name: austa_kibana
+    restart: unless-stopped
     ports:
       - "5601:5601"
     environment:

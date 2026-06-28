@@ -4,7 +4,7 @@
  */
 
 import request from 'supertest';
-import { app } from '../../src/server';
+import { app } from '../../src/app';
 import { TestDatabase } from '../helpers/test-database';
 import { TestFactories } from '../helpers/test-factories';
 

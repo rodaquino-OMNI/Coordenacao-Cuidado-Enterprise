@@ -4,7 +4,7 @@
  */
 
 import request from 'supertest';
-import { app } from '../../src/server';
+import { app } from '../../src/app';
 import { TestDatabase } from '../helpers/test-database';
 import { whatsappService } from '../../src/services/whatsapp.service';
 
@@ -433,7 +433,7 @@ describe('WhatsApp Conversation Flow E2E Tests', () => {
       expect(response.body.documentId).toBeDefined();
 
       // Verify document was saved
-      const document = await testDb.getPrismaClient().healthDocument.findFirst({
+      const document = await testDb.getPrismaClient().document.findFirst({
         where: { userId: testUser.id }
       });
 
@@ -640,7 +640,7 @@ describe('WhatsApp Conversation Flow E2E Tests', () => {
         data: {
           userId: testUser.id,
           platform: 'whatsapp',
-          status: 'completed',
+          status: 'COMPLETED',
           startedAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000), // 91 days ago
           endedAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         }
